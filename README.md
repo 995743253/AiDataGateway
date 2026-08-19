@@ -12,6 +12,9 @@
 - FreeSql 动态支持 SQL Server、MySQL、PostgreSQL 和 SQLite 数据源。
 - SQL 只读分类、多语句拦截、无条件 UPDATE/DELETE 拦截和危险 DDL 默认拒绝。
 - 写操作进入本地审批，由 Administrator/Approver 批准后执行。
+- 独立审批历史与完整 SQL 详情页，保留审批人、意见、执行状态和错误。
+- 运行日志页面集中查看 AI 查询、审批、数据源、用户和认证操作。
+- SSE 服务端事件驱动管理表格自动刷新，无定时轮询。
 - WinForms 系统托盘、WebView2 内嵌管理页面。
 
 ## 项目结构

@@ -79,12 +79,14 @@ public sealed class DataSourceService(
         await auditWriter.WriteAsync(actor, "datasource.delete", "success", entity.Id, entity.Key, cancellationToken);
     }
 
-    public async Task<ConnectionTestResult> TestAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ConnectionTestResult> TestAsync(Guid id, string actor, CancellationToken cancellationToken = default)
     {
         var entity = await repository.FindAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException("Data source was not found.");
         var connection = ToConnection(entity);
-        return await adapterFactory.Get(entity.Provider).TestConnectionAsync(connection, cancellationToken);
+        var result = await adapterFactory.Get(entity.Provider).TestConnectionAsync(connection, cancellationToken);
+        await auditWriter.WriteAsync(actor, "datasource.test", result.Success ? "success" : "failure", entity.Id, result.Message, cancellationToken);
+        return result;
     }
 
     internal DatabaseConnection ToConnection(DataSourceDefinition entity) => new(

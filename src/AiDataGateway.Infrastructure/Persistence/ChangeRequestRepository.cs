@@ -15,7 +15,25 @@ internal sealed class ChangeRequestRepository(GatewayDbContext dbContext) : ICha
             .Where(item => item.Status == ChangeStatus.Pending)
             .ToListAsync(cancellationToken);
 
-        return pending.OrderByDescending(item => item.CreatedAtUtc).ToList();
+        return pending
+            .Where(item => item.ExpiresAtUtc > DateTimeOffset.UtcNow)
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<ChangeRequest>> ListAsync(ChangeStatus? status = null, int take = 200, CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.ChangeRequests.AsNoTracking();
+        if (status.HasValue)
+        {
+            query = query.Where(item => item.Status == status.Value);
+        }
+
+        var changes = await query.ToListAsync(cancellationToken);
+        return changes
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .Take(Math.Clamp(take, 1, 1_000))
+            .ToList();
     }
 
     public Task<ChangeRequest?> FindAsync(Guid id, CancellationToken cancellationToken = default) =>

@@ -151,7 +151,7 @@ public sealed class GatewayHostTests
                 database = sqlitePath,
                 username = "local",
                 password = "local-secret",
-                accessMode = 1,
+                accessMode = 2,
                 maxRows = 100,
                 commandTimeoutSeconds = 10,
                 enabled = true
@@ -185,6 +185,41 @@ public sealed class GatewayHostTests
             Assert.True(nullQueryResponse.IsSuccessStatusCode, nullQueryBody);
             var nullQueryResult = JsonSerializer.Deserialize<JsonElement>(nullQueryBody);
             Assert.Equal(JsonValueKind.Null, nullQueryResult.GetProperty("rows")[0].GetProperty("value").ValueKind);
+
+            var submitChangeResponse = await aiClient.PostAsJsonAsync("/api/gateway/changes", new
+            {
+                dataSourceId,
+                sql = "create table approval_history_test (id integer primary key, name text)"
+            });
+            var submitChangeBody = await submitChangeResponse.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.Accepted, submitChangeResponse.StatusCode);
+            var submittedChange = JsonSerializer.Deserialize<JsonElement>(submitChangeBody);
+            var changeId = submittedChange.GetProperty("id").GetGuid();
+
+            var approvalHistory = await client.GetFromJsonAsync<JsonElement>("/api/approvals?take=100");
+            var pendingApproval = Assert.Single(approvalHistory.EnumerateArray());
+            Assert.Equal("Pending", pendingApproval.GetProperty("status").GetString());
+            Assert.Contains("approval_history_test", pendingApproval.GetProperty("sql").GetString());
+
+            var approvalDetail = await client.GetFromJsonAsync<JsonElement>($"/api/approvals/{changeId}");
+            Assert.Equal(changeId, approvalDetail.GetProperty("id").GetGuid());
+            Assert.Equal("High", approvalDetail.GetProperty("riskLevel").GetString());
+
+            var reviewResponse = await client.PostAsJsonAsync($"/api/approvals/{changeId}/review", new
+            {
+                approved = true,
+                comment = "integration test approval"
+            });
+            var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
+            Assert.True(reviewResponse.IsSuccessStatusCode, reviewBody);
+
+            approvalHistory = await client.GetFromJsonAsync<JsonElement>("/api/approvals?take=100");
+            var completedApproval = Assert.Single(approvalHistory.EnumerateArray());
+            Assert.Equal("Succeeded", completedApproval.GetProperty("status").GetString());
+            Assert.Equal("integration test approval", completedApproval.GetProperty("reviewComment").GetString());
+
+            var auditLogs = await client.GetFromJsonAsync<JsonElement>("/api/audit/logs?take=100");
+            Assert.Contains(auditLogs.EnumerateArray(), item => item.GetProperty("action").GetString() == "change.execute");
         }
         finally
         {

@@ -6,6 +6,7 @@ using AiDataGateway.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
+using AiDataGateway.Application.Abstractions;
 
 namespace AiDataGateway.Api.Endpoints;
 
@@ -19,7 +20,8 @@ internal static class SetupEndpoints
         endpoints.MapPost("/api/setup", async (
             SetupRequest request,
             UserManager<ApplicationUser> userManager,
-            IOpenIddictApplicationManager applicationManager) =>
+            IOpenIddictApplicationManager applicationManager,
+            IAuditWriter auditWriter) =>
         {
             if (await userManager.Users.AnyAsync())
             {
@@ -77,6 +79,7 @@ internal static class SetupEndpoints
             var clientId = $"local-ai-{Guid.NewGuid():N}";
             var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
             await applicationManager.CreateAsync(OAuthDescriptorFactory.CreateAiClient(clientId, request.AiClientName, secret));
+            await auditWriter.WriteAsync(user.UserName ?? user.Id.ToString(), "system.setup", "success", detail: clientId);
 
             return Results.Ok(new
             {

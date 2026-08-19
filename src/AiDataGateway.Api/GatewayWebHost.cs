@@ -1,6 +1,8 @@
 using AiDataGateway.Api.Endpoints;
 using AiDataGateway.Application;
+using AiDataGateway.Application.Abstractions;
 using AiDataGateway.Application.Security;
+using AiDataGateway.Api.Realtime;
 using AiDataGateway.Infrastructure;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
@@ -39,6 +41,8 @@ public sealed class GatewayWebHost : IAsyncDisposable
         var baseAddress = new Uri($"http://127.0.0.1:{options.Port}/");
         builder.WebHost.UseUrls(baseAddress.ToString());
         builder.Services.AddApplication();
+        builder.Services.AddSingleton<GatewayEventHub>();
+        builder.Services.AddSingleton<IGatewayEventPublisher>(services => services.GetRequiredService<GatewayEventHub>());
         builder.Services.AddInfrastructure(storage =>
         {
             storage.BasePath = options.StoragePath;
@@ -122,6 +126,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
         app.MapOAuthEndpoints();
         app.MapAdminEndpoints();
         app.MapGatewayEndpoints();
+        app.MapRealtimeEndpoints();
         app.MapFallback(async context =>
         {
             var index = Path.Combine(webRoot, "index.html");

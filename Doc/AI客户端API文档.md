@@ -496,6 +496,8 @@ AI 不得使用注释、编码、存储过程、数据库特有语法或其他�
 /api/auth/*
 /api/admin/*
 /api/approvals/*
+/api/audit/*
+/api/events
 /connect/authorize
 /connect/logout
 ```
@@ -533,3 +535,17 @@ POST /api/gateway/query           POST /api/gateway/changes
     ↓                                  ↓
 返回查询结果                       返回 Pending，等待人工审批
 ```
+
+## 14. 管理端实时接口（不得注册为 AI 工具）
+
+以下接口仅供已登录的本地管理页面使用，使用登录 Cookie 和角色授权：
+
+| 方法 | 地址 | 用途 |
+|---|---|---|
+| `GET` | `/api/approvals?take=500` | 查询审批历史 |
+| `GET` | `/api/approvals/{id}` | 查询完整 SQL、审批及执行详情 |
+| `POST` | `/api/approvals/{id}/review` | 人工批准或拒绝 |
+| `GET` | `/api/audit/logs?take=500` | 查询调用与运行日志 |
+| `GET` | `/api/events` | 建立 SSE 长连接，接收表变更通知 |
+
+`/api/events` 由服务端在业务数据提交后主动发送 `gateway-change` 事件。管理页面收到事件后按动作类型刷新审批、日志、数据源、用户或 OAuth2 客户端列表，不使用定时轮询。

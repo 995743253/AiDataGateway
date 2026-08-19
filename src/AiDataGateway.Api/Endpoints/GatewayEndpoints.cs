@@ -79,11 +79,108 @@ internal static class GatewayEndpoints
 
         var approvals = endpoints.MapGroup("/api/approvals")
             .RequireAuthorization(new AuthorizeAttribute { Roles = $"{GatewayRoles.Administrator},{GatewayRoles.Approver}" });
-        approvals.MapGet("/pending", async (IChangeRequestRepository changes, CancellationToken cancellationToken) =>
-            Results.Ok(await changes.ListPendingAsync(cancellationToken)));
+        approvals.MapGet("/", ListApprovalsAsync);
+        approvals.MapGet("/pending", ListPendingApprovalsAsync);
+        approvals.MapGet("/{id:guid}", GetApprovalAsync);
         approvals.MapPost("/{id:guid}/review", ReviewAsync);
 
+        endpoints.MapGet("/api/audit/logs", ListAuditLogsAsync)
+            .RequireAuthorization(new AuthorizeAttribute { Roles = $"{GatewayRoles.Administrator},{GatewayRoles.Approver},{GatewayRoles.Operator},{GatewayRoles.Auditor}" });
+
         return endpoints;
+    }
+
+    private static async Task<IResult> ListApprovalsAsync(
+        string? status,
+        int? take,
+        IChangeRequestRepository changes,
+        IDataSourceRepository dataSources,
+        CancellationToken cancellationToken)
+    {
+        ChangeStatus? statusFilter = null;
+        if (!string.IsNullOrWhiteSpace(status) && !status.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Enum.TryParse<ChangeStatus>(status, true, out var parsedStatus))
+            {
+                return Results.BadRequest(new { message = $"Unknown approval status '{status}'." });
+            }
+            statusFilter = parsedStatus;
+        }
+
+        var items = await changes.ListAsync(statusFilter, take ?? 200, cancellationToken);
+        var sourceNames = (await dataSources.ListAsync(cancellationToken)).ToDictionary(item => item.Id, item => item.Name);
+        return Results.Ok(items.Select(item => ToApprovalView(item, sourceNames.GetValueOrDefault(item.DataSourceId))));
+    }
+
+    private static async Task<IResult> ListPendingApprovalsAsync(
+        IChangeRequestRepository changes,
+        IDataSourceRepository dataSources,
+        CancellationToken cancellationToken)
+    {
+        var items = await changes.ListPendingAsync(cancellationToken);
+        var sourceNames = (await dataSources.ListAsync(cancellationToken)).ToDictionary(item => item.Id, item => item.Name);
+        return Results.Ok(items.Select(item => ToApprovalView(item, sourceNames.GetValueOrDefault(item.DataSourceId))));
+    }
+
+    private static async Task<IResult> GetApprovalAsync(
+        Guid id,
+        IChangeRequestRepository changes,
+        IDataSourceRepository dataSources,
+        CancellationToken cancellationToken)
+    {
+        var item = await changes.FindAsync(id, cancellationToken);
+        if (item is null)
+        {
+            return Results.NotFound();
+        }
+
+        var source = await dataSources.FindAsync(item.DataSourceId, cancellationToken);
+        return Results.Ok(ToApprovalView(item, source?.Name));
+    }
+
+    private static async Task<IResult> ListAuditLogsAsync(
+        int? take,
+        IAuditLogReader auditLogs,
+        IDataSourceRepository dataSources,
+        CancellationToken cancellationToken)
+    {
+        var items = await auditLogs.ListRecentAsync(take ?? 200, cancellationToken);
+        var sourceNames = (await dataSources.ListAsync(cancellationToken)).ToDictionary(item => item.Id, item => item.Name);
+        return Results.Ok(items.Select(item => new
+        {
+            item.Id,
+            item.Actor,
+            item.Action,
+            item.Outcome,
+            item.DataSourceId,
+            dataSourceName = item.DataSourceId.HasValue ? sourceNames.GetValueOrDefault(item.DataSourceId.Value) : null,
+            item.Detail,
+            item.CreatedAtUtc
+        }));
+    }
+
+    private static object ToApprovalView(ChangeRequest item, string? dataSourceName)
+    {
+        var status = item.Status == ChangeStatus.Pending && item.ExpiresAtUtc <= DateTimeOffset.UtcNow
+            ? ChangeStatus.Expired
+            : item.Status;
+        return new
+        {
+            item.Id,
+            item.DataSourceId,
+            dataSourceName,
+            item.Sql,
+            item.RequestedBy,
+            item.ReviewedBy,
+            item.ReviewComment,
+            riskLevel = item.RiskLevel.ToString(),
+            status = status.ToString(),
+            item.CreatedAtUtc,
+            item.ExpiresAtUtc,
+            item.ReviewedAtUtc,
+            item.ExecutedAtUtc,
+            item.ExecutionError
+        };
     }
 
     private static async Task<IResult> ReviewAsync(

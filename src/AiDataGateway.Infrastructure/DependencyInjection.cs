@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddScoped<IDataSourceRepository, DataSourceRepository>();
         services.AddScoped<IChangeRequestRepository, ChangeRequestRepository>();
         services.AddScoped<IAuditWriter, AuditWriter>();
+        services.AddScoped<IAuditLogReader, AuditLogReader>();
         services.AddSingleton<ICredentialProtector, DataProtectionCredentialProtector>();
         services.AddSingleton<IDatabaseAdapterFactory, DatabaseAdapterFactory>();
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.SqlServer));

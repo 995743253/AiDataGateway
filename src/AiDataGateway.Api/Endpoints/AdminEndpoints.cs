@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using AiDataGateway.Api.Contracts;
 using AiDataGateway.Api.Security;
 using AiDataGateway.Application.DataSources;
+using AiDataGateway.Application.Abstractions;
 using AiDataGateway.Application.Security;
 using AiDataGateway.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -38,7 +39,7 @@ internal static class AdminEndpoints
             return Results.Ok(result);
         });
 
-        admin.MapPost("/users", async (CreateUserRequest request, UserManager<ApplicationUser> userManager) =>
+        admin.MapPost("/users", async (CreateUserRequest request, HttpContext context, UserManager<ApplicationUser> userManager, IAuditWriter auditWriter) =>
         {
             var user = new ApplicationUser
             {
@@ -60,10 +61,11 @@ internal static class AdminEndpoints
             {
                 await userManager.AddToRolesAsync(user, roles);
             }
+            await auditWriter.WriteAsync(GatewayPrincipal.Actor(context.User), "user.create", "success", detail: user.UserName);
             return Results.Created($"/api/admin/users/{user.Id}", new { user.Id });
         });
 
-        admin.MapPut("/users/{id:guid}", async (Guid id, UpdateUserRequest request, UserManager<ApplicationUser> userManager) =>
+        admin.MapPut("/users/{id:guid}", async (Guid id, UpdateUserRequest request, HttpContext context, UserManager<ApplicationUser> userManager, IAuditWriter auditWriter) =>
         {
             var user = await userManager.FindByIdAsync(id.ToString());
             if (user is null)
@@ -81,6 +83,7 @@ internal static class AdminEndpoints
             {
                 await userManager.UpdateSecurityStampAsync(user);
             }
+            await auditWriter.WriteAsync(GatewayPrincipal.Actor(context.User), "user.update", "success", detail: user.UserName);
             return Results.NoContent();
         });
 
@@ -101,7 +104,7 @@ internal static class AdminEndpoints
             return Results.Ok(clients);
         });
 
-        admin.MapPost("/oauth-clients", async (CreateOAuthClientRequest request, IOpenIddictApplicationManager manager) =>
+        admin.MapPost("/oauth-clients", async (CreateOAuthClientRequest request, HttpContext context, IOpenIddictApplicationManager manager, IAuditWriter auditWriter) =>
         {
             var clientId = $"local-ai-{Guid.NewGuid():N}";
             var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
@@ -109,6 +112,7 @@ internal static class AdminEndpoints
                 .Intersect(GatewayScopes.AiClientDefaults, StringComparer.Ordinal)
                 .ToArray();
             await manager.CreateAsync(OAuthDescriptorFactory.CreateAiClient(clientId, request.DisplayName, secret, allowedScopes));
+            await auditWriter.WriteAsync(GatewayPrincipal.Actor(context.User), "oauth-client.create", "success", detail: clientId);
             return Results.Ok(new { clientId, clientSecret = secret, scopes = allowedScopes });
         });
 
@@ -124,8 +128,8 @@ internal static class AdminEndpoints
             await service.DeleteAsync(id, GatewayPrincipal.Actor(context.User), cancellationToken);
             return Results.NoContent();
         });
-        dataSources.MapPost("/{id:guid}/test", async (Guid id, DataSourceService service, CancellationToken cancellationToken) =>
-            Results.Ok(await service.TestAsync(id, cancellationToken)));
+        dataSources.MapPost("/{id:guid}/test", async (Guid id, HttpContext context, DataSourceService service, CancellationToken cancellationToken) =>
+            Results.Ok(await service.TestAsync(id, GatewayPrincipal.Actor(context.User), cancellationToken)));
 
         return endpoints;
     }
