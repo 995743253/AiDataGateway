@@ -1,0 +1,286 @@
+# AiDataGateway 使用说明
+
+如果是第一次使用，建议先阅读 [小白使用说明：客户端操作与 AI 接入](./小白使用说明-AI接入.md)。
+
+## 1. 软件用途
+
+AiDataGateway 是一套运行在 Windows 本机的 AI 数据库访问网关，用于控制 AI 编程助手对数据库的访问行为。
+
+它在 AI 与目标数据库之间提供以下能力：
+
+- 集中管理 SQL Server、MySQL、PostgreSQL 和 SQLite 数据源；
+- 通过 OAuth2 为 AI 客户端颁发受限访问令牌；
+- 只读 SQL 可直接执行；
+- 写 SQL 只能生成审批单，由本地用户审核后执行；
+- 限制单条 SQL、最大返回行数和命令超时；
+- 保存用户、数据源、审批记录和审计记录；
+- 对数据库密码进行本机加密存储。
+
+当前程序默认只监听本机回环地址：
+
+```text
+http://127.0.0.1:5127
+```
+
+## 2. 运行环境
+
+- Windows 10/11；
+- .NET 10 Desktop Runtime，或直接使用项目编译目录；
+- Microsoft Edge WebView2 Runtime；
+- 本机能够通过目标数据库的 IP、端口和账号访问数据库。
+
+## 3. 启动与退出
+
+### 3.1 启动编译版本
+
+运行：
+
+```text
+src\AiDataGateway.Desktop\bin\Debug\net10.0-windows10.0.17763.0\AiDataGateway.Desktop.exe
+```
+
+程序启动后会同时启动：
+
+1. WinForms 桌面窗口；
+2. 内嵌的 Vue 3 管理页面；
+3. 本机 Kestrel WebAPI，监听 `127.0.0.1:5127`。
+
+同一时间只允许运行一个桌面实例。
+
+### 3.2 最小化与退出
+
+- 点击窗口关闭按钮时，程序不会停止，而是进入系统托盘；
+- 双击托盘图标可恢复窗口；
+- 必须从托盘菜单选择“退出”，本地 API 才会停止。
+
+## 4. 首次初始化
+
+首次启动时，页面会要求创建第一个管理员账号。
+
+需要填写：
+
+| 字段 | 要求 |
+|---|---|
+| 用户名 | 必填，只能包含英文字母、数字及 `. - _ @ +` |
+| 邮箱 | 必填，必须是有效邮箱格式 |
+| 显示名称 | 必填 |
+| 管理员密码 | 至少 10 位，并同时包含大写字母、小写字母和数字 |
+
+初始化成功后，系统会同时生成一个供本地 AI 使用的 OAuth2 客户端，并显示：
+
+- `Client ID`；
+- `Client Secret`；
+- Token 地址；
+- 默认 Scope。
+
+> `Client Secret` 只显示一次。请保存到本机安全的凭据存储中，不要写入代码仓库、提示词、聊天记录或普通配置文件。
+
+如果 Secret 丢失，可以在登录后的“OAuth 客户端”页面创建一个新客户端。当前版本尚未提供客户端删除、禁用和 Secret 轮换页面。
+
+## 5. 登录与用户管理
+
+初始化后使用管理员用户名和密码登录。
+
+连续登录失败会触发账号锁定：
+
+- 最大连续失败次数：5 次；
+- 默认锁定时间：10 分钟。
+
+### 5.1 内置角色
+
+| 角色 | 当前能力 |
+|---|---|
+| `Administrator` | 管理用户、OAuth 客户端、数据源，并处理审批 |
+| `Operator` | 管理数据源；通过用户身份查询和提交变更 |
+| `Approver` | 查看并审批待处理写操作 |
+| `Developer` | 通过用户身份查询数据并提交变更 |
+| `Viewer` | 查看可用数据源列表 |
+| `Auditor` | 已预留角色；当前版本尚无审计查询页面/API |
+
+管理员可在“用户”页面创建账号并分配多个角色。
+
+## 6. 数据源管理
+
+在“数据源”页面点击“新增数据源”。
+
+### 6.1 数据库类型
+
+| 页面类型 | API 枚举值 | 默认端口 | 说明 |
+|---|---:|---:|---|
+| SQL Server | `1` | `1433` | 使用 SQL Server 用户名和密码 |
+| MySQL | `2` | `3306` | 使用 MySQL 用户名和密码 |
+| PostgreSQL | `3` | `5432` | 使用 PostgreSQL 用户名和密码 |
+| SQLite | `4` | `1` | “数据库”填写 SQLite 文件完整路径 |
+
+SQLite 实际只使用数据库文件路径。当前统一数据源模型仍要求填写主机、端口、用户名和密码，可使用：
+
+```text
+主机：localhost
+端口：1
+用户名：local
+密码：任意仅用于满足配置校验的本地值
+```
+
+### 6.2 字段说明
+
+| 字段 | 说明 |
+|---|---|
+| 标识 | 数据源唯一 Key，保存后统一转为小写 |
+| 名称 | 管理页面和 AI 数据源列表中的显示名称 |
+| IP/主机 | 目标数据库地址，不同数据源可以使用不同 IP |
+| 端口 | 范围 `1-65535` |
+| 数据库 | 数据库名；SQLite 填文件路径 |
+| 用户名/密码 | 网关访问目标数据库使用的账号 |
+| 最大返回行 | 范围 `1-10000`，默认 `1000` |
+| 超时秒数 | 范围 `1-300`，默认 `30` |
+| 是否启用 | 禁用后 AI 无法访问 |
+
+修改数据源时密码留空表示保留原密码。
+
+### 6.3 访问模式
+
+| 模式 | API 枚举值 | 行为 |
+|---|---:|---|
+| 禁用 | `0` | 禁止查询和写操作提单 |
+| 只读 | `1` | 允许只读查询，禁止写操作提单 |
+| 写入需审批 | `2` | 允许查询；写操作生成审批单 |
+| 开发模式 | `3` | 当前版本仍要求写操作审批，不会自动执行 |
+
+保存后建议点击“测试”验证网络、账号和数据库名称是否正确。
+
+## 7. AI 客户端接入
+
+AI 客户端通过 OAuth2 Client Credentials 获取 Token，默认 Scope 为：
+
+```text
+gateway.datasource.read
+gateway.query.execute
+gateway.change.submit
+```
+
+完整调用方式见 [AI 客户端 API 文档](./AI客户端API文档.md)。
+
+推荐把 Client ID 和 Secret 配置在可信的本地适配器、环境变量或系统凭据存储中。不要让大模型在上下文中读取或输出 Secret。
+
+## 8. 查询与审批流程
+
+### 8.1 只读查询
+
+AI 的推荐流程：
+
+1. 获取 OAuth2 Token；
+2. 获取可用数据源列表；
+3. 校验 SQL；
+4. 调用只读查询接口；
+5. 检查返回结果中的 `truncated`。
+
+查询结果最多返回数据源配置的“最大返回行”数量。
+
+### 8.2 写操作
+
+AI 不能直接执行写 SQL。流程如下：
+
+1. AI 生成单条 `INSERT`、`UPDATE`、`DELETE`、`MERGE` 或 `REPLACE`；
+2. AI 调用变更提交接口；
+3. 网关返回 HTTP `202 Accepted` 和审批单 ID；
+4. `Administrator` 或 `Approver` 在桌面页面查看 SQL；
+5. 人工批准后，网关连接目标数据库执行 SQL；
+6. 拒绝则不会访问目标数据库。
+
+审批单默认有效期为 15 分钟。
+
+### 8.3 默认 SQL 策略
+
+- 每次请求只允许一条 SQL；
+- `SELECT`、`WITH`、`EXPLAIN`、`SHOW`、`DESCRIBE`、`PRAGMA` 归类为只读；
+- `SELECT *` 当前会标记为中风险提示，但不会自动拦截；
+- `UPDATE`、`DELETE` 没有 `WHERE` 时按严重风险拦截；
+- `CREATE TABLE` 可作为高风险操作提交人工审批；
+- 其他 `CREATE` 以及 `DROP`、`TRUNCATE`、`ALTER`、`GRANT`、`REVOKE`、`EXEC`、`EXECUTE` 默认禁止；
+- 当前分析器是轻量 SQL 安全分类器，不是完整数据库方言 AST 解析器。
+
+## 9. 本地数据与安全
+
+默认数据目录：
+
+```text
+%LocalAppData%\AiDataGateway\
+├── gateway.db       # 用户、角色、数据源、OAuth 客户端、审批和审计
+├── keys\            # ASP.NET Core Data Protection 密钥
+├── logs\            # 预留日志目录
+└── WebView2\        # 内嵌浏览器用户数据
+```
+
+安全机制：
+
+- 数据库密码经 ASP.NET Core Data Protection 加密后保存；
+- Data Protection 密钥由当前 Windows 用户的 DPAPI 保护；
+- 数据库密码不会通过数据源列表 API 返回；
+- API 默认仅绑定 `127.0.0.1`；
+- AI 客户端默认没有审批权限和管理员权限。
+
+备份时应同时备份 `gateway.db` 和 `keys` 目录，否则加密后的数据库密码可能无法恢复。
+
+如需重新初始化，先从托盘退出程序，再将整个 `%LocalAppData%\AiDataGateway` 目录移动到备份位置，然后重新启动。确认新环境正常前不要删除备份。
+
+## 10. 常见问题
+
+### 10.1 初始化返回 HTTP 400
+
+检查邮箱格式和密码规则。新版页面会直接显示后台返回的具体原因。
+
+### 10.2 程序提示已经运行
+
+检查系统托盘。关闭主窗口只会隐藏程序，不会停止后台 API。
+
+### 10.3 端口 5127 被占用
+
+停止占用该端口的程序，或在源码中的 `GatewayHostOptions`/桌面启动配置中修改端口。前端和 AI 客户端地址也需要同步修改。
+
+### 10.4 数据源测试失败
+
+依次检查：
+
+1. 数据库 IP 和端口是否可达；
+2. 数据库服务是否允许 TCP 连接；
+3. 防火墙规则；
+4. 用户名、密码和数据库名；
+5. 数据库账号来源 IP 白名单；
+6. SQLite 文件路径及当前 Windows 用户的文件权限。
+
+### 10.5 API 返回 401 或 403
+
+- `401 Unauthorized`：Token 缺失、错误或过期；
+- `403 Forbidden`：Token 没有接口要求的 Scope，或登录用户没有要求的角色。
+
+### 10.6 Secret 丢失
+
+Secret 无法再次显示。使用管理员账号进入“OAuth 客户端”页面创建新客户端，并更新本地 AI 配置。
+
+## 11. 从源码构建
+
+```powershell
+cd D:\WorkStation\DataGateway\src\AiDataGateway.Web
+npm install
+npm run build
+
+cd D:\WorkStation\DataGateway
+dotnet restore AiDataGateway.slnx --configfile NuGet.Config
+dotnet build AiDataGateway.slnx --no-restore
+dotnet test AiDataGateway.slnx --no-build --no-restore
+```
+
+启动源码版本：
+
+```powershell
+dotnet run --project src\AiDataGateway.Desktop\AiDataGateway.Desktop.csproj
+```
+
+## 12. 当前版本限制
+
+- 当前提供 HTTP/JSON API，尚未实现 MCP Server 传输层；
+- AI 提交审批后，当前没有提供给 AI 的审批状态轮询接口；
+- OAuth 客户端尚无删除、禁用和 Secret 轮换页面；
+- 审计记录已经写入本地库，但尚无审计查询页面/API；
+- 数据库初始化使用 EF Core `EnsureCreated`，尚未建立正式迁移升级流程；
+- 默认 HTTP 仅适合本机回环访问。如修改为局域网或外网监听，必须另行配置 HTTPS、来源限制和网络访问控制。

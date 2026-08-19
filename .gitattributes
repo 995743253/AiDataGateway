@@ -1,0 +1,12 @@
+* text=auto
+
+*.cs text eol=crlf
+*.csproj text eol=crlf
+*.slnx text eol=crlf
+*.json text eol=lf
+*.js text eol=lf
+*.vue text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

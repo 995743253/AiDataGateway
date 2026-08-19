@@ -1,0 +1,33 @@
+.dotnet-home/
+.nuget/
+.npm-cache/
+artifacts/
+**/bin/
+**/obj/
+**/node_modules/
+src/AiDataGateway.Web/dist/
+**/publish/
+WebView2Runtime/
+*.user
+*.suo
+.vs/
+
+# Runtime data and local configuration
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+.env
+.env.*
+!.env.example
+
+# Secrets and local certificates
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Superseded binary documentation; Markdown is the source of truth
+Doc/*.docx

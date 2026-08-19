@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AiDataGateway.Api/AiDataGateway.Api.csproj" />
+    <Project Path="src/AiDataGateway.Application/AiDataGateway.Application.csproj" />
+    <Project Path="src/AiDataGateway.Desktop/AiDataGateway.Desktop.csproj" />
+    <Project Path="src/AiDataGateway.Domain/AiDataGateway.Domain.csproj" />
+    <Project Path="src/AiDataGateway.Infrastructure/AiDataGateway.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AiDataGateway.Tests/AiDataGateway.Tests.csproj" />
+  </Folder>
+</Solution>
