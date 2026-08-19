@@ -21,19 +21,56 @@ internal sealed class ChangeRequestRepository(GatewayDbContext dbContext) : ICha
             .ToList();
     }
 
-    public async Task<IReadOnlyList<ChangeRequest>> ListAsync(ChangeStatus? status = null, int take = 200, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<ChangeRequest>> SearchAsync(
+        ChangeStatus? status,
+        string? keyword,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
         var query = dbContext.ChangeRequests.AsNoTracking();
-        if (status.HasValue)
+        if (status.HasValue && status is not ChangeStatus.Pending and not ChangeStatus.Expired)
         {
             query = query.Where(item => item.Status == status.Value);
         }
+        else if (status is ChangeStatus.Pending or ChangeStatus.Expired)
+        {
+            query = query.Where(item => item.Status == ChangeStatus.Pending);
+        }
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var search = keyword.Trim();
+            query = query.Where(item =>
+                item.Sql.Contains(search) ||
+                item.RequestedBy.Contains(search) ||
+                (item.ReviewedBy != null && item.ReviewedBy.Contains(search)) ||
+                (item.ReviewComment != null && item.ReviewComment.Contains(search)) ||
+                (item.ExecutionError != null && item.ExecutionError.Contains(search)));
+        }
 
         var changes = await query.ToListAsync(cancellationToken);
-        return changes
+        var now = DateTimeOffset.UtcNow;
+        var filtered = changes.AsEnumerable();
+        if (status == ChangeStatus.Pending)
+        {
+            filtered = filtered.Where(item => item.ExpiresAtUtc > now);
+        }
+        else if (status == ChangeStatus.Expired)
+        {
+            filtered = filtered.Where(item => item.ExpiresAtUtc <= now);
+        }
+
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 200);
+        var ordered = filtered
             .OrderByDescending(item => item.CreatedAtUtc)
-            .Take(Math.Clamp(take, 1, 1_000))
             .ToList();
+        var items = ordered
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .ToList();
+        return new PagedResult<ChangeRequest>(items, ordered.Count, normalizedPage, normalizedPageSize);
     }
 
     public Task<ChangeRequest?> FindAsync(Guid id, CancellationToken cancellationToken = default) =>

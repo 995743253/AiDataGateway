@@ -14,7 +14,8 @@ public sealed record DataSourceUpsertRequest(
     DataSourceAccessMode AccessMode,
     int MaxRows = 1_000,
     int CommandTimeoutSeconds = 30,
-    bool Enabled = true);
+    bool Enabled = true,
+    string[]? BlockedTables = null);
 
 public sealed record DataSourceView(
     Guid Id,
@@ -29,5 +30,6 @@ public sealed record DataSourceView(
     int MaxRows,
     int CommandTimeoutSeconds,
     bool Enabled,
+    IReadOnlyList<string> BlockedTables,
     bool HasPassword,
     DateTimeOffset UpdatedAtUtc);

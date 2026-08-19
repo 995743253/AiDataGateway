@@ -4,5 +4,5 @@ namespace AiDataGateway.Application.Abstractions;
 
 public interface IAuditLogReader
 {
-    Task<IReadOnlyList<AuditEntry>> ListRecentAsync(int take = 200, CancellationToken cancellationToken = default);
+    Task<PagedResult<AuditEntry>> SearchAsync(string? keyword, string? action, string? outcome, int page, int pageSize, CancellationToken cancellationToken = default);
 }

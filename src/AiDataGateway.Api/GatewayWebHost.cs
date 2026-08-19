@@ -105,6 +105,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
             .AddValidation(validation =>
             {
                 validation.UseLocalServer();
+                validation.EnableTokenEntryValidation();
                 validation.UseAspNetCore();
             });
 
@@ -125,6 +126,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
         app.MapAuthEndpoints();
         app.MapOAuthEndpoints();
         app.MapAdminEndpoints();
+        app.MapSettingsEndpoints();
         app.MapGatewayEndpoints();
         app.MapRealtimeEndpoints();
         app.MapFallback(async context =>
@@ -141,11 +143,11 @@ public sealed class GatewayWebHost : IAsyncDisposable
             await context.Response.WriteAsync("<html><body><h2>AiDataGateway is running</h2><p>Build the Vue application to enable the management UI.</p></body></html>");
         });
 
-        await app.StartAsync(cancellationToken);
         await using (var scope = app.Services.CreateAsyncScope())
         {
             await scope.ServiceProvider.GetRequiredService<GatewayDatabaseInitializer>().InitializeAsync(cancellationToken);
         }
+        await app.StartAsync(cancellationToken);
 
         return new GatewayWebHost(app, baseAddress);
     }

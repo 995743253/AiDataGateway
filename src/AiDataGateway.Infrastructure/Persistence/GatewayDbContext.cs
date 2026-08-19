@@ -1,6 +1,7 @@
 using AiDataGateway.Domain.Approvals;
 using AiDataGateway.Domain.Auditing;
 using AiDataGateway.Domain.DataSources;
+using AiDataGateway.Domain.Maintenance;
 using AiDataGateway.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -14,6 +15,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<DataSourceDefinition> DataSources => Set<DataSourceDefinition>();
     public DbSet<ChangeRequest> ChangeRequests => Set<ChangeRequest>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<MaintenanceSettings> MaintenanceSettings => Set<MaintenanceSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -30,6 +32,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             entity.Property(item => item.Database).HasMaxLength(300).IsRequired();
             entity.Property(item => item.Username).HasMaxLength(200).IsRequired();
             entity.Property(item => item.ProtectedPassword).IsRequired();
+            entity.Property(item => item.TableBlacklist).HasDefaultValue(string.Empty).IsRequired();
             entity.Property(item => item.Provider).HasConversion<string>().HasMaxLength(50);
             entity.Property(item => item.AccessMode).HasConversion<string>().HasMaxLength(50);
         });
@@ -55,6 +58,14 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             entity.Property(item => item.Outcome).HasMaxLength(50).IsRequired();
             entity.HasIndex(item => item.CreatedAtUtc);
             entity.HasIndex(item => item.DataSourceId);
+        });
+
+        builder.Entity<MaintenanceSettings>(entity =>
+        {
+            entity.ToTable("GatewayMaintenanceSettings");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.CleanupTimeLocal).HasMaxLength(5).IsRequired();
+            entity.Property(item => item.LastCleanupSummary).HasMaxLength(500);
         });
     }
 }

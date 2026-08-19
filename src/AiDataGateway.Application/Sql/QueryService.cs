@@ -1,5 +1,6 @@
 using AiDataGateway.Application.Abstractions;
 using AiDataGateway.Domain.DataSources;
+using System.Text.Json;
 
 namespace AiDataGateway.Application.Sql;
 
@@ -8,6 +9,7 @@ public sealed class QueryService(
     ICredentialProtector credentialProtector,
     IDatabaseAdapterFactory adapterFactory,
     ISqlSafetyAnalyzer analyzer,
+    ISqlTableAccessGuard tableAccessGuard,
     IAuditWriter auditWriter)
 {
     public SqlAnalysis Validate(string sql) => analyzer.Analyze(sql);
@@ -27,6 +29,15 @@ public sealed class QueryService(
             throw new InvalidOperationException("The data source is disabled.");
         }
 
+        var blockedTables = tableAccessGuard.FindBlockedTables(sql, source.GetBlockedTables());
+        if (blockedTables.Count > 0)
+        {
+            var message = $"查询已被数据源表黑名单拦截：{string.Join(", ", blockedTables)}";
+            await auditWriter.WriteAsync(actor, "query.blocked", "failure", source.Id,
+                JsonSerializer.Serialize(new { sql, blockedTables, error = message }), cancellationToken);
+            throw new InvalidOperationException(message);
+        }
+
         var connection = new DatabaseConnection(source.Host, source.Port, source.Database, source.Username,
             credentialProtector.Unprotect(source.ProtectedPassword), source.CommandTimeoutSeconds);
 
@@ -34,12 +45,26 @@ public sealed class QueryService(
         {
             var result = await adapterFactory.Get(source.Provider).QueryAsync(connection, sql, source.MaxRows, cancellationToken);
             await auditWriter.WriteAsync(actor, "query.execute", "success", source.Id,
-                $"operation={analysis.Operation};rows={result.Rows.Count};truncated={result.Truncated}", cancellationToken);
+                JsonSerializer.Serialize(new
+                {
+                    sql,
+                    operation = analysis.Operation,
+                    rowCount = result.Rows.Count,
+                    truncated = result.Truncated,
+                    columns = result.Columns,
+                    rows = result.Rows
+                }), cancellationToken);
             return result;
         }
         catch (Exception exception)
         {
-            await auditWriter.WriteAsync(actor, "query.execute", "failure", source.Id, exception.Message, cancellationToken);
+            await auditWriter.WriteAsync(actor, "query.execute", "failure", source.Id,
+                JsonSerializer.Serialize(new
+                {
+                    sql,
+                    operation = analysis.Operation,
+                    error = exception.Message
+                }), cancellationToken);
             throw;
         }
     }

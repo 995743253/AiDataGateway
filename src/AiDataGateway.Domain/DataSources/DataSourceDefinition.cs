@@ -35,6 +35,7 @@ public sealed class DataSourceDefinition
     public int MaxRows { get; private set; }
     public int CommandTimeoutSeconds { get; private set; }
     public bool Enabled { get; private set; }
+    public string TableBlacklist { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
 
@@ -70,6 +71,23 @@ public sealed class DataSourceDefinition
         ProtectedPassword = Require(protectedPassword, nameof(protectedPassword));
         UpdatedAtUtc = DateTimeOffset.UtcNow;
     }
+
+    public void SetBlockedTables(IEnumerable<string>? tableNames)
+    {
+        var normalized = (tableNames ?? [])
+            .Select(item => item?.Trim())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item!)
+            .Select(item => item.Length <= 200 ? item : throw new ArgumentException("A blocked table name cannot exceed 200 characters.", nameof(tableNames)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(500)
+            .ToArray();
+        TableBlacklist = string.Join('\n', normalized);
+        UpdatedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    public IReadOnlyList<string> GetBlockedTables() => TableBlacklist
+        .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string Require(string value, string parameterName)
     {

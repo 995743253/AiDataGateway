@@ -39,6 +39,7 @@ public sealed class DataSourceService(
 
         entity.Update(request.Key, request.Name, request.Provider, request.Host, request.Port, request.Database, request.Username,
             request.AccessMode, request.MaxRows, request.CommandTimeoutSeconds, request.Enabled);
+        entity.SetBlockedTables(request.BlockedTables);
         entity.SetProtectedPassword(credentialProtector.Protect(request.Password));
 
         await repository.AddAsync(entity, cancellationToken);
@@ -60,6 +61,7 @@ public sealed class DataSourceService(
 
         entity.Update(request.Key, request.Name, request.Provider, request.Host, request.Port, request.Database, request.Username,
             request.AccessMode, request.MaxRows, request.CommandTimeoutSeconds, request.Enabled);
+        entity.SetBlockedTables(request.BlockedTables);
         if (!string.IsNullOrWhiteSpace(request.Password))
         {
             entity.SetProtectedPassword(credentialProtector.Protect(request.Password));
@@ -110,6 +112,7 @@ public sealed class DataSourceService(
         entity.MaxRows,
         entity.CommandTimeoutSeconds,
         entity.Enabled,
+        entity.GetBlockedTables(),
         !string.IsNullOrWhiteSpace(entity.ProtectedPassword),
         entity.UpdatedAtUtc);
 }

@@ -1,7 +1,9 @@
 using AiDataGateway.Application.Security;
+using AiDataGateway.Domain.Maintenance;
 using AiDataGateway.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace AiDataGateway.Infrastructure;
 
@@ -12,6 +14,8 @@ public sealed class GatewayDatabaseInitializer(
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
+        await EnsureTableBlacklistColumnAsync(cancellationToken);
+        await EnsureMaintenanceSettingsAsync(cancellationToken);
         foreach (var role in GatewayRoles.All)
         {
             if (!await roleManager.RoleExistsAsync(role))
@@ -21,6 +25,70 @@ public sealed class GatewayDatabaseInitializer(
                 {
                     throw new InvalidOperationException(string.Join("; ", result.Errors.Select(error => error.Description)));
                 }
+            }
+        }
+    }
+
+    private async Task EnsureMaintenanceSettingsAsync(CancellationToken cancellationToken)
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS "GatewayMaintenanceSettings" (
+                "Id" INTEGER NOT NULL CONSTRAINT "PK_GatewayMaintenanceSettings" PRIMARY KEY,
+                "CleanupEnabled" INTEGER NOT NULL,
+                "RetentionDays" INTEGER NOT NULL,
+                "CleanupTimeLocal" TEXT NOT NULL,
+                "LastCleanupAtUtc" TEXT NULL,
+                "LastCleanupSummary" TEXT NULL,
+                "UpdatedAtUtc" TEXT NOT NULL
+            )
+            """, cancellationToken);
+
+        if (!await dbContext.MaintenanceSettings.AnyAsync(item => item.Id == MaintenanceSettings.SingletonId, cancellationToken))
+        {
+            await dbContext.MaintenanceSettings.AddAsync(new MaintenanceSettings(), cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task EnsureTableBlacklistColumnAsync(CancellationToken cancellationToken)
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            var hasColumn = false;
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "PRAGMA table_info(\"GatewayDataSources\")";
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    if (string.Equals(reader.GetString(1), "TableBlacklist", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasColumn = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasColumn)
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = "ALTER TABLE \"GatewayDataSources\" ADD COLUMN \"TableBlacklist\" TEXT NOT NULL DEFAULT ''";
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
             }
         }
     }

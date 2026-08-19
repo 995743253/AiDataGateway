@@ -21,12 +21,18 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <ApplicationIcon>Assets\gateway-app.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <Target Name="CleanWebClientOutput" BeforeTargets="Build" Condition="Exists('..\AiDataGateway.Web\dist')">
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\gateway-brand-large.png" LogicalName="AiDataGateway.Desktop.Assets.gateway-brand-large.png" />
+    <EmbeddedResource Include="Assets\gateway-app-icon.png" LogicalName="AiDataGateway.Desktop.Assets.gateway-app-icon.png" />
+  </ItemGroup>
+
+  <Target Name="CleanWebClientOutput" BeforeTargets="PrepareForBuild" Condition="Exists('..\AiDataGateway.Web\dist')">
     <RemoveDir Directories="$(OutDir)wwwroot" Condition="Exists('$(OutDir)wwwroot')" />
   </Target>
 

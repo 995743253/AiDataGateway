@@ -279,6 +279,7 @@ Content-Type: application/json
 
 - 此接口只允许被策略识别为只读的单条 SQL；
 - 返回行数受数据源 `maxRows` 限制；
+- 若 SQL 的 `FROM`、`JOIN` 或子查询引用数据源配置的表黑名单，接口直接返回 `400`，且不会连接目标数据库；
 - `truncated=true` 表示结果还有更多行，AI 必须向用户明确说明结果被截断；
 - 建议 SQL 显式选择必要列并使用过滤条件；
 - 不要依赖 `SELECT *`；当前策略会将其标记为中风险；
@@ -542,10 +543,18 @@ POST /api/gateway/query           POST /api/gateway/changes
 
 | 方法 | 地址 | 用途 |
 |---|---|---|
-| `GET` | `/api/approvals?take=500` | 查询审批历史 |
+| `GET` | `/api/approvals?page=1&pageSize=20&status=Pending&keyword=table_name` | 分页查询审批历史；`status`、`keyword` 可选 |
 | `GET` | `/api/approvals/{id}` | 查询完整 SQL、审批及执行详情 |
 | `POST` | `/api/approvals/{id}/review` | 人工批准或拒绝 |
-| `GET` | `/api/audit/logs?take=500` | 查询调用与运行日志 |
+| `GET` | `/api/audit/logs?page=1&pageSize=20&keyword=select&action=query.execute&outcome=success` | 分页查询运行日志；筛选参数均可选 |
+| `GET` | `/api/settings/maintenance` | 查询日志与记录清理设置 |
+| `PUT` | `/api/settings/maintenance` | 更新启用状态、保留天数和每日清理时间 |
+| `POST` | `/api/settings/maintenance/cleanup-now` | 立即执行一次清理 |
+| `PUT` | `/api/admin/users/{id}` | 编辑用户显示名称、状态和角色 |
+| `DELETE` | `/api/admin/users/{id}` | 永久删除无历史记录的非当前、非最后管理员账号 |
+| `DELETE` | `/api/admin/oauth-clients/{clientId}` | 吊销客户端并删除关联授权和 Token |
 | `GET` | `/api/events` | 建立 SSE 长连接，接收表变更通知 |
 
 `/api/events` 由服务端在业务数据提交后主动发送 `gateway-change` 事件。管理页面收到事件后按动作类型刷新审批、日志、数据源、用户或 OAuth2 客户端列表，不使用定时轮询。
+
+两个分页接口统一返回 `{ items, total, page, pageSize }`。`pageSize` 范围为 1～200。

@@ -7,6 +7,7 @@ using AiDataGateway.Application.Sql;
 using AiDataGateway.Domain.Approvals;
 using AiDataGateway.Domain.DataSources;
 using Microsoft.AspNetCore.Authorization;
+using System.Text.Json;
 
 namespace AiDataGateway.Api.Endpoints;
 
@@ -73,7 +74,13 @@ internal static class GatewayEndpoints
             var change = new ChangeRequest(source.Id, request.Sql, actor, analysis.RiskLevel);
             await changes.AddAsync(change, cancellationToken);
             await changes.SaveChangesAsync(cancellationToken);
-            await auditWriter.WriteAsync(actor, "change.submit", "pending", source.Id, change.Id.ToString(), cancellationToken);
+            await auditWriter.WriteAsync(actor, "change.submit", "pending", source.Id, JsonSerializer.Serialize(new
+            {
+                changeId = change.Id,
+                sql = change.Sql,
+                operation = analysis.Operation,
+                riskLevel = analysis.RiskLevel.ToString()
+            }), cancellationToken);
             return Results.Accepted($"/api/gateway/changes/{change.Id}", new { change.Id, change.Status, analysis });
         });
 
@@ -92,7 +99,9 @@ internal static class GatewayEndpoints
 
     private static async Task<IResult> ListApprovalsAsync(
         string? status,
-        int? take,
+        string? keyword,
+        int? page,
+        int? pageSize,
         IChangeRequestRepository changes,
         IDataSourceRepository dataSources,
         CancellationToken cancellationToken)
@@ -107,9 +116,15 @@ internal static class GatewayEndpoints
             statusFilter = parsedStatus;
         }
 
-        var items = await changes.ListAsync(statusFilter, take ?? 200, cancellationToken);
+        var result = await changes.SearchAsync(statusFilter, keyword, page ?? 1, pageSize ?? 20, cancellationToken);
         var sourceNames = (await dataSources.ListAsync(cancellationToken)).ToDictionary(item => item.Id, item => item.Name);
-        return Results.Ok(items.Select(item => ToApprovalView(item, sourceNames.GetValueOrDefault(item.DataSourceId))));
+        return Results.Ok(new
+        {
+            items = result.Items.Select(item => ToApprovalView(item, sourceNames.GetValueOrDefault(item.DataSourceId))),
+            result.Total,
+            result.Page,
+            result.PageSize
+        });
     }
 
     private static async Task<IResult> ListPendingApprovalsAsync(
@@ -139,24 +154,34 @@ internal static class GatewayEndpoints
     }
 
     private static async Task<IResult> ListAuditLogsAsync(
-        int? take,
+        string? keyword,
+        string? action,
+        string? outcome,
+        int? page,
+        int? pageSize,
         IAuditLogReader auditLogs,
         IDataSourceRepository dataSources,
         CancellationToken cancellationToken)
     {
-        var items = await auditLogs.ListRecentAsync(take ?? 200, cancellationToken);
+        var result = await auditLogs.SearchAsync(keyword, action, outcome, page ?? 1, pageSize ?? 20, cancellationToken);
         var sourceNames = (await dataSources.ListAsync(cancellationToken)).ToDictionary(item => item.Id, item => item.Name);
-        return Results.Ok(items.Select(item => new
+        return Results.Ok(new
         {
-            item.Id,
-            item.Actor,
-            item.Action,
-            item.Outcome,
-            item.DataSourceId,
-            dataSourceName = item.DataSourceId.HasValue ? sourceNames.GetValueOrDefault(item.DataSourceId.Value) : null,
-            item.Detail,
-            item.CreatedAtUtc
-        }));
+            items = result.Items.Select(item => new
+            {
+                item.Id,
+                item.Actor,
+                item.Action,
+                item.Outcome,
+                item.DataSourceId,
+                dataSourceName = item.DataSourceId.HasValue ? sourceNames.GetValueOrDefault(item.DataSourceId.Value) : null,
+                item.Detail,
+                item.CreatedAtUtc
+            }),
+            result.Total,
+            result.Page,
+            result.PageSize
+        });
     }
 
     private static object ToApprovalView(ChangeRequest item, string? dataSourceName)
@@ -206,7 +231,13 @@ internal static class GatewayEndpoints
         {
             change.Reject(actor, review.Comment);
             await changes.SaveChangesAsync(cancellationToken);
-            await auditWriter.WriteAsync(actor, "change.review", "rejected", change.DataSourceId, change.Id.ToString(), cancellationToken);
+            await auditWriter.WriteAsync(actor, "change.review", "rejected", change.DataSourceId, JsonSerializer.Serialize(new
+            {
+                changeId = change.Id,
+                sql = change.Sql,
+                approved = false,
+                comment = review.Comment
+            }), cancellationToken);
             return Results.Ok(new { change.Id, change.Status });
         }
 
@@ -231,14 +262,24 @@ internal static class GatewayEndpoints
             var affectedRows = await adapterFactory.Get(source.Provider).ExecuteAsync(connection, change.Sql, cancellationToken);
             change.MarkExecuted(true, null);
             await changes.SaveChangesAsync(cancellationToken);
-            await auditWriter.WriteAsync(actor, "change.execute", "success", source.Id, $"change={change.Id};rows={affectedRows}", cancellationToken);
+            await auditWriter.WriteAsync(actor, "change.execute", "success", source.Id, JsonSerializer.Serialize(new
+            {
+                changeId = change.Id,
+                sql = change.Sql,
+                affectedRows
+            }), cancellationToken);
             return Results.Ok(new { change.Id, change.Status, affectedRows });
         }
         catch (Exception exception)
         {
             change.MarkExecuted(false, exception.Message);
             await changes.SaveChangesAsync(cancellationToken);
-            await auditWriter.WriteAsync(actor, "change.execute", "failure", source.Id, exception.Message, cancellationToken);
+            await auditWriter.WriteAsync(actor, "change.execute", "failure", source.Id, JsonSerializer.Serialize(new
+            {
+                changeId = change.Id,
+                sql = change.Sql,
+                error = exception.Message
+            }), cancellationToken);
             return Results.Problem(exception.Message);
         }
     }

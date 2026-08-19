@@ -2,6 +2,7 @@ using AiDataGateway.Application.Abstractions;
 using AiDataGateway.Domain.DataSources;
 using AiDataGateway.Infrastructure.Databases;
 using AiDataGateway.Infrastructure.Identity;
+using AiDataGateway.Infrastructure.Maintenance;
 using AiDataGateway.Infrastructure.Persistence;
 using AiDataGateway.Infrastructure.Security;
 using Microsoft.AspNetCore.DataProtection;
@@ -72,6 +73,8 @@ public static class DependencyInjection
                 return Task.CompletedTask;
             };
         });
+        services.Configure<SecurityStampValidatorOptions>(options =>
+            options.ValidationInterval = TimeSpan.Zero);
 
         services.AddOpenIddict()
             .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<GatewayDbContext>());
@@ -80,6 +83,12 @@ public static class DependencyInjection
         services.AddScoped<IChangeRequestRepository, ChangeRequestRepository>();
         services.AddScoped<IAuditWriter, AuditWriter>();
         services.AddScoped<IAuditLogReader, AuditLogReader>();
+        services.AddScoped<IMaintenanceSettingsRepository, MaintenanceSettingsRepository>();
+        services.AddScoped<IGatewayDataCleaner, GatewayDataCleaner>();
+        services.AddScoped<IUserHistoryChecker, UserHistoryChecker>();
+        services.AddSingleton<MaintenanceScheduleSignal>();
+        services.AddSingleton<IMaintenanceScheduleNotifier>(services => services.GetRequiredService<MaintenanceScheduleSignal>());
+        services.AddHostedService<GatewayCleanupBackgroundService>();
         services.AddSingleton<ICredentialProtector, DataProtectionCredentialProtector>();
         services.AddSingleton<IDatabaseAdapterFactory, DatabaseAdapterFactory>();
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.SqlServer));

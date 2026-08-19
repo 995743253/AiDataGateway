@@ -38,12 +38,35 @@ public sealed class GatewayHostTests
             host = null;
             SqliteConnection.ClearAllPools();
 
+            await using (var connection = new SqliteConnection($"Data Source={Path.Combine(tempPath, "gateway.db")}"))
+            {
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    "INSERT INTO GatewayAuditEntries (Id, Actor, Action, Outcome, DataSourceId, Detail, CreatedAtUtc) VALUES ($id, 'test', 'startup.cleanup.test', 'success', NULL, NULL, $created)";
+                command.Parameters.AddWithValue("$id", Guid.NewGuid());
+                command.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.AddDays(-10));
+                await command.ExecuteNonQueryAsync();
+            }
+
             host = await StartHostAsync(tempPath);
             using var restartedClient = new HttpClient { BaseAddress = host.BaseAddress };
             var setupStatus = await restartedClient.GetFromJsonAsync<JsonElement>("/api/setup/status");
 
             Assert.False(setupStatus.GetProperty("needsSetup").GetBoolean());
             Assert.True(File.Exists(Path.Combine(tempPath, "gateway.db")));
+
+            var oldRecordCount = 1L;
+            for (var attempt = 0; attempt < 30 && oldRecordCount > 0; attempt++)
+            {
+                await Task.Delay(100);
+                await using var connection = new SqliteConnection($"Data Source={Path.Combine(tempPath, "gateway.db")}");
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM GatewayAuditEntries WHERE Action = 'startup.cleanup.test'";
+                oldRecordCount = (long)(await command.ExecuteScalarAsync())!;
+            }
+            Assert.Equal(0, oldRecordCount);
         }
         finally
         {
@@ -122,6 +145,127 @@ public sealed class GatewayHostTests
             var pendingApprovalsBody = await pendingApprovals.Content.ReadAsStringAsync();
             Assert.True(pendingApprovals.IsSuccessStatusCode, pendingApprovalsBody);
 
+            var maintenanceSettings = await client.GetFromJsonAsync<JsonElement>("/api/settings/maintenance");
+            Assert.True(maintenanceSettings.GetProperty("cleanupEnabled").GetBoolean());
+            Assert.Equal(3, maintenanceSettings.GetProperty("retentionDays").GetInt32());
+            Assert.Equal("03:00", maintenanceSettings.GetProperty("cleanupTimeLocal").GetString());
+
+            await using (var gatewayConnection = new SqliteConnection($"Data Source={Path.Combine(tempPath, "gateway.db")}"))
+            {
+                await gatewayConnection.OpenAsync();
+                await using var insertOldAudit = gatewayConnection.CreateCommand();
+                insertOldAudit.CommandText =
+                    "INSERT INTO GatewayAuditEntries (Id, Actor, Action, Outcome, DataSourceId, Detail, CreatedAtUtc) VALUES ($id, 'test', 'old.test', 'success', NULL, NULL, $created)";
+                insertOldAudit.Parameters.AddWithValue("$id", Guid.NewGuid());
+                insertOldAudit.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.AddDays(-10));
+                await insertOldAudit.ExecuteNonQueryAsync();
+            }
+
+            var cleanupResponse = await client.PostAsync("/api/settings/maintenance/cleanup-now", null);
+            var cleanupResult = await cleanupResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(cleanupResponse.IsSuccessStatusCode, cleanupResult.ToString());
+            Assert.Equal(1, cleanupResult.GetProperty("auditLogsDeleted").GetInt32());
+
+            var updateMaintenanceResponse = await client.PutAsJsonAsync("/api/settings/maintenance", new
+            {
+                cleanupEnabled = true,
+                retentionDays = 7,
+                cleanupTimeLocal = "04:30"
+            });
+            var updatedMaintenance = await updateMaintenanceResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(updateMaintenanceResponse.IsSuccessStatusCode, updatedMaintenance.ToString());
+            Assert.Equal(7, updatedMaintenance.GetProperty("retentionDays").GetInt32());
+            Assert.Equal("04:30", updatedMaintenance.GetProperty("cleanupTimeLocal").GetString());
+
+            var currentUser = await client.GetFromJsonAsync<JsonElement>("/api/auth/me");
+            var deleteCurrentUser = await client.DeleteAsync($"/api/admin/users/{currentUser.GetProperty("id").GetGuid()}");
+            Assert.Equal(HttpStatusCode.BadRequest, deleteCurrentUser.StatusCode);
+
+            var createDisposableUser = await client.PostAsJsonAsync("/api/admin/users", new
+            {
+                userName = "disposable-user",
+                email = "disposable@example.local",
+                displayName = "Disposable User",
+                password = "StrongPassword10",
+                roles = new[] { "Viewer" }
+            });
+            Assert.Equal(HttpStatusCode.Created, createDisposableUser.StatusCode);
+            var disposableUser = await createDisposableUser.Content.ReadFromJsonAsync<JsonElement>();
+            var disposableUserId = disposableUser.GetProperty("id").GetGuid();
+            var disableDisposableUser = await client.PutAsJsonAsync($"/api/admin/users/{disposableUserId}", new
+            {
+                displayName = "Disposable User",
+                enabled = false,
+                roles = new[] { "Viewer" }
+            });
+            Assert.Equal(HttpStatusCode.NoContent, disableDisposableUser.StatusCode);
+            var deleteDisposableUser = await client.DeleteAsync($"/api/admin/users/{disposableUserId}");
+            Assert.Equal(HttpStatusCode.NoContent, deleteDisposableUser.StatusCode);
+
+            var createHistoryUser = await client.PostAsJsonAsync("/api/admin/users", new
+            {
+                userName = "history-user",
+                email = "history@example.local",
+                displayName = "History User",
+                password = "StrongPassword10",
+                roles = new[] { "Viewer" }
+            });
+            var historyUser = await createHistoryUser.Content.ReadFromJsonAsync<JsonElement>();
+            await using (var gatewayConnection = new SqliteConnection($"Data Source={Path.Combine(tempPath, "gateway.db")}"))
+            {
+                await gatewayConnection.OpenAsync();
+                await using var insertHistory = gatewayConnection.CreateCommand();
+                insertHistory.CommandText =
+                    "INSERT INTO GatewayAuditEntries (Id, Actor, Action, Outcome, DataSourceId, Detail, CreatedAtUtc) VALUES ($id, 'history-user', 'history.test', 'success', NULL, NULL, $created)";
+                insertHistory.Parameters.AddWithValue("$id", Guid.NewGuid());
+                insertHistory.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow);
+                await insertHistory.ExecuteNonQueryAsync();
+            }
+            var deleteHistoryUser = await client.DeleteAsync($"/api/admin/users/{historyUser.GetProperty("id").GetGuid()}");
+            Assert.Equal(HttpStatusCode.Conflict, deleteHistoryUser.StatusCode);
+
+            var removeLastAdministrator = await client.PutAsJsonAsync($"/api/admin/users/{currentUser.GetProperty("id").GetGuid()}", new
+            {
+                displayName = "Administrator",
+                enabled = true,
+                roles = new[] { "Developer" }
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, removeLastAdministrator.StatusCode);
+
+            var createDisposableClient = await client.PostAsJsonAsync("/api/admin/oauth-clients", new
+            {
+                displayName = "Disposable OAuth Client",
+                scopes = new[] { "gateway.datasource.read" }
+            });
+            createDisposableClient.EnsureSuccessStatusCode();
+            var disposableClient = await createDisposableClient.Content.ReadFromJsonAsync<JsonElement>();
+            var disposableClientId = disposableClient.GetProperty("clientId").GetString()!;
+            var disposableClientSecret = disposableClient.GetProperty("clientSecret").GetString()!;
+            var disposableTokenResponse = await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = disposableClientId,
+                ["client_secret"] = disposableClientSecret,
+                ["scope"] = "gateway.datasource.read"
+            }));
+            disposableTokenResponse.EnsureSuccessStatusCode();
+            var disposableToken = await disposableTokenResponse.Content.ReadFromJsonAsync<JsonElement>();
+            using var disposableAiClient = new HttpClient { BaseAddress = host.BaseAddress };
+            disposableAiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", disposableToken.GetProperty("access_token").GetString());
+            Assert.Equal(HttpStatusCode.OK, (await disposableAiClient.GetAsync("/api/gateway/datasources")).StatusCode);
+
+            var deleteDisposableClient = await client.DeleteAsync($"/api/admin/oauth-clients/{disposableClientId}");
+            Assert.Equal(HttpStatusCode.NoContent, deleteDisposableClient.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await disposableAiClient.GetAsync("/api/gateway/datasources")).StatusCode);
+            var tokenAfterDeletion = await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = disposableClientId,
+                ["client_secret"] = disposableClientSecret,
+                ["scope"] = "gateway.datasource.read"
+            }));
+            Assert.Equal(HttpStatusCode.Unauthorized, tokenAfterDeletion.StatusCode);
+
             var tokenResponse = await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "client_credentials",
@@ -154,12 +298,23 @@ public sealed class GatewayHostTests
                 accessMode = 2,
                 maxRows = 100,
                 commandTimeoutSeconds = 10,
-                enabled = true
+                enabled = true,
+                blockedTables = new[] { "secret_records" }
             });
             var createBody = await createDataSource.Content.ReadAsStringAsync();
             Assert.True(createDataSource.IsSuccessStatusCode, createBody);
             var created = JsonSerializer.Deserialize<JsonElement>(createBody);
             var dataSourceId = created.GetProperty("id").GetGuid();
+            Assert.Equal("secret_records", Assert.Single(created.GetProperty("blockedTables").EnumerateArray()).GetString());
+
+            var blockedQueryResponse = await aiClient.PostAsJsonAsync("/api/gateway/query", new
+            {
+                dataSourceId,
+                sql = "select * from secret_records"
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, blockedQueryResponse.StatusCode);
+            var blockedQuery = await blockedQueryResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Contains("黑名单", blockedQuery.GetProperty("message").GetString());
 
             var testConnection = await client.PostAsync($"/api/admin/datasources/{dataSourceId}/test", null);
             var testResult = await testConnection.Content.ReadFromJsonAsync<JsonElement>();
@@ -196,8 +351,9 @@ public sealed class GatewayHostTests
             var submittedChange = JsonSerializer.Deserialize<JsonElement>(submitChangeBody);
             var changeId = submittedChange.GetProperty("id").GetGuid();
 
-            var approvalHistory = await client.GetFromJsonAsync<JsonElement>("/api/approvals?take=100");
-            var pendingApproval = Assert.Single(approvalHistory.EnumerateArray());
+            var approvalHistory = await client.GetFromJsonAsync<JsonElement>("/api/approvals?page=1&pageSize=100");
+            Assert.Equal(1, approvalHistory.GetProperty("total").GetInt32());
+            var pendingApproval = Assert.Single(approvalHistory.GetProperty("items").EnumerateArray());
             Assert.Equal("Pending", pendingApproval.GetProperty("status").GetString());
             Assert.Contains("approval_history_test", pendingApproval.GetProperty("sql").GetString());
 
@@ -213,13 +369,32 @@ public sealed class GatewayHostTests
             var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
             Assert.True(reviewResponse.IsSuccessStatusCode, reviewBody);
 
-            approvalHistory = await client.GetFromJsonAsync<JsonElement>("/api/approvals?take=100");
-            var completedApproval = Assert.Single(approvalHistory.EnumerateArray());
+            approvalHistory = await client.GetFromJsonAsync<JsonElement>("/api/approvals?status=Succeeded&keyword=approval_history_test&page=1&pageSize=10");
+            Assert.Equal(1, approvalHistory.GetProperty("total").GetInt32());
+            var completedApproval = Assert.Single(approvalHistory.GetProperty("items").EnumerateArray());
             Assert.Equal("Succeeded", completedApproval.GetProperty("status").GetString());
             Assert.Equal("integration test approval", completedApproval.GetProperty("reviewComment").GetString());
 
-            var auditLogs = await client.GetFromJsonAsync<JsonElement>("/api/audit/logs?take=100");
-            Assert.Contains(auditLogs.EnumerateArray(), item => item.GetProperty("action").GetString() == "change.execute");
+            var auditLogs = await client.GetFromJsonAsync<JsonElement>("/api/audit/logs?keyword=select&page=1&pageSize=100");
+            Assert.True(auditLogs.GetProperty("total").GetInt32() >= 2);
+            var auditItems = auditLogs.GetProperty("items").EnumerateArray().ToArray();
+            var queryAudit = Assert.Single(auditItems, item =>
+                item.GetProperty("action").GetString() == "query.execute" &&
+                item.GetProperty("detail").GetString()!.Contains("select 1 as value", StringComparison.Ordinal));
+            var queryDetail = JsonSerializer.Deserialize<JsonElement>(queryAudit.GetProperty("detail").GetString()!);
+            Assert.Equal("select 1 as value", queryDetail.GetProperty("sql").GetString());
+            Assert.Equal(1, queryDetail.GetProperty("rowCount").GetInt32());
+            Assert.Equal(1, queryDetail.GetProperty("rows")[0].GetProperty("value").GetInt64());
+
+            auditLogs = await client.GetFromJsonAsync<JsonElement>("/api/audit/logs?action=change.execute&outcome=success&page=1&pageSize=1");
+            Assert.Equal(1, auditLogs.GetProperty("total").GetInt32());
+            var executeAudit = Assert.Single(auditLogs.GetProperty("items").EnumerateArray());
+            var executeDetail = JsonSerializer.Deserialize<JsonElement>(executeAudit.GetProperty("detail").GetString()!);
+            Assert.Contains("approval_history_test", executeDetail.GetProperty("sql").GetString());
+            Assert.Equal(0, executeDetail.GetProperty("affectedRows").GetInt32());
+
+            var blockedAuditLogs = await client.GetFromJsonAsync<JsonElement>("/api/audit/logs?action=query.blocked&page=1&pageSize=10");
+            Assert.Equal(1, blockedAuditLogs.GetProperty("total").GetInt32());
         }
         finally
         {

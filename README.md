@@ -4,16 +4,19 @@
 
 ## 当前能力
 
-- ASP.NET Core Identity 用户、密码、角色、锁定和会话管理。
+- ASP.NET Core Identity 用户、密码、角色、锁定和会话管理；支持编辑、启用/禁用和受限永久删除。
 - OpenIddict OAuth2/OIDC 服务，支持 Authorization Code + PKCE、Client Credentials 和 Refresh Token。
+- OAuth2 客户端支持吊销删除，并使关联授权和已签发 Token 立即失效。
 - AI 客户端默认只能获得数据源读取、只读查询和提交变更 Scope。
 - EF Core + SQLite 保存本地配置、用户、OAuth 客户端、审批和审计。
 - Data Protection 密钥由当前 Windows 用户的 DPAPI 保护。
 - FreeSql 动态支持 SQL Server、MySQL、PostgreSQL 和 SQLite 数据源。
+- 每个数据源可配置独立表黑名单，命中的只读 SQL 会在建立数据库连接前被强制拦截并写入审计日志。
 - SQL 只读分类、多语句拦截、无条件 UPDATE/DELETE 拦截和危险 DDL 默认拒绝。
 - 写操作进入本地审批，由 Administrator/Approver 批准后执行。
 - 独立审批历史与完整 SQL 详情页，保留审批人、意见、执行状态和错误。
 - 运行日志页面集中查看 AI 查询、审批、数据源、用户和认证操作。
+- 系统设置支持按天保留审批记录、审计日志和本地日志文件，默认保留 3 天；每次启动立即清理，持续运行时再按每日计划清理。
 - SSE 服务端事件驱动管理表格自动刷新，无定时轮询。
 - WinForms 系统托盘、WebView2 内嵌管理页面。
 

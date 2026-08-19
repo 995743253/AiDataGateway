@@ -11,6 +11,8 @@ WebView2Runtime/
 *.user
 *.suo
 .vs/
+.idea/
+**/.idea/
 
 # Runtime data and local configuration
 *.db
