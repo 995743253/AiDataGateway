@@ -28,4 +28,12 @@ public sealed class DomainTests
 
         Assert.Equal(ChangeStatus.Succeeded, request.Status);
     }
+
+    [Fact]
+    public void Change_request_uses_configured_expiration()
+    {
+        var request = new ChangeRequest(Guid.NewGuid(), "update t set value = 1 where id = 1", "ai-client", SqlRiskLevel.High, 90);
+
+        Assert.InRange(request.ExpiresAtUtc - request.CreatedAtUtc, TimeSpan.FromMinutes(89.9), TimeSpan.FromMinutes(90.1));
+    }
 }

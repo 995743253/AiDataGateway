@@ -8,8 +8,12 @@ public sealed class ChangeRequest
     {
     }
 
-    public ChangeRequest(Guid dataSourceId, string sql, string requestedBy, SqlRiskLevel riskLevel)
+    public ChangeRequest(Guid dataSourceId, string sql, string requestedBy, SqlRiskLevel riskLevel, int expirationMinutes = 15)
     {
+        if (expirationMinutes is < 1 or > 10_080)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expirationMinutes));
+        }
         Id = Guid.NewGuid();
         DataSourceId = dataSourceId;
         Sql = sql;
@@ -17,7 +21,7 @@ public sealed class ChangeRequest
         RiskLevel = riskLevel;
         Status = ChangeStatus.Pending;
         CreatedAtUtc = DateTimeOffset.UtcNow;
-        ExpiresAtUtc = CreatedAtUtc.AddMinutes(15);
+        ExpiresAtUtc = CreatedAtUtc.AddMinutes(expirationMinutes);
     }
 
     public Guid Id { get; private set; }

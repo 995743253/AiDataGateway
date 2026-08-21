@@ -8,21 +8,26 @@ public sealed class MaintenanceSettings
     {
     }
 
-    public MaintenanceSettings(bool cleanupEnabled = true, int retentionDays = 3, string cleanupTimeLocal = "03:00")
+    public MaintenanceSettings(
+        bool cleanupEnabled = true,
+        int retentionDays = 3,
+        string cleanupTimeLocal = "03:00",
+        int approvalExpirationMinutes = 15)
     {
         Id = SingletonId;
-        Update(cleanupEnabled, retentionDays, cleanupTimeLocal);
+        Update(cleanupEnabled, retentionDays, cleanupTimeLocal, approvalExpirationMinutes);
     }
 
     public int Id { get; private set; }
     public bool CleanupEnabled { get; private set; }
     public int RetentionDays { get; private set; }
     public string CleanupTimeLocal { get; private set; } = "03:00";
+    public int ApprovalExpirationMinutes { get; private set; }
     public DateTimeOffset? LastCleanupAtUtc { get; private set; }
     public string? LastCleanupSummary { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
 
-    public void Update(bool cleanupEnabled, int retentionDays, string cleanupTimeLocal)
+    public void Update(bool cleanupEnabled, int retentionDays, string cleanupTimeLocal, int approvalExpirationMinutes)
     {
         if (retentionDays is < 1 or > 3_650)
         {
@@ -32,10 +37,15 @@ public sealed class MaintenanceSettings
         {
             throw new ArgumentException("Cleanup time must use HH:mm format.", nameof(cleanupTimeLocal));
         }
+        if (approvalExpirationMinutes is < 1 or > 10_080)
+        {
+            throw new ArgumentOutOfRangeException(nameof(approvalExpirationMinutes), "Approval expiration must be between 1 and 10080 minutes.");
+        }
 
         CleanupEnabled = cleanupEnabled;
         RetentionDays = retentionDays;
         CleanupTimeLocal = cleanupTimeLocal;
+        ApprovalExpirationMinutes = approvalExpirationMinutes;
         UpdatedAtUtc = DateTimeOffset.UtcNow;
     }
 

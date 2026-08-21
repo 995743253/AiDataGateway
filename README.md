@@ -10,13 +10,14 @@
 - AI 客户端默认只能获得数据源读取、只读查询和提交变更 Scope。
 - EF Core + SQLite 保存本地配置、用户、OAuth 客户端、审批和审计。
 - Data Protection 密钥由当前 Windows 用户的 DPAPI 保护。
-- FreeSql 动态支持 SQL Server、MySQL、PostgreSQL 和 SQLite 数据源。
+- FreeSql 动态支持 SQL Server、MySQL、PostgreSQL、SQLite、Oracle、MariaDB、达梦 DM8 和 Firebird 数据源。
+- 内置 OAuth2 保护的 MCP Streamable HTTP Server（`/mcp`），支持工具发现、只读查询、提交审批和查询工单状态。
 - 每个数据源可配置独立表黑名单，命中的只读 SQL 会在建立数据库连接前被强制拦截并写入审计日志。
 - SQL 只读分类、多语句拦截、无条件 UPDATE/DELETE 拦截和危险 DDL 默认拒绝。
 - 写操作进入本地审批，由 Administrator/Approver 批准后执行。
 - 独立审批历史与完整 SQL 详情页，保留审批人、意见、执行状态和错误。
 - 运行日志页面集中查看 AI 查询、审批、数据源、用户和认证操作。
-- 系统设置支持按天保留审批记录、审计日志和本地日志文件，默认保留 3 天；每次启动立即清理，持续运行时再按每日计划清理。
+- 系统设置可配置新工单审批有效期；同时支持按天保留审批记录、审计日志和本地日志文件，默认保留 3 天。
 - SSE 服务端事件驱动管理表格自动刷新，无定时轮询。
 - WinForms 系统托盘、WebView2 内嵌管理页面。
 
@@ -41,6 +42,7 @@ tests/
 - [小白使用说明：客户端操作与 AI 接入](Doc/小白使用说明-AI接入.md)
 - [AiDataGateway 使用说明](Doc/AiDataGateway使用说明.md)
 - [AI 客户端 API 文档](Doc/AI客户端API文档.md)
+- [MCP Server 接入说明](Doc/MCP服务器接入说明.md)
 
 ## 构建
 
@@ -50,9 +52,9 @@ npm install
 npm run build
 
 cd ../..
-dotnet restore AiDataGateway.slnx --configfile NuGet.Config
-dotnet build AiDataGateway.slnx --no-restore
-dotnet test AiDataGateway.slnx --no-build --no-restore
+dotnet restore AiDataGateway.sln
+dotnet build AiDataGateway.sln --no-restore
+dotnet test AiDataGateway.sln --no-build --no-restore
 ```
 
 ## 启动
@@ -82,6 +84,8 @@ scope=gateway.datasource.read gateway.query.execute gateway.change.submit
 ```http
 Authorization: Bearer <access-token>
 ```
+
+支持 MCP 的客户端可连接 `http://127.0.0.1:5127/mcp`，并使用同一个 OAuth2 Bearer Token。详见 [MCP Server 接入说明](Doc/MCP服务器接入说明.md)。
 
 ## 本地数据
 

@@ -16,7 +16,7 @@ internal sealed class FreeSqlDatabaseAdapter(DatabaseProvider provider) : IDatab
         try
         {
             using var freeSql = Build(connection);
-            await freeSql.Ado.ExecuteScalarAsync("SELECT 1", cancellationToken);
+            await freeSql.Ado.ExecuteScalarAsync(ConnectionTestSql(Provider), cancellationToken);
             return new(true, "Connection succeeded.", stopwatch.Elapsed);
         }
         catch (Exception exception)
@@ -63,6 +63,10 @@ internal sealed class FreeSqlDatabaseAdapter(DatabaseProvider provider) : IDatab
         DatabaseProvider.MySql => $"Server={connection.Host};Port={connection.Port};Database={connection.Database};User ID={connection.Username};Password={connection.Password};Connection Timeout=5;Default Command Timeout={connection.CommandTimeoutSeconds};Allow User Variables=True;",
         DatabaseProvider.PostgreSql => $"Host={connection.Host};Port={connection.Port};Database={connection.Database};Username={connection.Username};Password={connection.Password};Timeout=5;Command Timeout={connection.CommandTimeoutSeconds};",
         DatabaseProvider.Sqlite => $"Data Source={connection.Database};",
+        DatabaseProvider.Oracle => $"User Id={connection.Username};Password={connection.Password};Data Source=//{connection.Host}:{connection.Port}/{connection.Database};Pooling=true;Connection Timeout=5;",
+        DatabaseProvider.MariaDb => $"Server={connection.Host};Port={connection.Port};Database={connection.Database};User ID={connection.Username};Password={connection.Password};Connection Timeout=5;Default Command Timeout={connection.CommandTimeoutSeconds};Allow User Variables=True;",
+        DatabaseProvider.Dameng => $"Server={connection.Host};Port={connection.Port};User Id={connection.Username};PWD={connection.Password};Database={connection.Database};Connection Timeout=5;",
+        DatabaseProvider.Firebird => $"Database={connection.Host}/{connection.Port}:{connection.Database};User={connection.Username};Password={connection.Password};Dialect=3;Charset=UTF8;Pooling=true;Connection timeout=5;",
         _ => throw new NotSupportedException($"Unsupported provider '{Provider}'.")
     };
 
@@ -72,7 +76,18 @@ internal sealed class FreeSqlDatabaseAdapter(DatabaseProvider provider) : IDatab
         DatabaseProvider.MySql => DataType.MySql,
         DatabaseProvider.PostgreSql => DataType.PostgreSQL,
         DatabaseProvider.Sqlite => DataType.Sqlite,
+        DatabaseProvider.Oracle => DataType.Oracle,
+        DatabaseProvider.MariaDb => DataType.MySql,
+        DatabaseProvider.Dameng => DataType.Dameng,
+        DatabaseProvider.Firebird => DataType.Firebird,
         _ => throw new NotSupportedException($"Unsupported provider '{provider}'.")
+    };
+
+    private static string ConnectionTestSql(DatabaseProvider provider) => provider switch
+    {
+        DatabaseProvider.Oracle or DatabaseProvider.Dameng => "SELECT 1 FROM DUAL",
+        DatabaseProvider.Firebird => "SELECT 1 FROM RDB$DATABASE",
+        _ => "SELECT 1"
     };
 
     private static IReadOnlyDictionary<string, object?> ToDictionary(object row)

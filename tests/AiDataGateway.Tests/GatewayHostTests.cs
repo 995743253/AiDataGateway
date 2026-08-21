@@ -149,6 +149,7 @@ public sealed class GatewayHostTests
             Assert.True(maintenanceSettings.GetProperty("cleanupEnabled").GetBoolean());
             Assert.Equal(3, maintenanceSettings.GetProperty("retentionDays").GetInt32());
             Assert.Equal("03:00", maintenanceSettings.GetProperty("cleanupTimeLocal").GetString());
+            Assert.Equal(15, maintenanceSettings.GetProperty("approvalExpirationMinutes").GetInt32());
 
             await using (var gatewayConnection = new SqliteConnection($"Data Source={Path.Combine(tempPath, "gateway.db")}"))
             {
@@ -170,12 +171,14 @@ public sealed class GatewayHostTests
             {
                 cleanupEnabled = true,
                 retentionDays = 7,
-                cleanupTimeLocal = "04:30"
+                cleanupTimeLocal = "04:30",
+                approvalExpirationMinutes = 45
             });
             var updatedMaintenance = await updateMaintenanceResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(updateMaintenanceResponse.IsSuccessStatusCode, updatedMaintenance.ToString());
             Assert.Equal(7, updatedMaintenance.GetProperty("retentionDays").GetInt32());
             Assert.Equal("04:30", updatedMaintenance.GetProperty("cleanupTimeLocal").GetString());
+            Assert.Equal(45, updatedMaintenance.GetProperty("approvalExpirationMinutes").GetInt32());
 
             var currentUser = await client.GetFromJsonAsync<JsonElement>("/api/auth/me");
             var deleteCurrentUser = await client.DeleteAsync($"/api/admin/users/{currentUser.GetProperty("id").GetGuid()}");
@@ -284,6 +287,35 @@ public sealed class GatewayHostTests
             var dataSources = await aiClient.GetAsync("/api/gateway/datasources");
             Assert.Equal(HttpStatusCode.OK, dataSources.StatusCode);
 
+            using (var unauthenticatedMcpClient = new HttpClient { BaseAddress = host.BaseAddress })
+            {
+                var unauthorizedMcp = await unauthenticatedMcpClient.PostAsJsonAsync("/mcp", new
+                {
+                    jsonrpc = "2.0",
+                    id = 1,
+                    method = "initialize",
+                    @params = new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "test", version = "1.0" } }
+                });
+                Assert.Equal(HttpStatusCode.Unauthorized, unauthorizedMcp.StatusCode);
+            }
+
+            var initializeMcp = await aiClient.PostAsJsonAsync("/mcp", new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method = "initialize",
+                @params = new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "integration-test", version = "1.0" } }
+            });
+            var initializeMcpBody = await initializeMcp.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(initializeMcp.IsSuccessStatusCode, initializeMcpBody.ToString());
+            Assert.Equal("2025-06-18", initializeMcpBody.GetProperty("result").GetProperty("protocolVersion").GetString());
+
+            var listMcpTools = await aiClient.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 2, method = "tools/list", @params = new { } });
+            var mcpToolsBody = await listMcpTools.Content.ReadFromJsonAsync<JsonElement>();
+            var mcpToolNames = mcpToolsBody.GetProperty("result").GetProperty("tools").EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
+            Assert.Contains("query_database", mcpToolNames);
+            Assert.Contains("submit_change", mcpToolNames);
+
             var sqlitePath = Path.Combine(tempPath, "target.db");
             var createDataSource = await client.PostAsJsonAsync("/api/admin/datasources/", new
             {
@@ -331,6 +363,18 @@ public sealed class GatewayHostTests
             var queryResult = JsonSerializer.Deserialize<JsonElement>(queryBody);
             Assert.Single(queryResult.GetProperty("rows").EnumerateArray());
 
+            var mcpQueryResponse = await aiClient.PostAsJsonAsync("/mcp", new
+            {
+                jsonrpc = "2.0",
+                id = 3,
+                method = "tools/call",
+                @params = new { name = "query_database", arguments = new { dataSourceId, sql = "select 1 as value" } }
+            });
+            var mcpQueryBody = await mcpQueryResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(mcpQueryResponse.IsSuccessStatusCode, mcpQueryBody.ToString());
+            Assert.False(mcpQueryBody.GetProperty("result").GetProperty("isError").GetBoolean());
+            Assert.Single(mcpQueryBody.GetProperty("result").GetProperty("structuredContent").GetProperty("rows").EnumerateArray());
+
             var nullQueryResponse = await aiClient.PostAsJsonAsync("/api/gateway/query", new
             {
                 dataSourceId,
@@ -341,15 +385,30 @@ public sealed class GatewayHostTests
             var nullQueryResult = JsonSerializer.Deserialize<JsonElement>(nullQueryBody);
             Assert.Equal(JsonValueKind.Null, nullQueryResult.GetProperty("rows")[0].GetProperty("value").ValueKind);
 
-            var submitChangeResponse = await aiClient.PostAsJsonAsync("/api/gateway/changes", new
+            var submitChangeResponse = await aiClient.PostAsJsonAsync("/mcp", new
             {
-                dataSourceId,
-                sql = "create table approval_history_test (id integer primary key, name text)"
+                jsonrpc = "2.0",
+                id = 4,
+                method = "tools/call",
+                @params = new { name = "submit_change", arguments = new { dataSourceId, sql = "create table approval_history_test (id integer primary key, name text)" } }
             });
             var submitChangeBody = await submitChangeResponse.Content.ReadAsStringAsync();
-            Assert.Equal(HttpStatusCode.Accepted, submitChangeResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, submitChangeResponse.StatusCode);
             var submittedChange = JsonSerializer.Deserialize<JsonElement>(submitChangeBody);
-            var changeId = submittedChange.GetProperty("id").GetGuid();
+            var submittedChangeContent = submittedChange.GetProperty("result").GetProperty("structuredContent");
+            var changeId = submittedChangeContent.GetProperty("id").GetGuid();
+            var expiresAt = submittedChangeContent.GetProperty("expiresAtUtc").GetDateTimeOffset();
+            Assert.InRange(expiresAt - DateTimeOffset.UtcNow, TimeSpan.FromMinutes(44), TimeSpan.FromMinutes(46));
+
+            var mcpStatusResponse = await aiClient.PostAsJsonAsync("/mcp", new
+            {
+                jsonrpc = "2.0",
+                id = 5,
+                method = "tools/call",
+                @params = new { name = "get_change_status", arguments = new { changeId } }
+            });
+            var mcpStatus = await mcpStatusResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Pending", mcpStatus.GetProperty("result").GetProperty("structuredContent").GetProperty("status").GetString());
 
             var approvalHistory = await client.GetFromJsonAsync<JsonElement>("/api/approvals?page=1&pageSize=100");
             Assert.Equal(1, approvalHistory.GetProperty("total").GetInt32());
@@ -378,7 +437,10 @@ public sealed class GatewayHostTests
             var auditLogs = await client.GetFromJsonAsync<JsonElement>("/api/audit/logs?keyword=select&page=1&pageSize=100");
             Assert.True(auditLogs.GetProperty("total").GetInt32() >= 2);
             var auditItems = auditLogs.GetProperty("items").EnumerateArray().ToArray();
-            var queryAudit = Assert.Single(auditItems, item =>
+            Assert.Contains(auditItems, item =>
+                item.GetProperty("action").GetString() == "query.execute" &&
+                item.GetProperty("detail").GetString()!.Contains("select 1 as value", StringComparison.Ordinal));
+            var queryAudit = auditItems.First(item =>
                 item.GetProperty("action").GetString() == "query.execute" &&
                 item.GetProperty("detail").GetString()!.Contains("select 1 as value", StringComparison.Ordinal));
             var queryDetail = JsonSerializer.Deserialize<JsonElement>(queryAudit.GetProperty("detail").GetString()!);

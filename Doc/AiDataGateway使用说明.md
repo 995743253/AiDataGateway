@@ -8,7 +8,7 @@ AiDataGateway 是一套运行在 Windows 本机的 AI 数据库访问网关，�
 
 它在 AI 与目标数据库之间提供以下能力：
 
-- 集中管理 SQL Server、MySQL、PostgreSQL 和 SQLite 数据源；
+- 集中管理 SQL Server、MySQL、PostgreSQL、SQLite、Oracle、MariaDB、达梦 DM8 和 Firebird 数据源；
 - 通过 OAuth2 为 AI 客户端颁发受限访问令牌；
 - 只读 SQL 可直接执行；
 - 写 SQL 只能生成审批单，由本地用户审核后执行；
@@ -111,6 +111,10 @@ src\AiDataGateway.Desktop\bin\Debug\net10.0-windows10.0.17763.0\AiDataGateway.De
 | MySQL | `2` | `3306` | 使用 MySQL 用户名和密码 |
 | PostgreSQL | `3` | `5432` | 使用 PostgreSQL 用户名和密码 |
 | SQLite | `4` | `1` | “数据库”填写 SQLite 文件完整路径 |
+| Oracle | `5` | `1521` | “数据库”填写 Service Name，例如 `XE` 或 `ORCLPDB1` |
+| MariaDB | `6` | `3306` | 使用 MariaDB 用户名和密码 |
+| 达梦 DM8 | `7` | `5236` | “数据库”填写数据库名或服务配置对应名称 |
+| Firebird | `8` | `3050` | “数据库”填写服务端数据库文件路径或别名 |
 
 SQLite 实际只使用数据库文件路径。当前统一数据源模型仍要求填写主机、端口、用户名和密码，可使用：
 
@@ -187,7 +191,7 @@ AI 不能直接执行写 SQL。流程如下：
 5. 人工批准后，网关连接目标数据库执行 SQL；
 6. 拒绝则不会访问目标数据库。
 
-审批单默认有效期为 15 分钟。
+审批单默认有效期为 15 分钟。管理员可在“系统设置”中配置 1–10080 分钟；设置只影响新提交的工单，已经生成的工单仍按原失效时间处理。
 
 “审批记录”页面会保留待审批和历史工单。点击“查看详情”可以查看完整 SQL、数据源、风险等级、提交/审批/执行时间、审批意见及执行错误；只有仍处于待审批状态的工单会显示批准和拒绝按钮。
 
@@ -288,9 +292,9 @@ dotnet run --project src\AiDataGateway.Desktop\AiDataGateway.Desktop.csproj
 
 ## 12. 当前版本限制
 
-- 当前提供 HTTP/JSON API，尚未实现 MCP Server 传输层；
-- AI 提交审批后，当前没有提供给 AI 的审批状态轮询接口；
-- OAuth 客户端尚无删除、禁用和 Secret 轮换页面；
-- 管理端审批和日志通过登录 Cookie 授权；不要把这些接口暴露为 AI 工具；
+- MCP 当前提供无服务端通知需求的无状态 Streamable HTTP POST；不提供旧版 SSE `/sse` 传输；
+- MCP 状态查询只返回工单结果，不提供审批能力；
+- OAuth Client Secret 不支持找回或直接轮换，丢失后应创建新客户端并删除旧客户端；
+- 管理端审批和日志通过登录 Cookie 授权；审批接口不会暴露为 MCP 工具；
 - 数据库初始化使用 EF Core `EnsureCreated`，尚未建立正式迁移升级流程；
 - 默认 HTTP 仅适合本机回环访问。如修改为局域网或外网监听，必须另行配置 HTTPS、来源限制和网络访问控制。

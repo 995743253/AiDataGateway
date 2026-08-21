@@ -128,6 +128,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
         app.MapAdminEndpoints();
         app.MapSettingsEndpoints();
         app.MapGatewayEndpoints();
+        app.MapMcpEndpoints(baseAddress);
         app.MapRealtimeEndpoints();
         app.MapFallback(async context =>
         {

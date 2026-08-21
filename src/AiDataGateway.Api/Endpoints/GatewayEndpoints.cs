@@ -1,6 +1,7 @@
 using AiDataGateway.Api.Contracts;
 using AiDataGateway.Api.Security;
 using AiDataGateway.Application.Abstractions;
+using AiDataGateway.Application.Approvals;
 using AiDataGateway.Application.DataSources;
 using AiDataGateway.Application.Security;
 using AiDataGateway.Application.Sql;
@@ -43,10 +44,7 @@ internal static class GatewayEndpoints
         gateway.MapPost("/changes", async (
             SubmitChangeRequest request,
             HttpContext context,
-            ISqlSafetyAnalyzer analyzer,
-            IDataSourceRepository dataSources,
-            IChangeRequestRepository changes,
-            IAuditWriter auditWriter,
+            ChangeSubmissionService service,
             CancellationToken cancellationToken) =>
         {
             if (!GatewayPrincipal.Can(context.User, GatewayScopes.ChangeSubmit, GatewayRoles.Developer, GatewayRoles.Operator))
@@ -54,34 +52,9 @@ internal static class GatewayEndpoints
                 return Results.Forbid();
             }
 
-            var analysis = analyzer.Analyze(request.Sql);
-            if (analysis.IsReadOnly || !analysis.Allowed)
-            {
-                return Results.BadRequest(new { message = "The SQL is not an approvable write statement.", analysis });
-            }
-
-            var source = await dataSources.FindAsync(request.DataSourceId, cancellationToken);
-            if (source is null)
-            {
-                return Results.NotFound();
-            }
-            if (!source.Enabled || source.AccessMode is DataSourceAccessMode.Disabled or DataSourceAccessMode.ReadOnly)
-            {
-                return Results.BadRequest(new { message = "The data source does not allow write requests." });
-            }
-
             var actor = GatewayPrincipal.Actor(context.User);
-            var change = new ChangeRequest(source.Id, request.Sql, actor, analysis.RiskLevel);
-            await changes.AddAsync(change, cancellationToken);
-            await changes.SaveChangesAsync(cancellationToken);
-            await auditWriter.WriteAsync(actor, "change.submit", "pending", source.Id, JsonSerializer.Serialize(new
-            {
-                changeId = change.Id,
-                sql = change.Sql,
-                operation = analysis.Operation,
-                riskLevel = analysis.RiskLevel.ToString()
-            }), cancellationToken);
-            return Results.Accepted($"/api/gateway/changes/{change.Id}", new { change.Id, change.Status, analysis });
+            var result = await service.SubmitAsync(request.DataSourceId, request.Sql, actor, cancellationToken);
+            return Results.Accepted($"/api/gateway/changes/{result.Id}", result);
         });
 
         var approvals = endpoints.MapGroup("/api/approvals")

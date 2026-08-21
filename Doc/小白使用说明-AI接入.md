@@ -25,7 +25,7 @@ AiDataGateway 检查 SQL
 
 1. 已编译好的 AiDataGateway；
 2. 目标数据库的地址、端口、数据库名、用户名和密码；
-3. 一个可以调用 HTTP API 的本地 AI 客户端或适配器；
+3. 一个支持 MCP Streamable HTTP 或普通 HTTP API 的本地 AI 客户端；
 4. 首次初始化时生成的 AI `Client ID` 和 `Client Secret`。
 
 当前支持：
@@ -33,7 +33,11 @@ AiDataGateway 检查 SQL
 - SQL Server；
 - MySQL；
 - PostgreSQL；
-- SQLite。
+- SQLite；
+- Oracle；
+- MariaDB；
+- 达梦 DM8；
+- Firebird。
 
 ## 3. 启动客户端
 
@@ -105,10 +109,10 @@ Client Secret
 |---|---|
 | 标识 | 给数据库起一个不重复的英文标识，例如 `order-dev` |
 | 名称 | 容易看懂的名称，例如“订单系统开发库” |
-| 类型 | SQL Server、MySQL、PostgreSQL 或 SQLite |
+| 类型 | SQL Server、MySQL、PostgreSQL、SQLite、Oracle、MariaDB、达梦 DM8 或 Firebird |
 | IP/主机 | 数据库服务器 IP 或主机名 |
-| 端口 | SQL Server 常用 1433，MySQL 3306，PostgreSQL 5432 |
-| 数据库 | 数据库名称；SQLite 填数据库文件完整路径 |
+| 端口 | SQL Server 1433、MySQL/MariaDB 3306、PostgreSQL 5432、Oracle 1521、达梦 5236、Firebird 3050 |
+| 数据库 | 数据库名称；SQLite 填文件完整路径；Oracle 填 Service Name；Firebird 填服务端文件路径或别名 |
 | 用户名 | 网关访问数据库的账号 |
 | 密码 | 网关访问数据库的密码 |
 | 访问模式 | 建议选择“只读”或“写入需审批” |
@@ -152,7 +156,9 @@ AI 提交 `INSERT`、`UPDATE`、`DELETE` 或 `CREATE TABLE` 后，会在这里�
 
 ### 5.6 系统设置
 
-管理员可从右上角头像菜单进入“系统设置”，配置日志与记录清理：
+管理员可从右上角头像菜单进入“系统设置”，配置审批与记录维护：
+
+- 审批单默认 15 分钟过期，可设置为 1–10080 分钟；修改只影响新工单；
 
 - 默认启用自动清理：每次软件启动立即执行一次，持续运行时再按每日计划执行；
 - 默认仅保留最近 3 天的运行日志、审批记录和本地日志文件；
@@ -339,18 +345,13 @@ AI 收到 `202 Accepted` 或 `Pending` 只代表“审批单创建成功”，�
 
 ## 10. 如果 AI 只支持 MCP
 
-当前 AiDataGateway 提供的是 HTTP API，还没有内置 MCP Server。
+直接把 MCP Streamable HTTP 地址配置为：
 
-如果你的 AI 客户端只支持 MCP，不能直接填写这个 HTTP 地址，需要增加一个 MCP-to-HTTP 适配层，将下面四个工具转发到网关：
+```text
+http://127.0.0.1:5127/mcp
+```
 
-| AI 工具 | HTTP 接口 |
-|---|---|
-| 获取数据源 | `GET /api/gateway/datasources` |
-| 校验 SQL | `POST /api/gateway/sql/validate` |
-| 执行只读查询 | `POST /api/gateway/query` |
-| 提交写操作审批 | `POST /api/gateway/changes` |
-
-工具的 JSON Schema 和完整请求示例见 [AI 客户端 API 文档](./AI客户端API文档.md)。
+MCP 请求必须携带通过 Client ID 和 Client Secret 获取的 Bearer Token。内置工具包括：获取数据源、校验 SQL、执行只读查询、提交写操作审批和查询工单状态。详细配置见 [MCP Server 接入说明](./MCP服务器接入说明.md)。
 
 ## 11. 第一次接入建议这样测试
 
@@ -398,11 +399,11 @@ AI 收到 `202 Accepted` 或 `Pending` 只代表“审批单创建成功”，�
 
 ### 12.6 审批单消失或无法批准
 
-审批单默认有效期为 15 分钟。超时后重新让 AI 提交。
+审批单默认有效期为 15 分钟，也可能被管理员调整。详情中的“失效时间”是该工单实际期限；超时后重新让 AI 提交。
 
 ### 12.7 AI 一直查询审批状态
 
-当前版本还没有提供给 AI 的审批状态查询接口。AI 提交后应停止，并等待你在客户端处理。
+MCP 客户端可调用 `get_change_status` 查询单个工单，但不应高频轮询。Pending 只表示等待人工处理，不代表 SQL 已执行。
 
 ## 13. 记住这三句话
 

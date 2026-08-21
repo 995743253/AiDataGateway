@@ -152,10 +152,12 @@
         </el-tabs>
 
         <section v-else-if="activeTab === 'settings'" class="secondary-page">
-          <div class="toolbar"><div><el-button link type="primary" @click="goTo('overview')">← 返回主页面</el-button><h2>系统设置</h2><p>配置网关自身数据的保存期限与自动清理计划。</p></div></div>
+          <div class="toolbar"><div><el-button link type="primary" @click="goTo('overview')">← 返回主页面</el-button><h2>系统设置</h2><p>配置审批有效期、网关记录保存期限与自动清理计划。</p></div></div>
           <el-card class="settings-card" shadow="never">
-            <template #header><div><strong>日志与记录清理</strong><p class="settings-subtitle">仅清理运行审计日志、审批历史和本地日志文件，不影响用户、数据源、OAuth2 客户端或业务数据库。</p></div></template>
+            <template #header><div><strong>审批与记录维护</strong><p class="settings-subtitle">审批有效期只影响新提交工单；自动清理仅删除运行审计日志、审批历史和本地日志文件。</p></div></template>
             <el-form :model="maintenanceSettings" label-width="150px" class="settings-form">
+              <el-form-item label="审批有效期"><el-input-number v-model="maintenanceSettings.approvalExpirationMinutes" :min="1" :max="10080" /><span class="inline-help">单位：分钟，默认 15 分钟，最长 7 天；过期工单无法再批准或执行。</span></el-form-item>
+              <el-divider />
               <el-form-item label="启用定期清理"><el-switch v-model="maintenanceSettings.cleanupEnabled" /><span class="inline-help">启用后每次软件启动立即清理一次，并在每日计划时间再次清理；关闭后仍可手动执行。</span></el-form-item>
               <el-form-item label="记录保留天数"><el-input-number v-model="maintenanceSettings.retentionDays" :min="1" :max="3650" /><span class="inline-help">默认保留最近 3 天，超过期限的数据将在下次任务中删除。</span></el-form-item>
               <el-form-item label="每日清理时间"><el-time-select v-model="maintenanceSettings.cleanupTimeLocal" start="00:00" step="00:30" end="23:30" placeholder="选择本地时间" :disabled="!maintenanceSettings.cleanupEnabled" /><span class="inline-help">使用当前 Windows 电脑的本地时间；错过该时间不影响下次启动时清理。</span></el-form-item>
@@ -192,7 +194,7 @@
       <el-dialog v-model="dataSourceDialog" title="数据源" width="680px">
         <el-form :model="dataSourceForm" label-width="110px">
           <el-form-item label="标识"><el-input v-model="dataSourceForm.key" /></el-form-item><el-form-item label="名称"><el-input v-model="dataSourceForm.name" /></el-form-item>
-          <el-form-item label="类型"><el-select v-model="dataSourceForm.provider" class="full-width"><el-option v-for="p in providers" :key="p.value" :label="p.label" :value="p.value" /></el-select></el-form-item>
+          <el-form-item label="类型"><el-select v-model="dataSourceForm.provider" class="full-width" @change="providerChanged"><el-option v-for="p in providers" :key="p.value" :label="p.label" :value="p.value" /></el-select></el-form-item>
           <el-form-item label="IP/主机"><el-input v-model="dataSourceForm.host" /></el-form-item><el-form-item label="端口"><el-input-number v-model="dataSourceForm.port" :min="1" :max="65535" /></el-form-item>
           <el-form-item label="数据库"><el-input v-model="dataSourceForm.database" /></el-form-item><el-form-item label="用户名"><el-input v-model="dataSourceForm.username" /></el-form-item>
           <el-form-item label="密码"><el-input v-model="dataSourceForm.password" type="password" show-password :placeholder="editingDataSource?'留空表示不修改':''" /></el-form-item>
@@ -275,8 +277,8 @@ export default {
     dataSourceDialog: false, editingDataSource: null, dataSourceForm: {},
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
-    maintenanceSettings: { cleanupEnabled: true, retentionDays: 3, cleanupTimeLocal: '03:00', lastCleanupAtUtc: null, lastCleanupSummary: null },
-    providers: [{ value: 1, label: 'SQL Server', port: 1433 }, { value: 2, label: 'MySQL', port: 3306 }, { value: 3, label: 'PostgreSQL', port: 5432 }, { value: 4, label: 'SQLite', port: 1 }],
+    maintenanceSettings: { cleanupEnabled: true, retentionDays: 3, cleanupTimeLocal: '03:00', approvalExpirationMinutes: 15, lastCleanupAtUtc: null, lastCleanupSummary: null },
+    providers: [{ value: 1, label: 'SQL Server', port: 1433 }, { value: 2, label: 'MySQL', port: 3306 }, { value: 3, label: 'PostgreSQL', port: 5432 }, { value: 4, label: 'SQLite', port: 1 }, { value: 5, label: 'Oracle', port: 1521 }, { value: 6, label: 'MariaDB', port: 3306 }, { value: 7, label: '达梦 DM8', port: 5236 }, { value: 8, label: 'Firebird', port: 3050 }],
     accessModes: [{ value: 0, label: '禁用' }, { value: 1, label: '只读' }, { value: 2, label: '写入需审批' }, { value: 3, label: '开发模式' }]
   }),
   computed: {
@@ -417,6 +419,10 @@ export default {
       this.dataSourceForm = row ? { ...row, password: '', blockedTablesText: (row.blockedTables || []).join('\n') } : { key: '', name: '', provider: 1, host: '127.0.0.1', port: 1433, database: '', username: '', password: '', accessMode: 1, maxRows: 1000, commandTimeoutSeconds: 30, enabled: true, blockedTablesText: '' }
       this.dataSourceDialog = true
     },
+    providerChanged (provider) {
+      const selected = this.providers.find(item => item.value === provider)
+      if (selected) this.dataSourceForm.port = selected.port
+    },
     async saveDataSource () {
       this.saving = true
       try { const payload = { ...this.dataSourceForm, blockedTables: this.dataSourceForm.blockedTablesText.split(/\r?\n/).map(item => item.trim()).filter(Boolean) }; delete payload.blockedTablesText; if (this.editingDataSource) await axios.put(`/api/admin/datasources/${this.editingDataSource.id}`, payload); else await axios.post('/api/admin/datasources', payload); this.dataSourceDialog = false; await this.loadDataSources(); ElMessage.success('已保存') } catch (e) { this.error(e) } finally { this.saving = false }
@@ -463,7 +469,7 @@ export default {
     async deleteClient (row) { try { await ElMessageBox.confirm(`吊销并删除 ${row.displayName || row.clientId}？该客户端将无法获取新 Token，已签发 Token 也会立即失效。`, '吊销 OAuth2 客户端', { type: 'warning', confirmButtonText: '吊销并删除' }); await axios.delete(`/api/admin/oauth-clients/${encodeURIComponent(row.clientId)}`); await this.loadClients(); ElMessage.success('OAuth2 客户端已吊销并删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
     async saveMaintenanceSettings () {
       this.saving = true
-      try { this.maintenanceSettings = (await axios.put('/api/settings/maintenance', { cleanupEnabled: this.maintenanceSettings.cleanupEnabled, retentionDays: this.maintenanceSettings.retentionDays, cleanupTimeLocal: this.maintenanceSettings.cleanupTimeLocal })).data; ElMessage.success('清理设置已保存') } catch (e) { this.error(e) } finally { this.saving = false }
+      try { this.maintenanceSettings = (await axios.put('/api/settings/maintenance', { cleanupEnabled: this.maintenanceSettings.cleanupEnabled, retentionDays: this.maintenanceSettings.retentionDays, cleanupTimeLocal: this.maintenanceSettings.cleanupTimeLocal, approvalExpirationMinutes: this.maintenanceSettings.approvalExpirationMinutes })).data; ElMessage.success('系统设置已保存') } catch (e) { this.error(e) } finally { this.saving = false }
     },
     async cleanupNow () {
       try { await ElMessageBox.confirm(`将删除 ${this.maintenanceSettings.retentionDays} 天以前的运行日志、审批记录和日志文件，是否继续？`, '立即清理', { type: 'warning' }) } catch (e) { if (!this.isCanceled(e)) this.error(e); return }
@@ -477,7 +483,7 @@ export default {
     riskType (risk) { return ({ Low: 'success', Medium: 'warning', High: 'danger', Critical: 'danger' })[risk] || 'info' },
     outcomeName (outcome) { return ({ success: '成功', failure: '失败', pending: '待处理', rejected: '已拒绝' })[outcome] || outcome },
     outcomeType (outcome) { return ({ success: 'success', failure: 'danger', pending: 'warning', rejected: 'danger' })[outcome] || 'info' },
-    actionName (action) { return ({ 'system.setup': '系统初始化', 'auth.login': '用户登录', 'auth.logout': '用户退出', 'query.execute': 'AI 只读查询', 'query.blocked': '黑名单拦截查询', 'change.submit': '提交 SQL 工单', 'change.review': '审核 SQL 工单', 'change.execute': '执行 SQL 变更', 'datasource.create': '创建数据源', 'datasource.update': '更新数据源', 'datasource.delete': '删除数据源', 'datasource.test': '测试数据源', 'settings.maintenance.update': '更新清理设置', 'maintenance.cleanup': '清理日志与记录', 'user.create': '创建用户', 'user.update': '更新用户', 'user.delete': '删除用户', 'oauth-client.create': '创建 OAuth2 客户端', 'oauth-client.delete': '吊销 OAuth2 客户端' })[action] || action },
+    actionName (action) { return ({ 'system.setup': '系统初始化', 'auth.login': '用户登录', 'auth.logout': '用户退出', 'query.execute': 'AI 只读查询', 'query.blocked': '黑名单拦截查询', 'change.submit': '提交 SQL 工单', 'change.review': '审核 SQL 工单', 'change.execute': '执行 SQL 变更', 'datasource.create': '创建数据源', 'datasource.update': '更新数据源', 'datasource.delete': '删除数据源', 'datasource.test': '测试数据源', 'settings.maintenance.update': '更新系统设置', 'maintenance.cleanup': '清理日志与记录', 'user.create': '创建用户', 'user.update': '更新用户', 'user.delete': '删除用户', 'oauth-client.create': '创建 OAuth2 客户端', 'oauth-client.delete': '吊销 OAuth2 客户端' })[action] || action },
     isCanceled (e) { return e === 'cancel' || e === 'close' || e?.message === 'cancel' || e?.message === 'close' }
   }
 }

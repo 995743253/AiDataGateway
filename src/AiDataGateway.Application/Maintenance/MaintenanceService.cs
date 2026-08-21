@@ -19,11 +19,11 @@ public sealed class MaintenanceService(
         CancellationToken cancellationToken = default)
     {
         var settings = await repository.GetAsync(cancellationToken);
-        settings.Update(request.CleanupEnabled, request.RetentionDays, request.CleanupTimeLocal);
+        settings.Update(request.CleanupEnabled, request.RetentionDays, request.CleanupTimeLocal, request.ApprovalExpirationMinutes);
         await repository.SaveChangesAsync(cancellationToken);
         scheduleNotifier.NotifyScheduleChanged();
         await auditWriter.WriteAsync(actor, "settings.maintenance.update", "success",
-            detail: $"enabled={settings.CleanupEnabled};retentionDays={settings.RetentionDays};cleanupTime={settings.CleanupTimeLocal}",
+            detail: $"enabled={settings.CleanupEnabled};retentionDays={settings.RetentionDays};cleanupTime={settings.CleanupTimeLocal};approvalExpirationMinutes={settings.ApprovalExpirationMinutes}",
             cancellationToken: cancellationToken);
         return ToView(settings);
     }
@@ -51,6 +51,7 @@ public sealed class MaintenanceService(
         settings.CleanupEnabled,
         settings.RetentionDays,
         settings.CleanupTimeLocal,
+        settings.ApprovalExpirationMinutes,
         settings.LastCleanupAtUtc,
         settings.LastCleanupSummary,
         settings.UpdatedAtUtc);

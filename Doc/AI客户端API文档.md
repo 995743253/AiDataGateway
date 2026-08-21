@@ -4,13 +4,14 @@
 
 本文档面向连接 AiDataGateway 的 AI 编程助手、Agent 或本地适配器。
 
-当前版本提供本地 HTTP/JSON API：
+当前版本同时提供本地 HTTP/JSON API 和 MCP Streamable HTTP Server：
 
 ```text
 Base URL: http://127.0.0.1:5127
+MCP URL:  http://127.0.0.1:5127/mcp
 ```
 
-当前尚未提供 MCP Server 端点。如 AI 客户端只支持 MCP，需要在其外部增加一个 MCP-to-HTTP 适配层，将工具调用转换为本文档中的 HTTP 请求。
+MCP 客户端配置、工具 Schema 和调用示例见 [MCP Server 接入说明](./MCP服务器接入说明.md)。MCP 与 HTTP API 使用同一套 OAuth2 Scope、SQL 策略、表黑名单、行数限制和人工审批链路。
 
 AI 客户端只应使用以下业务能力：
 
@@ -167,6 +168,10 @@ Authorization: Bearer <ACCESS_TOKEN>
 | `2` | MySQL |
 | `3` | PostgreSQL |
 | `4` | SQLite |
+| `5` | Oracle |
+| `6` | MariaDB |
+| `7` | 达梦 DM8 |
+| `8` | Firebird |
 
 `accessMode`：
 
@@ -342,9 +347,9 @@ Location: /api/gateway/changes/33333333-3333-3333-3333-333333333333
 - 审批单 ID；
 - 需要在 AiDataGateway 桌面管理页面进行人工审核。
 
-当前版本尚未实现 `GET /api/gateway/changes/{id}`。响应中的 `Location` 是为后续状态查询能力保留的地址，AI 当前不得轮询该地址，也不得把 404 解释为审批失败。
+HTTP API 当前不提供 AI 工单状态接口；使用 MCP 的 AI 可调用只读工具 `get_change_status` 查询。无论哪种接入方式，都不得高频轮询或把 Pending 声称为已执行。
 
-审批单有效期为 15 分钟。
+审批单默认有效期为 15 分钟，管理员可在“系统设置”中配置 1–10080 分钟。修改只影响之后新建的审批单。
 
 ## 9. SQL 安全策略
 

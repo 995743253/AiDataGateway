@@ -1,4 +1,5 @@
 using AiDataGateway.Application.DataSources;
+using AiDataGateway.Application.Approvals;
 using AiDataGateway.Application.Maintenance;
 using AiDataGateway.Application.Sql;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<DataSourceService>();
         services.AddScoped<QueryService>();
         services.AddScoped<MaintenanceService>();
+        services.AddScoped<ChangeSubmissionService>();
         services.AddSingleton<ISqlSafetyAnalyzer, SqlSafetyAnalyzer>();
         services.AddSingleton<ISqlTableAccessGuard, SqlTableAccessGuard>();
         return services;

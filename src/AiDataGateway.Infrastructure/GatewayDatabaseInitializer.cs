@@ -38,11 +38,18 @@ public sealed class GatewayDatabaseInitializer(
                 "CleanupEnabled" INTEGER NOT NULL,
                 "RetentionDays" INTEGER NOT NULL,
                 "CleanupTimeLocal" TEXT NOT NULL,
+                "ApprovalExpirationMinutes" INTEGER NOT NULL DEFAULT 15,
                 "LastCleanupAtUtc" TEXT NULL,
                 "LastCleanupSummary" TEXT NULL,
                 "UpdatedAtUtc" TEXT NOT NULL
             )
             """, cancellationToken);
+
+        await EnsureColumnAsync(
+            "GatewayMaintenanceSettings",
+            "ApprovalExpirationMinutes",
+            "ALTER TABLE \"GatewayMaintenanceSettings\" ADD COLUMN \"ApprovalExpirationMinutes\" INTEGER NOT NULL DEFAULT 15",
+            cancellationToken);
 
         if (!await dbContext.MaintenanceSettings.AnyAsync(item => item.Id == MaintenanceSettings.SingletonId, cancellationToken))
         {
@@ -52,6 +59,15 @@ public sealed class GatewayDatabaseInitializer(
     }
 
     private async Task EnsureTableBlacklistColumnAsync(CancellationToken cancellationToken)
+    {
+        await EnsureColumnAsync(
+            "GatewayDataSources",
+            "TableBlacklist",
+            "ALTER TABLE \"GatewayDataSources\" ADD COLUMN \"TableBlacklist\" TEXT NOT NULL DEFAULT ''",
+            cancellationToken);
+    }
+
+    private async Task EnsureColumnAsync(string tableName, string columnName, string alterSql, CancellationToken cancellationToken)
     {
         var connection = dbContext.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -65,11 +81,11 @@ public sealed class GatewayDatabaseInitializer(
             var hasColumn = false;
             await using (var command = connection.CreateCommand())
             {
-                command.CommandText = "PRAGMA table_info(\"GatewayDataSources\")";
+                command.CommandText = $"PRAGMA table_info(\"{tableName}\")";
                 await using var reader = await command.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    if (string.Equals(reader.GetString(1), "TableBlacklist", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
                     {
                         hasColumn = true;
                         break;
@@ -80,7 +96,7 @@ public sealed class GatewayDatabaseInitializer(
             if (!hasColumn)
             {
                 await using var command = connection.CreateCommand();
-                command.CommandText = "ALTER TABLE \"GatewayDataSources\" ADD COLUMN \"TableBlacklist\" TEXT NOT NULL DEFAULT ''";
+                command.CommandText = alterSql;
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
         }

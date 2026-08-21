@@ -95,6 +95,10 @@ public static class DependencyInjection
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.MySql));
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.PostgreSql));
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.Sqlite));
+        services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.Oracle));
+        services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.MariaDb));
+        services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.Dameng));
+        services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.Firebird));
         services.AddScoped<GatewayDatabaseInitializer>();
         return services;
     }
