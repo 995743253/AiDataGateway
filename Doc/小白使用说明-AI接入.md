@@ -158,6 +158,7 @@ AI 提交 `INSERT`、`UPDATE`、`DELETE` 或 `CREATE TABLE` 后，会在这里�
 
 管理员可从右上角头像菜单进入“系统设置”，配置审批与记录维护：
 
+- 在 Windows 客户端中可打开“内存使用悬浮球”，在桌面实时查看内存使用率；悬浮球可拖动、双击打开控制台、右键关闭，并会记住开关和位置；
 - 审批单默认 15 分钟过期，可设置为 1–10080 分钟；修改只影响新工单；
 
 - 默认启用自动清理：每次软件启动立即执行一次，持续运行时再按每日计划执行；
@@ -189,7 +190,7 @@ AI 提交 `INSERT`、`UPDATE`、`DELETE` 或 `CREATE TABLE` 后，会在这里�
 | Token 地址 | `http://127.0.0.1:5127/connect/token` |
 | Client ID | 初始化或“OAuth 客户端”页面生成 |
 | Client Secret | 初始化或“OAuth 客户端”页面生成，只显示一次 |
-| Scope | `gateway.datasource.read gateway.query.execute gateway.change.submit` |
+| Scope | `gateway.datasource.read gateway.query.execute gateway.change.submit gateway.logs.read gateway.metrics.read` |
 | API 文档 | `Doc/AI客户端API文档.md` |
 
 推荐使用环境变量：
@@ -199,7 +200,7 @@ AI_GATEWAY_BASE_URL=http://127.0.0.1:5127
 AI_GATEWAY_TOKEN_URL=http://127.0.0.1:5127/connect/token
 AI_GATEWAY_CLIENT_ID=<你的 Client ID>
 AI_GATEWAY_CLIENT_SECRET=<你的 Client Secret>
-AI_GATEWAY_SCOPE=gateway.datasource.read gateway.query.execute gateway.change.submit
+AI_GATEWAY_SCOPE=gateway.datasource.read gateway.query.execute gateway.change.submit gateway.logs.read gateway.metrics.read
 ```
 
 不要把真实 Secret 提交到 Git，也不要把包含 Secret 的 `.env` 文件发给别人。
@@ -208,12 +209,15 @@ AI_GATEWAY_SCOPE=gateway.datasource.read gateway.query.execute gateway.change.su
 
 在对话中只需要告诉 AI：
 
+- 项目编号，例如 `order-center`；AI 可据此找到关联的数据库、日志源和服务器监控节点；
 - 想访问哪个数据源，例如“订单系统开发库”；
 - 想查询或修改什么业务数据；
 - 查询条件，例如订单号、时间范围、用户 ID；
 - 需要返回哪些字段；
 - 是否允许提交写操作审批；
 - 写操作的预期结果。
+
+不要把 Seq API Key、NLog 配置中的敏感信息或本地日志路径发给 AI。项目和日志配置方法见 [项目与日志接入说明](./项目与日志接入说明.md)。
 
 例如：
 

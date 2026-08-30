@@ -14,6 +14,8 @@ internal sealed class GatewayDataCleaner(GatewayDbContext dbContext, IOptions<Ga
             $"DELETE FROM \"GatewayAuditEntries\" WHERE \"CreatedAtUtc\" < {cutoff}", cancellationToken);
         var approvalRecordsDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM \"GatewayChangeRequests\" WHERE \"CreatedAtUtc\" < {cutoff}", cancellationToken);
+        var metricSamplesDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM \"GatewayServerMetricSamples\" WHERE \"CollectedAtUtc\" < {cutoff}", cancellationToken);
 
         var logFilesDeleted = 0;
         var logsPath = Path.Combine(storageOptions.Value.BasePath, "logs");
@@ -28,6 +30,6 @@ internal sealed class GatewayDataCleaner(GatewayDbContext dbContext, IOptions<Ga
             }
         }
 
-        return new CleanupResult(auditLogsDeleted, approvalRecordsDeleted, logFilesDeleted, cutoff);
+        return new CleanupResult(auditLogsDeleted, approvalRecordsDeleted, metricSamplesDeleted, logFilesDeleted, cutoff);
     }
 }

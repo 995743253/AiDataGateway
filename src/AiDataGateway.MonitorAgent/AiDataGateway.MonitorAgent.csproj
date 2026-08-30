@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AiDataGateway.Application\AiDataGateway.Application.csproj" />
+    <ProjectReference Include="..\AiDataGateway.Domain\AiDataGateway.Domain.csproj" />
+    <ProjectReference Include="..\AiDataGateway.Monitoring\AiDataGateway.Monitoring.csproj" />
+    <ProjectReference Include="..\AiDataGateway.Infrastructure\AiDataGateway.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="README.md" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>AiDataGateway.MonitorAgent</AssemblyName>
+  </PropertyGroup>
+
+</Project>

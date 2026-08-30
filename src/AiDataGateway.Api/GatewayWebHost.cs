@@ -39,7 +39,9 @@ public sealed class GatewayWebHost : IAsyncDisposable
         builder.Logging.AddDebug();
 
         var baseAddress = new Uri($"http://127.0.0.1:{options.Port}/");
-        builder.WebHost.UseUrls(baseAddress.ToString());
+        var listenAddress = NormalizeListenAddress(options.ListenAddress);
+        var listenHost = listenAddress.Contains(':', StringComparison.Ordinal) ? $"[{listenAddress}]" : listenAddress;
+        builder.WebHost.UseUrls($"http://{listenHost}:{options.Port}/");
         builder.Services.AddApplication();
         builder.Services.AddSingleton<GatewayEventHub>();
         builder.Services.AddSingleton<IGatewayEventPublisher>(services => services.GetRequiredService<GatewayEventHub>());
@@ -83,6 +85,8 @@ public sealed class GatewayWebHost : IAsyncDisposable
                     GatewayScopes.ChangeSubmit,
                     GatewayScopes.ChangeApprove,
                     GatewayScopes.AuditRead,
+                    GatewayScopes.LogRead,
+                    GatewayScopes.MetricsRead,
                     GatewayScopes.Admin);
                 if (options.UseEphemeralCertificates)
                 {
@@ -128,6 +132,8 @@ public sealed class GatewayWebHost : IAsyncDisposable
         app.MapAdminEndpoints();
         app.MapSettingsEndpoints();
         app.MapGatewayEndpoints();
+        app.MapProjectLogEndpoints();
+        app.MapMonitoringEndpoints();
         app.MapMcpEndpoints(baseAddress);
         app.MapRealtimeEndpoints();
         app.MapFallback(async context =>
@@ -157,5 +163,13 @@ public sealed class GatewayWebHost : IAsyncDisposable
     {
         await _application.StopAsync();
         await _application.DisposeAsync();
+    }
+
+    private static string NormalizeListenAddress(string? value)
+    {
+        var address = string.IsNullOrWhiteSpace(value) ? "127.0.0.1" : value.Trim();
+        if (string.Equals(address, "localhost", StringComparison.OrdinalIgnoreCase)) return "127.0.0.1";
+        if (System.Net.IPAddress.TryParse(address, out _)) return address;
+        throw new ArgumentException("ListenAddress must be an IPv4 or IPv6 address.", nameof(value));
     }
 }

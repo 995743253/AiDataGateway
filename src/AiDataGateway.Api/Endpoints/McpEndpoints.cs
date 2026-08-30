@@ -5,6 +5,9 @@ using AiDataGateway.Application.Approvals;
 using AiDataGateway.Application.DataSources;
 using AiDataGateway.Application.Security;
 using AiDataGateway.Application.Sql;
+using AiDataGateway.Application.Projects;
+using AiDataGateway.Application.Logs;
+using AiDataGateway.Application.Monitoring;
 using AiDataGateway.Domain.Approvals;
 using Microsoft.AspNetCore.Authorization;
 using OpenIddict.Validation.AspNetCore;
@@ -51,6 +54,9 @@ internal static class McpEndpoints
         QueryService queries,
         ChangeSubmissionService submissions,
         IChangeRequestRepository changes,
+        ProjectService projects,
+        LogSourceService logs,
+        MonitoringService monitoring,
         CancellationToken cancellationToken)
     {
         if (context.User.Identity?.IsAuthenticated != true ||
@@ -108,7 +114,7 @@ internal static class McpEndpoints
                     "initialize" => RpcResult(id, Initialize(root)),
                     "ping" => RpcResult(id, new { }),
                     "tools/list" => RpcResult(id, new { tools = ListTools() }),
-                    "tools/call" => await CallToolAsync(id, root, context, dataSources, queries, submissions, changes, cancellationToken),
+                    "tools/call" => await CallToolAsync(id, root, context, dataSources, queries, submissions, changes, projects, logs, monitoring, cancellationToken),
                     _ => RpcError(id, -32601, "Method not found", method)
                 };
             }
@@ -135,7 +141,7 @@ internal static class McpEndpoints
             protocolVersion = negotiatedVersion,
             capabilities = new { tools = new { listChanged = false } },
             serverInfo = new { name = "AiDataGateway", version = typeof(McpEndpoints).Assembly.GetName().Version?.ToString() ?? "1.0.0" },
-            instructions = "Use query_database only for read-only SQL. Submit all writes with submit_change; approval is completed by a human in the gateway UI."
+            instructions = "Use list_projects to resolve project codes to database, log source, and monitoring identifiers. Use query_database only for read-only SQL, query_logs for application logs, and query_server_metrics for server status. Submit all writes with submit_change; approval is completed by a human in the gateway UI."
         };
     }
 
@@ -146,6 +152,70 @@ internal static class McpEndpoints
             name = "list_data_sources",
             description = "List enabled database targets available through the local AI data gateway.",
             inputSchema = new { type = "object", properties = new { }, additionalProperties = false },
+            annotations = new { readOnlyHint = true, destructiveHint = false }
+        },
+        new
+        {
+            name = "list_projects",
+            description = "List enabled projects and their associated database and log source identifiers.",
+            inputSchema = new { type = "object", properties = new { }, additionalProperties = false },
+            annotations = new { readOnlyHint = true, destructiveHint = false }
+        },
+        new
+        {
+            name = "list_log_sources",
+            description = "List enabled log sources, optionally restricted to one project code. Credentials and local paths are never returned.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new { projectCode = new { type = "string", description = "Optional project code." } },
+                additionalProperties = false
+            },
+            annotations = new { readOnlyHint = true, destructiveHint = false }
+        },
+        new
+        {
+            name = "query_logs",
+            description = "Read structured local NLog, Seq, or remote-agent events associated with a project. Prefer searchText/propertyName/propertyValue; use query only for advanced Seq filter syntax.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    projectCode = new { type = "string", minLength = 1, description = "Project code returned by list_projects." },
+                    logSourceKey = new { type = "string", description = "Required when the project has multiple enabled log sources." },
+                    query = new { type = "string", description = "Optional advanced Seq filter expression." },
+                    searchText = new { type = "string", description = "Beginner-friendly case-insensitive text search." },
+                    propertyName = new { type = "string", description = "Optional structured property name." },
+                    propertyValue = new { type = "string", description = "Optional exact Seq property value or local contains value." },
+                    level = new { type = "string", description = "Optional exact log level." },
+                    fromUtc = new { type = "string", format = "date-time" },
+                    toUtc = new { type = "string", format = "date-time" },
+                    count = new { type = "integer", minimum = 1, maximum = 500, @default = 100 }
+                },
+                required = new[] { "projectCode" },
+                additionalProperties = false
+            },
+            annotations = new { readOnlyHint = true, destructiveHint = false }
+        },
+        new
+        {
+            name = "query_server_metrics",
+            description = "Read recent CPU, memory, disk, network and uptime metrics from a local or remote server linked to a project.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    projectCode = new { type = "string", minLength = 1, description = "Project code returned by list_projects." },
+                    targetKey = new { type = "string", description = "Required when the project has multiple enabled monitoring targets." },
+                    fromUtc = new { type = "string", format = "date-time" },
+                    toUtc = new { type = "string", format = "date-time" },
+                    count = new { type = "integer", minimum = 1, maximum = 500, @default = 100 }
+                },
+                required = new[] { "projectCode" },
+                additionalProperties = false
+            },
             annotations = new { readOnlyHint = true, destructiveHint = false }
         },
         new
@@ -210,6 +280,9 @@ internal static class McpEndpoints
         QueryService queries,
         ChangeSubmissionService submissions,
         IChangeRequestRepository changes,
+        ProjectService projects,
+        LogSourceService logs,
+        MonitoringService monitoring,
         CancellationToken cancellationToken)
     {
         var parameters = RequiredObject(request, "params");
@@ -226,6 +299,10 @@ internal static class McpEndpoints
         object payload = name switch
         {
             "list_data_sources" => await ListDataSourcesAsync(context, dataSources, cancellationToken),
+            "list_projects" => await ListProjectsAsync(context, projects, cancellationToken),
+            "list_log_sources" => await ListLogSourcesAsync(context, projects, logs, arguments, cancellationToken),
+            "query_logs" => await QueryLogsAsync(context, logs, arguments, actor, cancellationToken),
+            "query_server_metrics" => await QueryServerMetricsAsync(context, monitoring, arguments, cancellationToken),
             "validate_sql" => queries.Validate(RequiredString(arguments, "sql")),
             "query_database" => await QueryAsync(context, queries, arguments, actor, cancellationToken),
             "submit_change" => await SubmitAsync(context, submissions, arguments, actor, cancellationToken),
@@ -233,6 +310,89 @@ internal static class McpEndpoints
             _ => throw new ArgumentException($"Unknown tool '{name}'.")
         };
         return RpcResult(id, ToolSuccess(payload));
+    }
+
+    private static async Task<object> ListProjectsAsync(HttpContext context, ProjectService service, CancellationToken cancellationToken)
+    {
+        Demand(context, GatewayScopes.DataSourceRead);
+        var items = await service.ListAsync(cancellationToken);
+        return new
+        {
+            items = items.Where(item => item.Enabled).Select(item => new
+            {
+                item.Id,
+                item.Code,
+                item.Name,
+                dataSources = item.DataSources.Where(source => source.Enabled),
+                logSources = item.LogSources.Where(source => source.Enabled),
+                monitorTargets = item.MonitorTargets.Where(target => target.Enabled)
+            })
+        };
+    }
+
+    private static async Task<object> QueryServerMetricsAsync(
+        HttpContext context,
+        MonitoringService service,
+        JsonElement arguments,
+        CancellationToken cancellationToken)
+    {
+        Demand(context, GatewayScopes.MetricsRead);
+        return await service.QueryByProjectAsync(
+            RequiredString(arguments, "projectCode"), OptionalString(arguments, "targetKey"),
+            OptionalDateTimeOffset(arguments, "fromUtc"), OptionalDateTimeOffset(arguments, "toUtc"),
+            OptionalInt32(arguments, "count", 100, 1, 500), cancellationToken);
+    }
+
+    private static async Task<object> ListLogSourcesAsync(
+        HttpContext context,
+        ProjectService projects,
+        LogSourceService logs,
+        JsonElement arguments,
+        CancellationToken cancellationToken)
+    {
+        DemandLogRead(context);
+        var projectCode = OptionalString(arguments, "projectCode");
+        if (!string.IsNullOrWhiteSpace(projectCode))
+        {
+            var project = await projects.GetByCodeAsync(projectCode, cancellationToken);
+            if (!project.Enabled) throw new KeyNotFoundException("Project was not found.");
+            return new { project.Code, items = project.LogSources.Where(item => item.Enabled) };
+        }
+
+        var items = await logs.ListAsync(false, cancellationToken);
+        return new
+        {
+            items = items.Where(item => item.Enabled).Select(item => new
+            {
+                item.Id,
+                item.Key,
+                item.Name,
+                type = item.Type.ToString(),
+                projects = item.Projects.Where(project => project.Enabled).Select(project => new { project.Code, project.Name })
+            })
+        };
+    }
+
+    private static async Task<object> QueryLogsAsync(
+        HttpContext context,
+        LogSourceService service,
+        JsonElement arguments,
+        string actor,
+        CancellationToken cancellationToken)
+    {
+        DemandLogRead(context);
+        return await service.QueryByProjectAsync(new ProjectLogQueryRequest(
+            RequiredString(arguments, "projectCode"),
+            OptionalString(arguments, "logSourceKey"),
+            OptionalString(arguments, "query"),
+            OptionalString(arguments, "level"),
+            OptionalDateTimeOffset(arguments, "fromUtc"),
+            OptionalDateTimeOffset(arguments, "toUtc"),
+            OptionalString(arguments, "searchText"),
+            OptionalString(arguments, "propertyName"),
+            OptionalString(arguments, "propertyValue"),
+            Page: 1,
+            PageSize: OptionalInt32(arguments, "count", 100, 1, 500)), actor, cancellationToken);
     }
 
     private static async Task<object> ListDataSourcesAsync(HttpContext context, DataSourceService service, CancellationToken cancellationToken)
@@ -295,6 +455,15 @@ internal static class McpEndpoints
         }
     }
 
+    private static void DemandLogRead(HttpContext context)
+    {
+        if (!GatewayPrincipal.Can(context.User, GatewayScopes.LogRead) &&
+            !GatewayPrincipal.Can(context.User, GatewayScopes.QueryExecute))
+        {
+            throw new InvalidOperationException($"The access token does not grant '{GatewayScopes.LogRead}'.");
+        }
+    }
+
     private static object ToolSuccess(object payload) => new
     {
         content = new[] { new { type = "text", text = JsonSerializer.Serialize(payload, JsonOptions) } },
@@ -325,6 +494,31 @@ internal static class McpEndpoints
             throw new ArgumentException($"'{propertyName}' is required.");
         }
         return value.GetString()!;
+    }
+
+    private static string? OptionalString(JsonElement parent, string propertyName) =>
+        parent.ValueKind == JsonValueKind.Object && parent.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? string.IsNullOrWhiteSpace(value.GetString()) ? null : value.GetString()
+            : null;
+
+    private static DateTimeOffset? OptionalDateTimeOffset(JsonElement parent, string propertyName)
+    {
+        var value = OptionalString(parent, propertyName);
+        return value is null
+            ? null
+            : DateTimeOffset.TryParse(value, out var parsed)
+                ? parsed.ToUniversalTime()
+                : throw new FormatException($"'{propertyName}' must be an ISO-8601 date-time.");
+    }
+
+    private static int OptionalInt32(JsonElement parent, string propertyName, int defaultValue, int minimum, int maximum)
+    {
+        if (parent.ValueKind != JsonValueKind.Object || !parent.TryGetProperty(propertyName, out var value)) return defaultValue;
+        if (!value.TryGetInt32(out var parsed) || parsed < minimum || parsed > maximum)
+        {
+            throw new ArgumentOutOfRangeException(propertyName, $"'{propertyName}' must be between {minimum} and {maximum}.");
+        }
+        return parsed;
     }
 
     private static Guid RequiredGuid(JsonElement parent, string propertyName) =>

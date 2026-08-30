@@ -4,9 +4,13 @@ import {
   ElAvatar,
   ElButton,
   ElCard,
+  ElCheckbox,
+  ElCheckboxGroup,
+  ElDatePicker,
   ElDescriptions,
   ElDescriptionsItem,
   ElDialog,
+  ElDivider,
   ElDropdown,
   ElDropdownItem,
   ElDropdownMenu,
@@ -15,13 +19,19 @@ import {
   ElFormItem,
   ElInput,
   ElInputNumber,
+  ElMenu,
+  ElMenuItem,
   ElOption,
+  ElProgress,
   ElSelect,
+  ElSubMenu,
+  ElSwitch,
   ElTabPane,
   ElTable,
   ElTableColumn,
   ElTabs,
-  ElTag
+  ElTag,
+  ElTimeSelect
 } from 'element-plus'
 import 'element-plus/dist/index.css'
 import './styles.css'
@@ -34,9 +44,13 @@ const components = [
   ElAvatar,
   ElButton,
   ElCard,
+  ElCheckbox,
+  ElCheckboxGroup,
+  ElDatePicker,
   ElDescriptions,
   ElDescriptionsItem,
   ElDialog,
+  ElDivider,
   ElDropdown,
   ElDropdownItem,
   ElDropdownMenu,
@@ -45,13 +59,19 @@ const components = [
   ElFormItem,
   ElInput,
   ElInputNumber,
+  ElMenu,
+  ElMenuItem,
   ElOption,
+  ElProgress,
   ElSelect,
+  ElSubMenu,
+  ElSwitch,
   ElTabPane,
   ElTable,
   ElTableColumn,
   ElTabs,
-  ElTag
+  ElTag,
+  ElTimeSelect
 ]
 
 components.forEach(component => app.use(component))

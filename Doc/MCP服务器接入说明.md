@@ -21,7 +21,7 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=client_credentials&
 client_id=<CLIENT_ID>&
 client_secret=<CLIENT_SECRET>&
-scope=gateway.datasource.read gateway.query.execute gateway.change.submit
+scope=gateway.datasource.read gateway.query.execute gateway.change.submit gateway.logs.read gateway.metrics.read
 ```
 
 之后每个 MCP 请求携带：
@@ -37,7 +37,7 @@ Accept: application/json, text/event-stream
 - MCP URL：`http://127.0.0.1:5127/mcp`
 - Token URL：`http://127.0.0.1:5127/connect/token`
 - Client ID、Client Secret：后台生成的凭据
-- Scope：`gateway.datasource.read gateway.query.execute gateway.change.submit`
+- Scope：`gateway.datasource.read gateway.query.execute gateway.change.submit gateway.logs.read gateway.metrics.read`
 
 不支持自动换 Token 的客户端，应由可信的本地启动器或凭据组件获取和刷新 Token。不要把 Client Secret 写入 Prompt 或发给大模型。
 
@@ -53,12 +53,61 @@ http://127.0.0.1:5127/.well-known/oauth-protected-resource
 | 工具 | Scope | 行为 |
 |---|---|---|
 | `list_data_sources` | `gateway.datasource.read` | 返回已启用数据源及其 ID、类型、访问模式、行数上限和表黑名单 |
+| `list_projects` | `gateway.datasource.read` | 返回已启用项目及其关联数据源、日志源、监控节点标识 |
+| `list_log_sources` | `gateway.logs.read` | 列出全部或指定项目的已启用日志源，不返回路径、配置或密钥 |
+| `query_logs` | `gateway.logs.read` | 查询本地 NLog 或 Seq 结构化事件；旧客户端可兼容使用 `gateway.query.execute` |
+| `query_server_metrics` | `gateway.metrics.read` | 查询项目关联的本机或远端服务器 CPU、内存、磁盘、网络和运行时间 |
 | `validate_sql` | 已认证 | 只分析 SQL，不连接数据库 |
 | `query_database` | `gateway.query.execute` | 执行只读 SQL，强制应用 SQL 策略、表黑名单和最大返回行数 |
 | `submit_change` | `gateway.change.submit` | 仅生成待人工审批工单，不批准、不直接执行 SQL |
 | `get_change_status` | `gateway.change.submit` | 查询指定工单的 Pending、Rejected、Succeeded、Failed 或 Expired 状态 |
 
 MCP 没有审批工具。`submit_change` 返回 Pending 后，必须由 Administrator 或 Approver 在桌面管理页面审核。
+
+## 3.1 查询项目日志
+
+先调用 `list_projects` 获取项目编号及 `logSourceKey`。项目只有一个启用日志源时可省略 `logSourceKey`；有多个时必须明确指定：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 20,
+  "method": "tools/call",
+  "params": {
+    "name": "query_logs",
+    "arguments": {
+      "projectCode": "order-center",
+      "logSourceKey": "order-api-seq",
+      "query": "@Level = 'Error'",
+      "count": 100
+    }
+  }
+}
+```
+
+对于 Seq，`query` 使用 Seq Filter 表达式；对于本地 NLog，`query` 是不区分大小写的全文/属性搜索。返回包含结构化属性、异常、原始记录和不完整记录提示。详见 [项目与日志接入说明](./项目与日志接入说明.md)。
+
+## 3.2 查询服务器指标
+
+先把监控节点关联到项目，然后调用：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 21,
+  "method": "tools/call",
+  "params": {
+    "name": "query_server_metrics",
+    "arguments": {
+      "projectCode": "order-center",
+      "targetKey": "order-prod-01",
+      "count": 100
+    }
+  }
+}
+```
+
+项目只有一个启用监控节点时可省略 `targetKey`。部署远端 Agent 见 [服务器监控使用说明](./服务器监控使用说明.md)。
 
 ## 4. 初始化示例
 
@@ -174,5 +223,5 @@ Mcp-Method: initialize
 1. MCP 只能使用 Bearer Token；管理页面 Cookie 不能调用。
 2. MCP 不暴露审批、用户、OAuth 客户端、设置和数据源管理接口。
 3. AI 只能提交写操作建议，批准和执行权仍由本地用户掌握。
-4. REST 与 MCP 共用同一 SQL 检查、数据源权限、表黑名单、行数限制和审计日志。
+4. REST 与 MCP 共用同一 SQL/日志服务、数据源权限、表黑名单、行数限制和审计日志。
 5. `Mcp-Method`、`Mcp-Name` 请求头如存在，必须与 JSON-RPC 请求体一致，避免代理层与应用层理解不同。

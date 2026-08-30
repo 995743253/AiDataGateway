@@ -54,7 +54,43 @@
         </div>
       </header>
 
-      <main class="content">
+      <div class="workspace-shell" :class="{ 'sidebar-is-collapsed': sidebarCollapsed }">
+        <aside class="sidebar">
+          <div class="sidebar-control">
+            <button type="button" class="sidebar-toggle" :title="sidebarCollapsed ? '展开菜单' : '收起菜单'" @click="toggleSidebar">
+              <span class="collapse-glyph">{{ sidebarCollapsed ? '»' : '«' }}</span>
+              <span v-if="!sidebarCollapsed">收起菜单</span>
+            </button>
+          </div>
+          <el-menu class="side-menu" :default-active="activeTab" :collapse="sidebarCollapsed" :collapse-transition="false" unique-opened @select="goTo">
+            <el-menu-item index="overview"><span class="menu-glyph">⌂</span><template #title>工作概览</template></el-menu-item>
+            <el-sub-menu v-if="canOperate" index="resources">
+              <template #title><span class="menu-glyph">◇</span><span>资源管理</span></template>
+              <el-menu-item index="projects">项目管理</el-menu-item>
+              <el-menu-item index="datasources">数据源</el-menu-item>
+              <el-menu-item index="logsources">日志源</el-menu-item>
+            </el-sub-menu>
+            <el-sub-menu v-if="canViewLogs || canViewMetrics" index="observability">
+              <template #title><span class="menu-glyph">◉</span><span>观测中心</span></template>
+              <el-menu-item v-if="canViewLogs" index="applicationlogs">应用日志</el-menu-item>
+              <el-menu-item v-if="canViewMetrics" index="monitoring">服务器监控</el-menu-item>
+              <el-menu-item v-if="canViewLogs" index="logs">网关审计</el-menu-item>
+            </el-sub-menu>
+            <el-sub-menu v-if="canApprove" index="security">
+              <template #title><span class="menu-glyph">✓</span><span>安全审批</span></template>
+              <el-menu-item index="approvals">审批记录</el-menu-item>
+            </el-sub-menu>
+            <el-sub-menu v-if="isAdmin" index="system">
+              <template #title><span class="menu-glyph">⚙</span><span>系统管理</span></template>
+              <el-menu-item index="settings">系统设置</el-menu-item>
+              <el-menu-item index="users">用户管理</el-menu-item>
+              <el-menu-item index="clients">OAuth2 客户端</el-menu-item>
+            </el-sub-menu>
+          </el-menu>
+          <div v-if="!sidebarCollapsed" class="sidebar-foot"><span class="sidebar-live-dot" :class="{ online: eventConnected }" /><span>{{ eventConnected ? '数据实时同步' : '正在连接服务' }}</span></div>
+        </aside>
+
+        <main class="content">
         <el-alert v-if="generatedClient" class="credential-alert" title="请立即保存 OAuth2 客户端凭据，关闭后无法再次查看 Secret" type="warning" show-icon closable @close="generatedClient=null">
           <div class="credential-panel">
             <div class="credential-item"><span class="credential-label">Client ID</span><code class="credential-value">{{ generatedClient.clientId }}</code></div>
@@ -62,13 +98,16 @@
           </div>
         </el-alert>
 
-        <el-tabs v-if="isMainPage" v-model="activeTab" class="main-tabs" @tab-change="loadActiveTab">
-          <el-tab-pane label="概览" name="overview">
+        <el-tabs v-model="activeTab" type="card" closable class="workspace-tabs" @tab-change="loadActiveTab" @tab-remove="closePage">
+          <el-tab-pane v-if="isPageOpen('overview')" label="概览" name="overview" :closable="false">
             <div class="metric-grid">
+              <el-card class="metric metric-link project-metric" :class="{ 'metric-disabled': !canOperate }" shadow="hover" role="button" :tabindex="canOperate ? 0 : -1" @click="openProjectPage" @keyup.enter="openProjectPage"><span>项目</span><strong>{{ canOperate ? projects.length : '—' }}</strong><small>{{ canOperate ? '查看项目资源聚合 →' : '无查看权限' }}</small></el-card>
               <el-card class="metric metric-link" :class="{ 'metric-disabled': !canOperate }" shadow="hover" role="button" :tabindex="canOperate ? 0 : -1" @click="openDataSourcePage" @keyup.enter="openDataSourcePage"><span>数据源</span><strong>{{ canOperate ? dataSources.length : '—' }}</strong><small>{{ canOperate ? '进入数据源管理 →' : '无查看权限' }}</small></el-card>
+              <el-card class="metric metric-link log-source-metric" :class="{ 'metric-disabled': !canOperate }" shadow="hover" role="button" :tabindex="canOperate ? 0 : -1" @click="openLogSourcePage" @keyup.enter="openLogSourcePage"><span>日志源</span><strong>{{ canOperate ? logSources.length : '—' }}</strong><small>{{ canOperate ? '配置 NLog / Seq →' : '无查看权限' }}</small></el-card>
               <el-card class="metric metric-link warning" :class="{ 'metric-disabled': !canApprove }" shadow="hover" role="button" :tabindex="canApprove ? 0 : -1" @click="openApprovalPage('Pending')" @keyup.enter="openApprovalPage('Pending')"><span>待审批</span><strong>{{ canApprove ? pendingApprovalTotal : '—' }}</strong><small>{{ canApprove ? '查看待审批工单 →' : '无查看权限' }}</small></el-card>
               <el-card class="metric metric-link" :class="{ 'metric-disabled': !canApprove }" shadow="hover" role="button" :tabindex="canApprove ? 0 : -1" @click="openApprovalPage('all')" @keyup.enter="openApprovalPage('all')"><span>审批记录</span><strong>{{ canApprove ? approvalAllTotal : '—' }}</strong><small>{{ canApprove ? '查询审批历史 →' : '无查看权限' }}</small></el-card>
-              <el-card class="metric metric-link success" :class="{ 'metric-disabled': !canViewLogs }" shadow="hover" role="button" :tabindex="canViewLogs ? 0 : -1" @click="openLogPage" @keyup.enter="openLogPage"><span>运行日志</span><strong>{{ canViewLogs ? auditLogAllTotal : '—' }}</strong><small>{{ canViewLogs ? '查询调用明细 →' : '无查看权限' }}</small></el-card>
+              <el-card class="metric metric-link success" :class="{ 'metric-disabled': !canViewLogs }" shadow="hover" role="button" :tabindex="canViewLogs ? 0 : -1" @click="openApplicationLogPage" @keyup.enter="openApplicationLogPage"><span>应用日志</span><strong>{{ canViewLogs ? 'NLog / Seq' : '—' }}</strong><small>{{ canViewLogs ? '查询项目业务日志 →' : '无查看权限' }}</small></el-card>
+              <el-card class="metric metric-link monitor-metric" :class="{ 'metric-disabled': !canViewMetrics }" shadow="hover" role="button" :tabindex="canViewMetrics ? 0 : -1" @click="openMonitoringPage" @keyup.enter="openMonitoringPage"><span>服务器监控</span><strong>{{ canViewMetrics ? onlineMonitorCount : '—' }}</strong><small>{{ canViewMetrics ? `在线 ${onlineMonitorCount} / ${monitorTargets.length} →` : '无查看权限' }}</small></el-card>
             </div>
             <el-card class="overview-card" shadow="never">
               <div class="overview-heading">
@@ -78,7 +117,21 @@
             </el-card>
           </el-tab-pane>
 
-          <el-tab-pane v-if="canOperate" label="数据源" name="datasources">
+          <el-tab-pane v-if="canOperate && isPageOpen('projects')" label="项目管理" name="projects">
+            <div class="toolbar"><div><h3>项目资源聚合</h3><p>通过唯一项目编号聚合数据库、日志源和服务器监控节点，供页面及 AI 统一解析。</p></div><el-button type="primary" @click="openProject()">新增项目</el-button></div>
+            <el-table :data="projects" stripe border>
+              <el-table-column prop="code" label="项目编号" min-width="140" />
+              <el-table-column prop="name" label="项目名称" min-width="160" />
+              <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
+              <el-table-column label="数据库" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.dataSources" :key="item.id" effect="plain">{{ item.key }}</el-tag><span v-if="!s.row.dataSources.length">—</span></div></template></el-table-column>
+              <el-table-column label="日志源" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.logSources" :key="item.id" type="success" effect="plain">{{ item.key }}</el-tag><span v-if="!s.row.logSources.length">—</span></div></template></el-table-column>
+              <el-table-column label="监控节点" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.monitorTargets" :key="item.id" type="warning" effect="plain">{{ item.key }}</el-tag><span v-if="!s.row.monitorTargets?.length">—</span></div></template></el-table-column>
+              <el-table-column label="状态" width="90"><template #default="s"><el-tag :type="s.row.enabled ? 'success' : 'info'">{{ s.row.enabled ? '启用' : '禁用' }}</el-tag></template></el-table-column>
+              <el-table-column label="操作" width="170"><template #default="s"><el-button size="small" @click="openProject(s.row)">编辑</el-button><el-button size="small" type="danger" @click="deleteProject(s.row)">删除</el-button></template></el-table-column>
+            </el-table>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="canOperate && isPageOpen('datasources')" label="数据源" name="datasources">
             <div class="toolbar"><div><h3>多数据库连接</h3><p>管理 AI 可以访问的数据库及审批模式。</p></div><el-button type="primary" @click="openDataSource()">新增数据源</el-button></div>
             <el-table :data="dataSources" stripe>
               <el-table-column prop="name" label="名称" min-width="150" />
@@ -92,7 +145,165 @@
             </el-table>
           </el-tab-pane>
 
-          <el-tab-pane v-if="canApprove" label="审批记录" name="approvals">
+          <el-tab-pane v-if="canOperate && isPageOpen('logsources')" label="日志源" name="logsources">
+            <div class="toolbar"><div><h3>日志采集源</h3><p>支持网关本机 NLog、Seq API，以及安装在远端服务器上的采集 Agent。</p></div><el-button type="primary" @click="openLogSource()">新增日志源</el-button></div>
+            <el-table :data="logSources" stripe border>
+              <el-table-column prop="name" label="名称" min-width="160" />
+              <el-table-column prop="key" label="日志标识" min-width="140" />
+              <el-table-column label="类型" width="120"><template #default="s"><el-tag :type="s.row.type === 2 ? 'warning' : 'primary'">{{ logSourceTypeName(s.row.type) }}</el-tag></template></el-table-column>
+              <el-table-column label="采集位置" min-width="300"><template #default="s"><div class="log-source-location"><strong>{{ s.row.type === 2 ? 'Seq HTTP API' : s.row.type === 3 ? '远程 Agent' : '本地文件夹' }}</strong><span :title="s.row.endpoint">{{ s.row.endpoint || '从 NLog 配置读取文件位置' }}</span></div></template></el-table-column>
+              <el-table-column label="关联项目" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.projects" :key="item.id" effect="plain">{{ item.code }}</el-tag><span v-if="!s.row.projects.length">—</span></div></template></el-table-column>
+              <el-table-column label="状态" width="90"><template #default="s"><el-tag :type="s.row.enabled ? 'success' : 'info'">{{ s.row.enabled ? '启用' : '禁用' }}</el-tag></template></el-table-column>
+              <el-table-column label="操作" width="220"><template #default="s"><el-button size="small" @click="testLogSource(s.row)">测试</el-button><el-button size="small" @click="openLogSource(s.row)">编辑</el-button><el-button size="small" type="danger" @click="deleteLogSource(s.row)">删除</el-button></template></el-table-column>
+            </el-table>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="canViewLogs && isPageOpen('applicationlogs')" label="应用日志" name="applicationlogs">
+            <div class="toolbar app-log-toolbar">
+              <div><h3>项目应用日志</h3><p>统一读取本地 NLog 文件或 Seq，保留多行、空字段和未闭合末尾记录。</p></div>
+              <div class="live-log-actions"><el-tag v-if="applicationLogLive" type="success" effect="dark"><span class="live-dot" />实时接收中</el-tag><el-button :type="applicationLogLive ? 'danger' : 'success'" plain @click="applicationLogLive ? stopApplicationLogStream() : startApplicationLogStream()">{{ applicationLogLive ? '停止实时' : '查看实时日志' }}</el-button></div>
+            </div>
+            <div class="app-log-filter-panel">
+              <div class="app-log-filter-row">
+                <el-select v-model="applicationLogSourceId" class="log-source-select" filterable placeholder="选择日志源"><el-option v-for="item in logSources.filter(x => x.enabled)" :key="item.id" :label="`[${item.type === 2 ? 'Seq API' : item.type === 3 ? '远程 Agent' : '本地文件'}] ${item.name}（${item.key}）`" :value="item.id" /></el-select>
+                <el-date-picker v-model="applicationLogRange" class="log-date-range" type="datetimerange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" :shortcuts="logDateShortcuts" />
+                <el-select v-model="applicationLogLevel" class="status-filter" clearable placeholder="全部级别"><el-option v-for="level in logLevels" :key="level" :label="level" :value="level" /></el-select>
+              </div>
+              <div v-if="selectedApplicationLogSource?.type === 2" class="seq-query-mode"><el-radio-group v-model="applicationLogQueryMode" size="small"><el-radio-button value="simple">简单查询</el-radio-button><el-radio-button value="advanced">高级表达式</el-radio-button></el-radio-group><span>{{ applicationLogQueryMode === 'simple' ? '不会写表达式也能查：填写关键词，或按属性精确筛选。' : '适合熟悉 Seq Filter 语法的用户。' }}</span></div>
+              <div class="app-log-filter-row">
+                <template v-if="selectedApplicationLogSource?.type !== 2 || applicationLogQueryMode === 'simple'">
+                  <el-input v-model="applicationLogSearchText" class="log-search" clearable placeholder="关键词，例如：订单失败" @keyup.enter="searchApplicationLogs" />
+                  <template v-if="selectedApplicationLogSource?.type === 2"><el-input v-model="applicationLogPropertyName" class="log-property" clearable placeholder="属性名（可选）" /><el-input v-model="applicationLogPropertyValue" class="log-property" clearable placeholder="属性值（可选）" /></template>
+                </template>
+                <el-input v-else v-model="applicationLogQuery" class="log-advanced-search" clearable placeholder="例如：RequestPath like '/api/%' and StatusCode >= 500" @keyup.enter="searchApplicationLogs" />
+                <div class="filter-buttons"><el-button type="primary" :loading="applicationLogsLoading" @click="searchApplicationLogs">查询</el-button><el-button @click="resetApplicationLogs">重置</el-button></div>
+              </div>
+            </div>
+            <div v-if="selectedApplicationLogSource" class="log-source-mode-bar">
+              <el-tag :type="selectedApplicationLogSource.type === 2 ? 'warning' : selectedApplicationLogSource.type === 3 ? 'success' : 'primary'" effect="dark">{{ selectedApplicationLogSource.type === 2 ? 'Seq API 采集' : selectedApplicationLogSource.type === 3 ? '远程 Agent 采集' : '本地文件夹采集' }}</el-tag>
+              <span>{{ selectedApplicationLogSource.type === 2 ? '网关使用 Seq HTTP API 和独立 API Key 查询；日期条件会直接发送给 Seq，避免先下载全部日志。' : selectedApplicationLogSource.type === 3 ? '网关按日期向远端 Agent 查询服务器本地日志，文件内容不会预先全量上传。' : '网关只读取所选日期可能涉及的文件，并限制单次读取量，避免日志过多占用大量内存。' }}</span>
+            </div>
+            <el-alert v-if="applicationLogWarning" :title="applicationLogWarning" type="warning" show-icon :closable="false" class="log-warning" />
+            <el-table :data="applicationLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table" @row-dblclick="openApplicationLog">
+              <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
+              <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
+              <el-table-column prop="message" label="消息" min-width="360" show-overflow-tooltip />
+              <el-table-column label="解析" width="100"><template #default="s"><el-tag v-if="s.row.incomplete" type="warning">不完整</el-tag><el-tag v-else type="success" effect="plain">结构化</el-tag></template></el-table-column>
+              <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
+            </el-table>
+            <el-empty v-if="!applicationLogsLoading && applicationLogs.length === 0" description="请选择日志源并查询" />
+            <div class="pagination-panel"><span class="pagination-summary">当前第 {{ applicationLogPage }} 页，共返回 {{ applicationLogs.length }} 条<span v-if="applicationLogTotal">，查询窗口 {{ applicationLogTotal }} 条</span></span><div class="pagination-controls"><el-select v-model="applicationLogPageSize" class="page-size-select" @change="applicationLogSizeChanged"><el-option v-for="size in [20, 50, 100, 200]" :key="size" :label="`${size} 条`" :value="size" /></el-select><el-button :disabled="applicationLogPage <= 1" @click="changeApplicationLogPage(applicationLogPage - 1)">上一页</el-button><strong class="page-indicator">第 {{ applicationLogPage }} 页</strong><el-button type="primary" plain :disabled="!applicationLogHasNext" @click="changeApplicationLogPage(applicationLogPage + 1)">下一页</el-button></div></div>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="canViewMetrics && isPageOpen('monitoring')" label="服务器监控" name="monitoring">
+            <div class="toolbar monitoring-toolbar">
+              <div><h3>服务器状态指标</h3><p>本机由网关直接采集；远端服务器运行轻量 Agent 后使用独立密钥上报，无需轮询页面。</p></div>
+              <el-button v-if="canOperate" type="primary" @click="openMonitorTarget()">新增远端节点</el-button>
+            </div>
+            <div class="monitor-layout">
+              <el-card class="monitor-target-panel" shadow="never">
+                <template #header><div class="panel-heading"><strong>监控节点</strong><el-tag effect="plain">{{ onlineMonitorCount }} 在线</el-tag></div></template>
+                <button v-for="target in monitorTargets" :key="target.id" type="button" class="monitor-target-item" :class="{ active: selectedMonitorTargetId === target.id }" @click="selectMonitorTarget(target)">
+                  <span class="target-status" :class="{ online: target.online }" />
+                  <span class="target-copy"><strong>{{ target.name }}</strong><small>{{ target.hostName || target.key }} · {{ monitorTargetTypeName(target.type) }}</small></span>
+                  <span class="target-cpu">{{ target.latest ? `${target.latest.cpuPercent.toFixed(1)}%` : '—' }}</span>
+                </button>
+                <el-empty v-if="monitorTargets.length === 0" description="暂无监控节点" :image-size="72" />
+              </el-card>
+
+              <div class="monitor-detail">
+                <template v-if="selectedMonitorTarget">
+                  <el-card class="monitor-summary-card" shadow="never">
+                    <div class="monitor-title-row">
+                      <div><h3>{{ selectedMonitorTarget.name }}</h3><p>{{ selectedMonitorTarget.hostName || '等待首次采集' }} · {{ selectedMonitorTarget.osDescription || selectedMonitorTarget.key }}</p></div>
+                      <div class="monitor-title-actions"><el-tag :type="selectedMonitorTarget.online ? 'success' : 'danger'">{{ selectedMonitorTarget.online ? '在线' : '离线' }}</el-tag><el-button v-if="canOperate" size="small" @click="openMonitorTarget(selectedMonitorTarget)">配置</el-button><el-button v-if="canOperate && selectedMonitorTarget.type === 2" size="small" @click="rotateMonitorSecret(selectedMonitorTarget)">重置密钥</el-button><el-button v-if="canOperate && selectedMonitorTarget.type === 2" size="small" type="danger" @click="deleteMonitorTarget(selectedMonitorTarget)">删除</el-button></div>
+                    </div>
+                    <div class="server-metric-grid">
+                      <div class="server-metric"><span>CPU</span><strong>{{ formatPercent(selectedMonitorTarget.latest?.cpuPercent) }}</strong><el-progress :percentage="selectedMonitorTarget.latest?.cpuPercent || 0" :show-text="false" /></div>
+                      <div class="server-metric"><span>内存</span><strong>{{ formatPercent(selectedMonitorTarget.latest?.memoryPercent) }}</strong><small>{{ formatBytes(selectedMonitorTarget.latest?.memoryUsedBytes) }} / {{ formatBytes(selectedMonitorTarget.latest?.memoryTotalBytes) }}</small><el-progress :percentage="selectedMonitorTarget.latest?.memoryPercent || 0" :show-text="false" status="warning" /></div>
+                      <div class="server-metric"><span>磁盘</span><strong>{{ formatPercent(selectedMonitorTarget.latest?.diskPercent) }}</strong><small>{{ formatBytes(selectedMonitorTarget.latest?.diskUsedBytes) }} / {{ formatBytes(selectedMonitorTarget.latest?.diskTotalBytes) }}</small><el-progress :percentage="selectedMonitorTarget.latest?.diskPercent || 0" :show-text="false" status="success" /></div>
+                      <div class="server-metric"><span>最近上报</span><strong class="metric-time">{{ formatDate(selectedMonitorTarget.lastSeenAtUtc) }}</strong><small>运行 {{ formatDuration(selectedMonitorTarget.latest?.systemUptimeSeconds) }}</small></div>
+                    </div>
+                    <div v-if="selectedMetricCards.length" class="extended-metric-grid">
+                      <div v-for="metric in selectedMetricCards" :key="metric.key" class="extended-metric-card" :title="metric.description">
+                        <span>{{ metric.name }}</span><strong>{{ formatMetricValue(metricValue(selectedMonitorTarget.latest, metric.key), metric.unit) }}</strong><small>{{ metric.category }}</small>
+                      </div>
+                    </div>
+                  </el-card>
+
+                  <el-card class="monitor-chart-card" shadow="never">
+                    <template #header>
+                      <div class="trend-header">
+                        <div><strong>{{ metricTrendMode === 'recent' ? '近期趋势' : '历史趋势' }}</strong><small>{{ trendSummary }}</small></div>
+                        <div class="trend-controls">
+                          <el-button :type="metricTrendMode === 'recent' ? 'primary' : 'default'" plain @click="setMetricTrendMode('recent')">近期趋势</el-button>
+                          <el-button :type="metricTrendMode === 'history' ? 'primary' : 'default'" plain @click="setMetricTrendMode('history')">历史趋势</el-button>
+                          <el-date-picker v-if="metricTrendMode === 'history'" v-model="metricHistoryRange" type="datetimerange" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" :clearable="false" />
+                          <el-select v-model="metricTrendKey" class="trend-metric-select" filterable placeholder="选择趋势指标" @change="metricHoverPoint = null"><el-option v-for="metric in selectableTrendMetrics" :key="metric.key" :label="`${metric.category} / ${metric.name}`" :value="metric.key" /></el-select>
+                          <el-button :loading="monitorLoading" @click="metricTrendMode === 'history' ? loadHistoricalTrend() : loadMetricSamples()">刷新</el-button>
+                        </div>
+                      </div>
+                    </template>
+                    <div class="metric-chart" :aria-label="`${selectedTrendMetric?.name || '指标'}趋势图`" @mouseleave="metricHoverPoint = null">
+                      <div class="chart-plot">
+                        <svg viewBox="0 0 800 280" preserveAspectRatio="xMidYMid meet" role="img">
+                          <title>{{ selectedTrendMetric?.name || metricTrendKey }}趋势图</title>
+                          <defs><linearGradient id="metric-area-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a82bd" stop-opacity="0.22" /><stop offset="100%" stop-color="#2a82bd" stop-opacity="0.02" /></linearGradient></defs>
+                          <g class="chart-y-axis">
+                            <g v-for="tick in metricYAxisTicks" :key="`y-${tick.y}`">
+                              <line x1="72" x2="790" :y1="tick.y" :y2="tick.y" class="chart-grid-line" />
+                              <text x="62" :y="tick.y + 4" text-anchor="end" class="chart-axis-label">{{ tick.label }}</text>
+                            </g>
+                            <line x1="72" x2="72" y1="20" y2="232" class="chart-axis-line" />
+                          </g>
+                          <g class="chart-x-axis">
+                            <line x1="72" x2="790" y1="232" y2="232" class="chart-axis-line" />
+                            <g v-for="tick in metricXAxisTicks" :key="`x-${tick.index}`">
+                              <line :x1="tick.x" :x2="tick.x" y1="232" y2="239" class="chart-axis-tick" />
+                              <text :x="tick.x" y="260" :text-anchor="tick.anchor" class="chart-axis-label chart-time-label">{{ tick.label }}</text>
+                            </g>
+                          </g>
+                          <polygon v-if="metricTrendChartPoints.length > 1" :points="metricTrendAreaPoints" class="chart-area" />
+                          <g v-if="metricTrendMode === 'history'" class="chart-reference-lines">
+                            <g v-for="reference in metricTrendReferenceLines" :key="reference.key">
+                              <line x1="72" x2="790" :y1="reference.y" :y2="reference.y" class="chart-reference-line" :class="reference.key" />
+                              <text x="782" :y="Math.max(14, reference.y - 6)" text-anchor="end" class="chart-reference-label" :class="reference.key">{{ reference.label }}</text>
+                            </g>
+                          </g>
+                          <polyline v-if="metricTrendChartPoints.length > 1" :points="metricTrendPoints" class="chart-line cpu-line" />
+                          <g v-for="point in metricTrendMode === 'recent' ? metricTrendChartPoints : []" :key="point.key" class="chart-point-group" @mouseenter="showMetricPoint(point)" @mousemove="showMetricPoint(point)">
+                            <circle :cx="point.x" :cy="point.y" r="11" class="chart-point-hit" />
+                            <circle :cx="point.x" :cy="point.y" :r="metricHoverPoint?.key === point.key ? 3.8 : 2.4" class="chart-point" :class="{ active: metricHoverPoint?.key === point.key }" />
+                            <title>{{ formatDate(point.timestamp) }}，{{ selectedTrendMetric?.name || metricTrendKey }}：{{ formatMetricValue(point.value, selectedTrendMetric?.unit) }}</title>
+                          </g>
+                        </svg>
+                        <div v-if="metricHoverPoint" class="chart-tooltip" :class="{ 'align-left': metricHoverPoint.x < 175, 'align-right': metricHoverPoint.x > 680, 'place-below': metricHoverPoint.y < 78 }" :style="metricTooltipStyle">
+                          <strong>{{ selectedTrendMetric?.name || metricTrendKey }}</strong>
+                          <span>{{ formatMetricValue(metricHoverPoint.value, selectedTrendMetric?.unit) }}</span>
+                          <small>{{ formatDate(metricHoverPoint.timestamp) }}</small>
+                        </div>
+                        <el-empty v-if="metricTrendChartPoints.length < 2" description="所选时间范围内暂无足够采样点" :image-size="64" />
+                      </div>
+                      <div class="chart-legend"><span><i class="cpu-legend" />{{ selectedTrendMetric?.name || metricTrendKey }}</span><span class="chart-range">{{ trendRangeLabel }}</span></div>
+                    </div>
+                  </el-card>
+
+                  <el-table :data="metricSamples" stripe border max-height="360">
+                    <el-table-column prop="collectedAtUtc" label="采集时间" width="190"><template #default="s">{{ formatDate(s.row.collectedAtUtc) }}</template></el-table-column>
+                    <el-table-column prop="cpuPercent" label="CPU" width="100"><template #default="s">{{ formatPercent(s.row.cpuPercent) }}</template></el-table-column>
+                    <el-table-column prop="memoryPercent" label="内存" width="100"><template #default="s">{{ formatPercent(s.row.memoryPercent) }}</template></el-table-column>
+                    <el-table-column prop="diskPercent" label="磁盘" width="100"><template #default="s">{{ formatPercent(s.row.diskPercent) }}</template></el-table-column>
+                    <el-table-column label="网关/Agent 内存" min-width="150"><template #default="s">{{ formatBytes(s.row.processWorkingSetBytes) }}</template></el-table-column>
+                    <el-table-column label="网络累计接收 / 发送" min-width="220"><template #default="s">{{ formatBytes(s.row.networkReceivedBytes) }} / {{ formatBytes(s.row.networkSentBytes) }}</template></el-table-column>
+                    <el-table-column label="系统运行时间" min-width="140"><template #default="s">{{ formatDuration(s.row.systemUptimeSeconds) }}</template></el-table-column>
+                  </el-table>
+                </template>
+                <el-empty v-else description="请选择监控节点" />
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="canApprove && isPageOpen('approvals')" label="审批记录" name="approvals">
             <div class="toolbar">
               <div><h3>SQL 审批记录</h3><p>同时查看待审批、已通过、已拒绝和执行失败的完整历史。</p></div>
               <div class="toolbar-actions">
@@ -123,9 +334,9 @@
             </div>
           </el-tab-pane>
 
-          <el-tab-pane v-if="canViewLogs" label="运行日志" name="logs">
+          <el-tab-pane v-if="canViewLogs && isPageOpen('logs')" label="网关审计" name="logs">
             <div class="toolbar">
-              <div><h3>调用与运行日志</h3><p>记录 AI 查询、变更提单、人工审批、数据源、用户及认证操作。</p></div>
+              <div><h3>网关调用与审计日志</h3><p>记录 AI 查询、日志读取、变更提单、人工审批、数据源、用户及认证操作。</p></div>
               <div class="toolbar-actions"><el-input v-model="logKeyword" class="log-search" clearable placeholder="搜索人员、动作、SQL 或结果数据" @keyup.enter="searchAuditLogs" /><el-select v-model="logOutcome" class="status-filter" @change="searchAuditLogs"><el-option label="全部结果" value="" /><el-option label="成功" value="success" /><el-option label="失败" value="failure" /><el-option label="待处理" value="pending" /><el-option label="已拒绝" value="rejected" /></el-select><el-button type="primary" @click="searchAuditLogs">查询</el-button><el-button @click="resetLogSearch">重置</el-button></div>
             </div>
             <el-table :data="auditLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table" @row-dblclick="openLog">
@@ -149,12 +360,22 @@
               </div>
             </div>
           </el-tab-pane>
-        </el-tabs>
-
-        <section v-else-if="activeTab === 'settings'" class="secondary-page">
-          <div class="toolbar"><div><el-button link type="primary" @click="goTo('overview')">← 返回主页面</el-button><h2>系统设置</h2><p>配置审批有效期、网关记录保存期限与自动清理计划。</p></div></div>
+          <el-tab-pane v-if="isAdmin && isPageOpen('settings')" label="系统设置" name="settings">
+          <section class="secondary-page">
+          <div class="toolbar"><div><h2>系统设置</h2><p>配置桌面辅助功能、审批有效期、记录保存期限与自动清理计划。</p></div></div>
+          <el-card class="settings-card desktop-feature-card" shadow="never">
+            <template #header><div><strong>Windows 桌面辅助</strong><p class="settings-subtitle">悬浮球由 Windows 客户端直接显示，不经过 Web API，也不会向外部浏览器公开控制能力。</p></div></template>
+            <el-form label-width="150px" class="settings-form">
+              <el-form-item label="内存使用悬浮球">
+                <el-switch v-model="desktopSettings.memoryOverlayEnabled" :disabled="!desktopSettings.available" @change="setMemoryOverlayEnabled" />
+                <span class="inline-help">开启后在桌面置顶显示当前内存使用率；可拖动并记住位置，双击打开控制台，右键可关闭。</span>
+              </el-form-item>
+              <el-alert v-if="!desktopSettings.available" title="当前页面不在 AiDataGateway Windows 客户端中，桌面悬浮球不可用。" type="info" :closable="false" show-icon />
+              <el-alert v-else :title="desktopSettings.memoryOverlayEnabled ? '内存悬浮球已显示在桌面。' : '内存悬浮球当前已关闭。'" :type="desktopSettings.memoryOverlayEnabled ? 'success' : 'info'" :closable="false" show-icon />
+            </el-form>
+          </el-card>
           <el-card class="settings-card" shadow="never">
-            <template #header><div><strong>审批与记录维护</strong><p class="settings-subtitle">审批有效期只影响新提交工单；自动清理仅删除运行审计日志、审批历史和本地日志文件。</p></div></template>
+            <template #header><div><strong>审批与记录维护</strong><p class="settings-subtitle">审批有效期只影响新提交工单；自动清理会删除过期审计、审批历史、服务器指标和本地日志文件。</p></div></template>
             <el-form :model="maintenanceSettings" label-width="150px" class="settings-form">
               <el-form-item label="审批有效期"><el-input-number v-model="maintenanceSettings.approvalExpirationMinutes" :min="1" :max="10080" /><span class="inline-help">单位：分钟，默认 15 分钟，最长 7 天；过期工单无法再批准或执行。</span></el-form-item>
               <el-divider />
@@ -169,27 +390,34 @@
               <div class="settings-actions"><el-button type="primary" :loading="saving" @click="saveMaintenanceSettings">保存设置</el-button><el-button :loading="saving" @click="cleanupNow">立即清理</el-button></div>
             </el-form>
           </el-card>
-        </section>
+          </section>
+          </el-tab-pane>
 
-        <section v-else-if="activeTab === 'users'" class="secondary-page">
-          <div class="toolbar"><div><el-button link type="primary" @click="goTo('overview')">← 返回主页面</el-button><h2>用户管理</h2><p>管理本地后台账号、状态和角色；有历史记录的用户应禁用而不是删除。</p></div><el-button type="primary" @click="openUserDialog()">新增用户</el-button></div>
+          <el-tab-pane v-if="isAdmin && isPageOpen('users')" label="用户管理" name="users">
+          <section class="secondary-page">
+          <div class="toolbar"><div><h2>用户管理</h2><p>管理本地后台账号、状态和角色；有历史记录的用户应禁用而不是删除。</p></div><el-button type="primary" @click="openUserDialog()">新增用户</el-button></div>
           <el-table :data="users" stripe>
             <el-table-column prop="userName" label="用户名" /><el-table-column prop="displayName" label="显示名称" /><el-table-column prop="email" label="邮箱" min-width="200" />
             <el-table-column label="角色" min-width="180"><template #default="s">{{ s.row.roles.join(', ') }}</template></el-table-column>
             <el-table-column label="状态" width="100"><template #default="s"><el-tag :type="s.row.isEnabled?'success':'danger'">{{ s.row.isEnabled?'启用':'禁用' }}</el-tag></template></el-table-column>
             <el-table-column label="操作" width="170"><template #default="s"><el-button size="small" @click="openUserDialog(s.row)">编辑</el-button><el-button size="small" type="danger" :disabled="s.row.id === user.id" @click="deleteUser(s.row)">删除</el-button></template></el-table-column>
           </el-table>
-        </section>
+          </section>
+          </el-tab-pane>
 
-        <section v-else-if="activeTab === 'clients'" class="secondary-page">
-          <div class="toolbar"><div><el-button link type="primary" @click="goTo('overview')">← 返回主页面</el-button><h2>OAuth2 客户端</h2><p>管理本地 AI 使用的客户端身份和权限范围。</p></div><el-button type="primary" @click="createClient">创建客户端</el-button></div>
+          <el-tab-pane v-if="isAdmin && isPageOpen('clients')" label="OAuth2 客户端" name="clients">
+          <section class="secondary-page">
+          <div class="toolbar"><div><h2>OAuth2 客户端</h2><p>管理本地 AI 使用的客户端身份和权限范围。</p></div><el-button type="primary" @click="createClient">创建客户端</el-button></div>
           <el-table :data="clients" stripe>
             <el-table-column prop="displayName" label="名称" min-width="180" /><el-table-column prop="clientId" label="Client ID" min-width="300" />
             <el-table-column label="权限" min-width="360"><template #default="s"><div class="permission-list"><el-tag v-for="permission in s.row.permissions" :key="permission" effect="plain">{{ permission }}</el-tag></div></template></el-table-column>
             <el-table-column label="操作" width="110"><template #default="s"><el-button size="small" type="danger" @click="deleteClient(s.row)">吊销删除</el-button></template></el-table-column>
           </el-table>
-        </section>
-      </main>
+          </section>
+          </el-tab-pane>
+        </el-tabs>
+        </main>
+      </div>
 
       <el-dialog v-model="dataSourceDialog" title="数据源" width="680px">
         <el-form :model="dataSourceForm" label-width="110px">
@@ -203,6 +431,96 @@
           <el-form-item label="最大返回行"><el-input-number v-model="dataSourceForm.maxRows" :min="1" :max="10000" /></el-form-item><el-form-item label="超时秒数"><el-input-number v-model="dataSourceForm.commandTimeoutSeconds" :min="1" :max="300" /></el-form-item>
         </el-form>
         <template #footer><el-button @click="dataSourceDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveDataSource">保存</el-button></template>
+      </el-dialog>
+
+      <el-dialog v-model="projectDialog" :title="editingProject ? '编辑项目' : '新增项目'" width="720px" destroy-on-close>
+        <el-form :model="projectForm" label-width="110px">
+          <el-form-item label="项目编号"><el-input v-model="projectForm.code" placeholder="例如：order-center" /><span class="field-help">AI 使用此编号查找数据库、日志和监控标识，保存后建议不要随意修改。</span></el-form-item>
+          <el-form-item label="项目名称"><el-input v-model="projectForm.name" /></el-form-item>
+          <el-form-item label="项目说明"><el-input v-model="projectForm.description" type="textarea" :rows="3" /></el-form-item>
+          <el-form-item label="关联数据库"><el-select v-model="projectForm.dataSourceIds" multiple filterable class="full-width" placeholder="可关联多个数据库"><el-option v-for="item in dataSources" :key="item.id" :label="`${item.name}（${item.key}）`" :value="item.id" /></el-select></el-form-item>
+          <el-form-item label="关联日志源"><el-select v-model="projectForm.logSourceIds" multiple filterable class="full-width" placeholder="可关联多个 NLog / Seq 日志源"><el-option v-for="item in logSources" :key="item.id" :label="`${item.name}（${item.key}）`" :value="item.id" /></el-select></el-form-item>
+          <el-form-item label="关联监控节点"><el-select v-model="projectForm.monitorTargetIds" multiple filterable class="full-width" placeholder="可关联本机或多个远端服务器"><el-option v-for="item in monitorTargets" :key="item.id" :label="`${item.name}（${item.key}）`" :value="item.id" /></el-select></el-form-item>
+          <el-form-item label="启用"><el-switch v-model="projectForm.enabled" /></el-form-item>
+        </el-form>
+        <template #footer><el-button @click="projectDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveProject">保存</el-button></template>
+      </el-dialog>
+
+      <el-dialog v-model="logSourceDialog" :title="editingLogSource ? '编辑日志源' : '新增日志源'" width="780px" class="log-source-dialog" top="4vh" destroy-on-close>
+        <el-form :model="logSourceForm" label-width="130px">
+          <el-form-item label="日志标识"><el-input v-model="logSourceForm.key" placeholder="例如：order-api-log" /></el-form-item>
+          <el-form-item label="名称"><el-input v-model="logSourceForm.name" /></el-form-item>
+          <el-form-item label="采集方式"><div class="log-source-type-picker"><div class="log-source-type-buttons"><el-button :type="logSourceForm.type === 1 ? 'primary' : 'default'" :plain="logSourceForm.type !== 1" @click="selectLogSourceType(1)">本机 NLog</el-button><el-button :type="logSourceForm.type === 2 ? 'warning' : 'default'" :plain="logSourceForm.type !== 2" @click="selectLogSourceType(2)">Seq API</el-button><el-button :type="logSourceForm.type === 3 ? 'success' : 'default'" :plain="logSourceForm.type !== 3" @click="selectLogSourceType(3)">远程 Agent</el-button></div><p>{{ logSourceForm.type === 1 ? '读取网关所在电脑的 NLog 文件。' : logSourceForm.type === 2 ? '调用 Seq API，每条日志源使用独立 API Key。' : '通过单独部署的采集 Agent 追溯远程服务器本地日志。' }}</p></div></el-form-item>
+          <template v-if="logSourceForm.type === 1">
+            <el-alert title="本地文件夹采集不会连接 Seq。只需填写日志文件夹；默认读取其中最近的 *.log 文件。也可以直接填写完整文件名或通配符。" type="info" show-icon :closable="false" class="source-mode-alert" />
+            <el-form-item label="日志文件夹"><el-input v-model="logSourceForm.endpoint" placeholder="例如 D:\Logs\OrderApi，或 D:\Logs\OrderApi\*.log" /><span class="field-help">支持绝对文件夹、完整文件名和通配符；文件夹模式默认匹配 *.log。也支持相对 NLog 配置的路径以及 ${basedir}、${shortdate} 等常见变量。</span></el-form-item>
+            <el-form-item label="NLog 配置（可选）"><el-input v-model="logSourceForm.nLogConfiguration" type="textarea" :rows="6" placeholder="仅在需要自动读取 fileName/layout 时填写：可粘贴 NLog XML，或填写 nlog.config 的绝对路径" /></el-form-item>
+            <el-form-item label="目标名称"><el-input v-model="logSourceForm.nLogTargetName" placeholder="配置包含多个 File target 时填写 target name" /></el-form-item>
+            <el-form-item label="Layout 覆盖"><el-input v-model="logSourceForm.nLogLayout" type="textarea" :rows="3" placeholder="可留空并从 File target 提取，例如 ${longdate}|${level}|${message}|${exception}" /></el-form-item>
+          </template>
+          <template v-else-if="logSourceForm.type === 2">
+            <el-alert title="Seq 模式不会读取本地文件。网关通过 Seq HTTP API 查询事件，API Key 仅加密保存在内置数据库中。" type="warning" show-icon :closable="false" class="source-mode-alert" />
+            <el-form-item label="Seq API 地址"><el-input v-model="logSourceForm.endpoint" placeholder="http://127.0.0.1:5341" /><span class="field-help">填写 Seq 服务根地址，系统会调用 GET /api/events。</span></el-form-item>
+            <el-form-item label="Seq API Key"><el-input v-model="logSourceForm.apiKey" type="password" show-password :placeholder="editingLogSource && editingLogSource.hasApiKey ? '已加密保存；留空表示不修改' : '建议使用仅具备 Read 权限的 API Key'" /></el-form-item>
+          </template>
+          <template v-else>
+            <el-alert title="请先在远程服务器运行 Monitor Agent 并启用日志服务。网关只通过内网 HTTP 查询，不会访问远程共享文件夹。" type="success" show-icon :closable="false" class="source-mode-alert" />
+            <el-form-item label="Agent 地址"><el-input v-model="logSourceForm.endpoint" placeholder="http://192.168.1.20:5188" /><span class="field-help">填写远程 Agent 的监听地址，请仅在可信内网开放该端口。</span></el-form-item>
+            <el-form-item label="访问密钥"><el-input v-model="logSourceForm.apiKey" type="password" show-password :placeholder="editingLogSource && editingLogSource.hasApiKey ? '已加密保存；留空表示不修改' : '填写远端 Agent 使用的 --secret'" /></el-form-item>
+          </template>
+          <el-form-item label="关联项目"><el-select v-model="logSourceForm.projectIds" multiple filterable class="full-width" placeholder="同一日志源可以供多个项目使用"><el-option v-for="item in projects" :key="item.id" :label="`${item.name}（${item.code}）`" :value="item.id" /></el-select></el-form-item>
+          <el-form-item label="启用"><el-switch v-model="logSourceForm.enabled" /></el-form-item>
+        </el-form>
+        <template #footer><el-button @click="logSourceDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveLogSource">保存</el-button></template>
+      </el-dialog>
+
+      <el-dialog v-model="monitorTargetDialog" :title="editingMonitorTarget ? '配置监控节点' : '新增远端监控节点'" width="680px" class="monitor-target-dialog" top="4vh" destroy-on-close>
+        <el-form :model="monitorTargetForm" label-width="120px">
+          <el-form-item label="节点标识"><el-input v-model="monitorTargetForm.key" :disabled="editingMonitorTarget?.type === 1" placeholder="例如：order-prod-01" /><span class="field-help">远端 Agent 使用该标识上报；同一网关内必须唯一。</span></el-form-item>
+          <el-form-item label="显示名称"><el-input v-model="monitorTargetForm.name" placeholder="例如：订单生产服务器 01" /></el-form-item>
+          <el-form-item label="节点类型"><el-tag :type="editingMonitorTarget?.type === 1 ? 'primary' : 'warning'">{{ editingMonitorTarget?.type === 1 ? '本机内置采集' : '远端 Agent 采集' }}</el-tag></el-form-item>
+          <el-form-item label="关联项目"><el-select v-model="monitorTargetForm.projectIds" multiple filterable class="full-width" placeholder="同一节点可关联多个项目"><el-option v-for="item in projects" :key="item.id" :label="`${item.name}（${item.code}）`" :value="item.id" /></el-select></el-form-item>
+          <el-form-item label="采集指标">
+            <div class="metric-selector full-width">
+              <div class="metric-selector-summary"><span>已选择 {{ monitorTargetForm.metricKeys?.length || 0 }} / {{ metricCatalog.length }} 项</span><el-button size="small" link type="primary" @click="selectDefaultMetrics">恢复推荐</el-button></div>
+              <div v-for="group in metricCatalogGroups" :key="group.name" class="metric-selector-group">
+                <strong>{{ group.name }}</strong>
+                <el-checkbox-group v-model="monitorTargetForm.metricKeys">
+                  <el-checkbox v-for="metric in group.items" :key="metric.key" :value="metric.key" :disabled="metric.required"><span>{{ metric.name }}</span><small>{{ metric.description }}</small></el-checkbox>
+                </el-checkbox-group>
+              </div>
+              <p class="field-help">基础心跳指标不可取消；远端 Agent 大约每 5 分钟同步一次最新配置。未勾选的扩展指标不会入库。</p>
+            </div>
+          </el-form-item>
+          <el-form-item label="启用采集"><el-switch v-model="monitorTargetForm.enabled" /></el-form-item>
+        </el-form>
+        <template #footer><el-button @click="monitorTargetDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveMonitorTarget">保存</el-button></template>
+      </el-dialog>
+
+      <el-dialog v-model="monitorCredentialDialog" title="请保存远端监控节点凭据" width="760px" :close-on-click-modal="false" destroy-on-close>
+        <el-alert title="上报密钥只显示这一次；关闭后只能重置，无法再次查看。" type="warning" show-icon :closable="false" />
+        <div v-if="monitorCredential" class="monitor-credential-panel">
+          <div><span>网关地址</span><code>{{ gatewayBaseUrl }}</code></div>
+          <div><span>节点标识</span><code>{{ monitorCredential.targetKey }}</code></div>
+          <div><span>上报密钥</span><code>{{ monitorCredential.ingestSecret }}</code></div>
+          <div><span>远端启动命令</span><pre>AiDataGateway.MonitorAgent.exe --gateway {{ gatewayBaseUrl }} --target {{ monitorCredential.targetKey }} --secret "{{ monitorCredential.ingestSecret }}"</pre></div>
+        </div>
+        <template #footer><el-button type="primary" @click="monitorCredentialDialog=false">我已保存</el-button></template>
+      </el-dialog>
+
+      <el-dialog v-model="applicationLogDialog" title="应用日志完整数据" width="90%" class="detail-window log-dialog" draggable overflow>
+        <div v-if="selectedApplicationLog" class="detail-dialog">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="事件 ID">{{ selectedApplicationLog.id }}</el-descriptions-item><el-descriptions-item label="时间">{{ formatDate(selectedApplicationLog.timestampUtc) }}</el-descriptions-item>
+            <el-descriptions-item label="级别"><el-tag :type="logLevelType(selectedApplicationLog.level)">{{ selectedApplicationLog.level || '未知' }}</el-tag></el-descriptions-item><el-descriptions-item label="解析状态"><el-tag :type="selectedApplicationLog.incomplete ? 'warning' : 'success'">{{ selectedApplicationLog.incomplete ? '记录不完整' : '结构化成功' }}</el-tag></el-descriptions-item>
+            <el-descriptions-item v-if="selectedApplicationLog.parseWarning" label="解析提示" :span="2"><span class="warning-text">{{ selectedApplicationLog.parseWarning }}</span></el-descriptions-item>
+            <el-descriptions-item v-if="selectedApplicationLog.exception" label="异常" :span="2"><pre class="inline-exception">{{ selectedApplicationLog.exception }}</pre></el-descriptions-item>
+          </el-descriptions>
+          <div class="detail-section"><h4>消息</h4><pre class="log-detail">{{ selectedApplicationLog.message || '—' }}</pre></div>
+          <div class="detail-section"><h4>结构化属性</h4><el-table :data="applicationLogProperties" stripe border max-height="340"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><pre class="property-value">{{ formatCell(s.row.value) }}</pre></template></el-table-column></el-table></div>
+          <div class="detail-section"><h4>原始记录</h4><pre class="log-detail">{{ selectedApplicationLog.rawText }}</pre></div>
+        </div>
+        <template #footer><el-button @click="applicationLogDialog=false">关闭</el-button></template>
       </el-dialog>
 
       <el-dialog v-model="approvalDialog" title="SQL 审批详情" width="900px" class="detail-window approval-detail-window" draggable overflow destroy-on-close>
@@ -261,7 +579,7 @@ axios.defaults.withCredentials = true
 
 export default {
   data: () => ({
-    loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', generatedClient: null,
+    loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', openTabs: ['overview'], sidebarCollapsed: localStorage.getItem('gateway.sidebarCollapsed') === 'true', generatedClient: null,
     eventSource: null, eventConnected: false, eventRefreshTimer: null,
     setup: { userName: 'admin', email: '', displayName: '管理员', password: '', aiClientName: 'Local AI Client' },
     setupRules: {
@@ -271,24 +589,141 @@ export default {
       password: [{ required: true, message: '请输入管理员密码', trigger: 'blur' }, { min: 10, message: '密码长度至少为 10 位', trigger: 'blur' }, { pattern: /[a-z]/, message: '密码必须包含小写字母', trigger: 'blur' }, { pattern: /[A-Z]/, message: '密码必须包含大写字母', trigger: 'blur' }, { pattern: /\d/, message: '密码必须包含数字', trigger: 'blur' }]
     },
     loginForm: { userName: 'admin', password: '', rememberMe: true },
-    dataSources: [], approvals: [], auditLogs: [], users: [], clients: [], roles: [],
+    dataSources: [], projects: [], logSources: [], monitorTargets: [], metricSamples: [], metricTrendSamples: [], metricCatalog: [], metricCatalogDefaultKeys: [], metricCatalogRequiredKeys: [], approvals: [], auditLogs: [], applicationLogs: [], users: [], clients: [], roles: [],
     approvalFilter: 'all', approvalKeyword: '', approvalPage: 1, approvalPageSize: 20, approvalTotal: 0, approvalAllTotal: 0, pendingApprovalTotal: 0,
     logKeyword: '', logOutcome: '', auditLogPage: 1, auditLogPageSize: 20, auditLogTotal: 0, auditLogAllTotal: 0,
     dataSourceDialog: false, editingDataSource: null, dataSourceForm: {},
+    projectDialog: false, editingProject: null, projectForm: {},
+    logSourceDialog: false, editingLogSource: null, logSourceForm: {},
+    monitorTargetDialog: false, editingMonitorTarget: null, monitorTargetForm: {}, monitorCredentialDialog: false, monitorCredential: null,
+    selectedMonitorTargetId: '', monitorLoading: false, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
+    applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false, applicationLogEventSource: null, applicationLogLive: false,
+    applicationLogDialog: false, selectedApplicationLog: null,
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
     maintenanceSettings: { cleanupEnabled: true, retentionDays: 3, cleanupTimeLocal: '03:00', approvalExpirationMinutes: 15, lastCleanupAtUtc: null, lastCleanupSummary: null },
+    desktopSettings: { available: false, memoryOverlayEnabled: false }, desktopMessageHandler: null,
     providers: [{ value: 1, label: 'SQL Server', port: 1433 }, { value: 2, label: 'MySQL', port: 3306 }, { value: 3, label: 'PostgreSQL', port: 5432 }, { value: 4, label: 'SQLite', port: 1 }, { value: 5, label: 'Oracle', port: 1521 }, { value: 6, label: 'MariaDB', port: 3306 }, { value: 7, label: '达梦 DM8', port: 5236 }, { value: 8, label: 'Firebird', port: 3050 }],
-    accessModes: [{ value: 0, label: '禁用' }, { value: 1, label: '只读' }, { value: 2, label: '写入需审批' }, { value: 3, label: '开发模式' }]
+    accessModes: [{ value: 0, label: '禁用' }, { value: 1, label: '只读' }, { value: 2, label: '写入需审批' }, { value: 3, label: '开发模式' }],
+    logLevels: ['Trace', 'Debug', 'Information', 'Info', 'Warning', 'Warn', 'Error', 'Fatal'],
+    logDateShortcuts: [{ text: '最近 15 分钟', value: () => [new Date(Date.now() - 15 * 60 * 1000), new Date()] }, { text: '最近 1 小时', value: () => [new Date(Date.now() - 60 * 60 * 1000), new Date()] }, { text: '最近 24 小时', value: () => [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()] }, { text: '最近 7 天', value: () => [new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), new Date()] }]
   }),
   computed: {
     isAdmin () { return this.user?.roles?.includes('Administrator') },
     canOperate () { return this.isAdmin || this.user?.roles?.includes('Operator') },
     canApprove () { return this.isAdmin || this.user?.roles?.includes('Approver') },
     canViewLogs () { return this.isAdmin || this.user?.roles?.includes('Approver') || this.user?.roles?.includes('Operator') || this.user?.roles?.includes('Auditor') },
-    isMainPage () { return ['overview', 'datasources', 'approvals', 'logs'].includes(this.activeTab) },
+    canViewMetrics () { return this.canViewLogs || this.user?.roles?.includes('Viewer') },
     approvalPageCount () { return Math.max(1, Math.ceil(this.approvalTotal / this.approvalPageSize)) },
     auditLogPageCount () { return Math.max(1, Math.ceil(this.auditLogTotal / this.auditLogPageSize)) },
+    selectedApplicationLogSource () { return this.logSources.find(item => item.id === this.applicationLogSourceId) },
+    selectedMonitorTarget () { return this.monitorTargets.find(item => item.id === this.selectedMonitorTargetId) },
+    onlineMonitorCount () { return this.monitorTargets.filter(item => item.online).length },
+    gatewayBaseUrl () { return window.location.origin },
+    metricCatalogGroups () {
+      return [...new Set(this.metricCatalog.map(item => item.category))].map(name => ({ name, items: this.metricCatalog.filter(item => item.category === name) }))
+    },
+    selectedMetricCards () {
+      const hidden = new Set(['cpu.percent', 'memory.percent', 'disk.percent', 'system.uptime_seconds'])
+      const selected = new Set(this.selectedMonitorTarget?.metricKeys || [])
+      return this.metricCatalog.filter(item => selected.has(item.key) && !hidden.has(item.key) && this.metricValue(this.selectedMonitorTarget?.latest, item.key) !== null)
+    },
+    selectableTrendMetrics () {
+      const selected = new Set(this.selectedMonitorTarget?.metricKeys || [])
+      return this.metricCatalog.filter(item => selected.has(item.key))
+    },
+    selectedTrendMetric () { return this.metricCatalog.find(item => item.key === this.metricTrendKey) },
+    metricTrendValues () { return this.metricTrendSamples.map(item => this.metricValue(item, this.metricTrendKey)).filter(value => value !== null) },
+    metricTrendScale () {
+      const values = this.metricTrendValues
+      if (!values.length) return { min: 0, max: this.selectedTrendMetric?.unit === 'percent' ? 100 : 1 }
+      const observedMin = Math.min(...values)
+      const observedMax = Math.max(...values)
+      const minimumSpan = this.selectedTrendMetric?.unit === 'percent' ? 10 : Math.max(Math.abs(observedMax) * 0.1, 1)
+      const paddedSpan = Math.max(observedMax - observedMin, minimumSpan)
+      let minimum = Math.max(0, observedMin - paddedSpan * 0.18)
+      let maximum = observedMax + paddedSpan * 0.18
+      const roughStep = Math.max((maximum - minimum) / 4, Number.EPSILON)
+      const magnitude = 10 ** Math.floor(Math.log10(roughStep))
+      const normalized = roughStep / magnitude
+      const step = (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude
+      minimum = Math.floor(minimum / step) * step
+      maximum = Math.ceil(maximum / step) * step
+      if (this.selectedTrendMetric?.unit === 'percent') {
+        maximum = Math.min(100, maximum)
+        if (maximum - minimum < 10) {
+          if (maximum >= 100) minimum = 90
+          else maximum = Math.min(100, minimum + 10)
+        }
+      }
+      if (maximum <= minimum) maximum = minimum + step
+      return { min: minimum, max: maximum }
+    },
+    metricTrendMin () { return this.metricTrendScale.min },
+    metricTrendMax () { return this.metricTrendScale.max },
+    metricTrendChartPoints () {
+      const samples = [...this.metricTrendSamples]
+        .sort((left, right) => new Date(left.collectedAtUtc) - new Date(right.collectedAtUtc))
+        .map((sample, sourceIndex) => ({ sample, sourceIndex, value: this.metricValue(sample, this.metricTrendKey) }))
+        .filter(item => item.value !== null)
+      const range = Math.max(1e-9, this.metricTrendMax - this.metricTrendMin)
+      return samples.map((item, index) => ({
+        key: `${item.sample.collectedAtUtc}-${item.sourceIndex}`,
+        timestamp: item.sample.collectedAtUtc,
+        value: item.value,
+        x: samples.length === 1 ? 431 : 72 + index * 718 / (samples.length - 1),
+        y: 232 - (item.value - this.metricTrendMin) * 212 / range
+      }))
+    },
+    metricTrendPoints () { return this.metricTrendChartPoints.map(point => `${point.x},${point.y}`).join(' ') },
+    metricTrendAreaPoints () {
+      const points = this.metricTrendChartPoints
+      return points.length > 1 ? `${points[0].x},232 ${this.metricTrendPoints} ${points.at(-1).x},232` : ''
+    },
+    metricTrendReferenceLines () {
+      const points = this.metricTrendChartPoints
+      if (this.metricTrendMode !== 'history' || !points.length) return []
+      const minimum = Math.min(...points.map(point => point.value))
+      const maximum = Math.max(...points.map(point => point.value))
+      const yFor = value => 232 - (value - this.metricTrendMin) * 212 / Math.max(1e-9, this.metricTrendMax - this.metricTrendMin)
+      if (Math.abs(maximum - minimum) < 1e-9) {
+        return [{ key: 'same', y: yFor(maximum), label: `最高/最低 ${this.formatMetricValue(maximum, this.selectedTrendMetric?.unit)}` }]
+      }
+      return [
+        { key: 'maximum', y: yFor(maximum), label: `最高 ${this.formatMetricValue(maximum, this.selectedTrendMetric?.unit)}` },
+        { key: 'minimum', y: yFor(minimum), label: `最低 ${this.formatMetricValue(minimum, this.selectedTrendMetric?.unit)}` }
+      ]
+    },
+    metricYAxisTicks () {
+      const range = this.metricTrendMax - this.metricTrendMin
+      return Array.from({ length: 5 }, (_, index) => {
+        const value = this.metricTrendMax - range * index / 4
+        return { y: 20 + index * 53, value, label: this.formatMetricValue(value, this.selectedTrendMetric?.unit) }
+      })
+    },
+    metricXAxisTicks () {
+      const points = this.metricTrendChartPoints
+      if (!points.length) return []
+      const count = Math.min(5, points.length)
+      const indices = [...new Set(Array.from({ length: count }, (_, index) => Math.round(index * (points.length - 1) / Math.max(1, count - 1))))]
+      return indices.map((pointIndex, index) => ({
+        index: pointIndex,
+        x: points[pointIndex].x,
+        label: this.formatChartAxisTime(points[pointIndex].timestamp),
+        anchor: index === 0 ? 'start' : index === indices.length - 1 ? 'end' : 'middle'
+      }))
+    },
+    metricTooltipStyle () {
+      if (!this.metricHoverPoint) return {}
+      return { left: `${this.metricHoverPoint.x / 8}%`, top: `${this.metricHoverPoint.y / 2.8}%` }
+    },
+    trendRangeLabel () { return `${this.formatMetricValue(this.metricTrendMin, this.selectedTrendMetric?.unit)} – ${this.formatMetricValue(this.metricTrendMax, this.selectedTrendMetric?.unit)}` },
+    trendSummary () {
+      if (this.metricTrendMode === 'recent') return `最近 ${this.metricTrendSamples.length} 个采样点，按采样顺序展开`
+      return `时间范围内 ${this.metricTrendSourceCount} 条原始记录，显示 ${this.metricTrendSamples.length} 个趋势点，虚线标注最高值和最低值`
+    },
+    applicationLogHasNext () { return this.applicationLogPartial || this.applicationLogs.length >= this.applicationLogPageSize },
+    applicationLogProperties () { return Object.entries(this.selectedApplicationLog?.properties || {}).map(([key, value]) => ({ key, value })) },
     userInitials () { return (this.user?.displayName || this.user?.userName || 'U').trim().slice(0, 2).toUpperCase() },
     selectedLogDetail () { return this.parseLogDetail(this.selectedLog?.detail) },
     selectedLogColumns () {
@@ -296,9 +731,28 @@ export default {
       return Object.keys(this.selectedLogDetail.rows?.[0] || {})
     }
   },
-  async created () { await this.bootstrap() },
-  beforeUnmount () { this.disconnectEvents() },
+  async created () { this.initializeDesktopBridge(); await this.bootstrap() },
+  beforeUnmount () { this.disconnectEvents(); this.stopApplicationLogStream(); this.disposeDesktopBridge() },
   methods: {
+    initializeDesktopBridge () {
+      if (!window.chrome?.webview) return
+      this.desktopSettings.available = true
+      this.desktopMessageHandler = event => this.handleDesktopMessage(event)
+      window.chrome.webview.addEventListener('message', this.desktopMessageHandler)
+      window.chrome.webview.postMessage({ type: 'desktop.getState' })
+    },
+    disposeDesktopBridge () {
+      if (this.desktopMessageHandler && window.chrome?.webview) window.chrome.webview.removeEventListener('message', this.desktopMessageHandler)
+      this.desktopMessageHandler = null
+    },
+    handleDesktopMessage (event) {
+      if (event.data?.type !== 'desktop.state') return
+      this.desktopSettings = { available: event.data.available === true, memoryOverlayEnabled: event.data.memoryOverlayEnabled === true }
+    },
+    setMemoryOverlayEnabled (enabled) {
+      if (!this.desktopSettings.available || !window.chrome?.webview) return
+      window.chrome.webview.postMessage({ type: 'desktop.memoryOverlay.set', enabled: enabled === true })
+    },
     async bootstrap () {
       try {
         const setup = await axios.get('/api/setup/status')
@@ -322,19 +776,43 @@ export default {
       this.saving = true
       try { this.user = (await axios.post('/api/auth/login', this.loginForm)).data; await this.loadOverview(); this.connectEvents() } catch (e) { this.error(e) } finally { this.saving = false }
     },
-    async logout () { this.disconnectEvents(); await axios.post('/api/auth/logout'); this.user = null; this.activeTab = 'overview' },
+    async logout () { this.disconnectEvents(); await axios.post('/api/auth/logout'); this.user = null; this.activeTab = 'overview'; this.openTabs = ['overview'] },
     async handleUserCommand (command) { if (command === 'logout') return this.logout(); await this.goTo(command) },
-    async goTo (name) { this.activeTab = name; await this.loadActiveTab() },
+    toggleSidebar () {
+      this.sidebarCollapsed = !this.sidebarCollapsed
+      localStorage.setItem('gateway.sidebarCollapsed', String(this.sidebarCollapsed))
+    },
+    isPageOpen (name) { return this.openTabs.includes(name) },
+    async goTo (name) {
+      if (!this.openTabs.includes(name)) this.openTabs.push(name)
+      this.activeTab = name
+      await this.loadActiveTab()
+    },
+    async closePage (name) {
+      if (name === 'overview') return
+      const index = this.openTabs.indexOf(name)
+      if (index < 0) return
+      this.openTabs.splice(index, 1)
+      if (this.activeTab === name) {
+        this.activeTab = this.openTabs[Math.max(0, index - 1)] || 'overview'
+        await this.loadActiveTab()
+      }
+    },
     async loadOverview () {
       const jobs = []
-      if (this.canOperate) jobs.push(this.loadDataSources())
+      if (this.canOperate) jobs.push(this.loadResourceCatalog())
       if (this.canApprove) jobs.push(this.loadApprovalMetrics())
       if (this.canViewLogs) jobs.push(this.loadAuditLogMetrics())
+      if (this.canViewMetrics) jobs.push(this.loadMonitorTargets())
       await Promise.all(jobs)
     },
     async loadActiveTab () {
       if (this.activeTab === 'overview') await this.loadOverview()
+      if (this.activeTab === 'projects') await this.loadResourceCatalog()
       if (this.activeTab === 'datasources') await this.loadDataSources()
+      if (this.activeTab === 'logsources') await this.loadResourceCatalog()
+      if (this.activeTab === 'applicationlogs') await this.loadLogSources()
+      if (this.activeTab === 'monitoring') { await this.loadMonitorTargets(); await this.loadMetricSamples() }
       if (this.activeTab === 'approvals') await this.loadApprovals()
       if (this.activeTab === 'logs') await this.loadAuditLogs()
       if (this.activeTab === 'settings') await this.loadMaintenanceSettings()
@@ -342,6 +820,24 @@ export default {
       if (this.activeTab === 'clients') await this.loadClients()
     },
     async loadDataSources () { this.dataSources = (await axios.get('/api/admin/datasources')).data },
+    async loadProjects () { this.projects = (await axios.get('/api/admin/projects')).data },
+    async loadLogSources () { this.logSources = (await axios.get(this.canOperate ? '/api/admin/log-sources' : '/api/log-sources')).data },
+    async loadMonitorTargets () {
+      if (!this.metricCatalog.length) await this.loadMetricCatalog()
+      this.monitorTargets = (await axios.get('/api/monitoring/targets')).data
+      if (!this.monitorTargets.some(item => item.id === this.selectedMonitorTargetId)) this.selectedMonitorTargetId = this.monitorTargets[0]?.id || ''
+      this.ensureTrendMetric()
+    },
+    async loadMetricCatalog () {
+      const result = (await axios.get('/api/monitoring/metric-catalog')).data
+      this.metricCatalog = result.items || []
+      this.metricCatalogDefaultKeys = result.defaultKeys || []
+      this.metricCatalogRequiredKeys = result.requiredKeys || []
+    },
+    async loadResourceCatalog () {
+      await Promise.all([this.loadDataSources(), this.loadProjects(), this.loadLogSources(), this.loadMonitorTargets()])
+      if (!this.applicationLogSourceId && this.logSources.some(item => item.enabled)) this.applicationLogSourceId = this.logSources.find(item => item.enabled).id
+    },
     async loadApprovalMetrics () {
       const [all, pending] = await Promise.all([
         axios.get('/api/approvals', { params: { page: 1, pageSize: 1 } }),
@@ -372,6 +868,10 @@ export default {
     async auditLogSizeChanged () { this.auditLogPage = 1; await this.loadAuditLogs() },
     async changeAuditLogPage (page) { if (page < 1 || page > this.auditLogPageCount || page === this.auditLogPage) return; this.auditLogPage = page; await this.loadAuditLogs() },
     async openDataSourcePage () { if (this.canOperate) await this.goTo('datasources') },
+    async openProjectPage () { if (this.canOperate) await this.goTo('projects') },
+    async openLogSourcePage () { if (this.canOperate) await this.goTo('logsources') },
+    async openApplicationLogPage () { if (!this.canViewLogs) return; await this.goTo('applicationlogs') },
+    async openMonitoringPage () { if (!this.canViewMetrics) return; await this.goTo('monitoring') },
     async openApprovalPage (status = 'all') { if (!this.canApprove) return; this.approvalFilter = status; this.approvalKeyword = ''; this.approvalPage = 1; await this.goTo('approvals') },
     async openLogPage () { if (!this.canViewLogs) return; this.logKeyword = ''; this.logOutcome = ''; this.auditLogPage = 1; await this.goTo('logs') },
     async loadUsers () { const [users, roles] = await Promise.all([axios.get('/api/admin/users'), axios.get('/api/admin/roles')]); this.users = users.data; this.roles = roles.data },
@@ -407,6 +907,11 @@ export default {
         if (this.activeTab === 'approvals') jobs.push(this.loadApprovals())
       }
       if (this.canOperate && action.startsWith('datasource.')) jobs.push(this.loadDataSources())
+      if (this.canOperate && (action.startsWith('project.') || action.startsWith('logsource.'))) jobs.push(this.loadResourceCatalog())
+      if (this.canViewMetrics && (action.startsWith('monitor-target.') || action.startsWith('metrics.'))) {
+        jobs.push(this.loadMonitorTargets())
+        if (this.activeTab === 'monitoring') jobs.push(this.loadMetricSamples())
+      }
       if (this.isAdmin && action.startsWith('user.') && this.activeTab === 'users') jobs.push(this.loadUsers())
       if (this.isAdmin && action.startsWith('oauth-client.') && this.activeTab === 'clients') jobs.push(this.loadClients())
       if (this.isAdmin && (action.startsWith('settings.') || action.startsWith('maintenance.')) && this.activeTab === 'settings') jobs.push(this.loadMaintenanceSettings())
@@ -429,6 +934,160 @@ export default {
     },
     async testDataSource (row) { try { const response = await axios.post(`/api/admin/datasources/${row.id}/test`); ElMessage({ type: response.data.success ? 'success' : 'error', message: response.data.message }) } catch (e) { this.error(e) } },
     async deleteDataSource (row) { try { await ElMessageBox.confirm(`确定删除 ${row.name}？`); await axios.delete(`/api/admin/datasources/${row.id}`); await this.loadDataSources() } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
+    openProject (row) {
+      this.editingProject = row || null
+      this.projectForm = row ? { code: row.code, name: row.name, description: row.description, enabled: row.enabled, dataSourceIds: row.dataSources.map(item => item.id), logSourceIds: row.logSources.map(item => item.id), monitorTargetIds: (row.monitorTargets || []).map(item => item.id) } : { code: '', name: '', description: '', enabled: true, dataSourceIds: [], logSourceIds: [], monitorTargetIds: [] }
+      this.projectDialog = true
+    },
+    async saveProject () {
+      this.saving = true
+      try { if (this.editingProject) await axios.put(`/api/admin/projects/${this.editingProject.id}`, this.projectForm); else await axios.post('/api/admin/projects', this.projectForm); this.projectDialog = false; await this.loadResourceCatalog(); ElMessage.success('项目已保存') } catch (e) { this.error(e) } finally { this.saving = false }
+    },
+    async deleteProject (row) { try { await ElMessageBox.confirm(`确定删除项目 ${row.name}？关联的数据源和日志源本身不会被删除。`, '删除项目', { type: 'warning' }); await axios.delete(`/api/admin/projects/${row.id}`); await this.loadResourceCatalog(); ElMessage.success('项目已删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
+    openLogSource (row) {
+      this.editingLogSource = row || null
+      this.logSourceForm = row ? { key: row.key, name: row.name, type: row.type, endpoint: row.endpoint, nLogConfiguration: row.nLogConfiguration || '', nLogTargetName: row.nLogTargetName || '', nLogLayout: row.nLogLayout || '', apiKey: '', enabled: row.enabled, projectIds: row.projects.map(item => item.id) } : { key: '', name: '', type: 1, endpoint: '', nLogConfiguration: '', nLogTargetName: '', nLogLayout: '${longdate}|${level}|${logger}|${message}|${exception}', apiKey: '', enabled: true, projectIds: [] }
+      this.logSourceDialog = true
+    },
+    selectLogSourceType (type) { if (this.logSourceForm.type === type) return; this.logSourceForm.type = type; this.logSourceTypeChanged(type) },
+    logSourceTypeChanged (type) { this.logSourceForm.endpoint = type === 2 ? 'http://127.0.0.1:5341' : type === 3 ? 'http://127.0.0.1:5188' : ''; this.logSourceForm.apiKey = '' },
+    async saveLogSource () {
+      this.saving = true
+      try { if (this.editingLogSource) await axios.put(`/api/admin/log-sources/${this.editingLogSource.id}`, this.logSourceForm); else await axios.post('/api/admin/log-sources', this.logSourceForm); this.logSourceDialog = false; await this.loadResourceCatalog(); ElMessage.success('日志源已保存') } catch (e) { this.error(e) } finally { this.saving = false }
+    },
+    async testLogSource (row) { try { const response = await axios.post(`/api/admin/log-sources/${row.id}/test`); ElMessage({ type: response.data.success ? 'success' : 'error', message: response.data.message, duration: 6000 }) } catch (e) { this.error(e) } },
+    async deleteLogSource (row) { try { await ElMessageBox.confirm(`确定删除日志源 ${row.name}？不会删除本地日志文件或 Seq 数据。`, '删除日志源', { type: 'warning' }); await axios.delete(`/api/admin/log-sources/${row.id}`); await this.loadResourceCatalog(); ElMessage.success('日志源已删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
+    async selectMonitorTarget (target) { this.selectedMonitorTargetId = target.id; this.metricTrendMode = 'recent'; this.metricHoverPoint = null; this.ensureTrendMetric(); await this.loadMetricSamples() },
+    async loadMetricSamples () {
+      if (!this.selectedMonitorTargetId) { this.metricSamples = []; return }
+      this.metricHoverPoint = null
+      this.monitorLoading = true
+      try {
+        this.metricSamples = (await axios.get(`/api/monitoring/targets/${this.selectedMonitorTargetId}/samples`, { params: { page: 1, pageSize: 120 } })).data.items
+        if (this.metricTrendMode === 'recent') { this.metricTrendSamples = this.metricSamples; this.metricTrendSourceCount = this.metricSamples.length }
+      } catch (e) { this.error(e) } finally { this.monitorLoading = false }
+    },
+    async setMetricTrendMode (mode) {
+      this.metricTrendMode = mode
+      this.metricHoverPoint = null
+      if (mode === 'recent') { this.metricTrendSamples = this.metricSamples; this.metricTrendSourceCount = this.metricSamples.length } else await this.loadHistoricalTrend()
+    },
+    async loadHistoricalTrend () {
+      if (!this.selectedMonitorTargetId || !Array.isArray(this.metricHistoryRange) || this.metricHistoryRange.length !== 2) return
+      this.metricHoverPoint = null
+      this.monitorLoading = true
+      try {
+        const [from, to] = this.metricHistoryRange
+        const result = (await axios.get(`/api/monitoring/targets/${this.selectedMonitorTargetId}/trend`, { params: { fromUtc: new Date(from).toISOString(), toUtc: new Date(to).toISOString(), maxPoints: 500 } })).data
+        this.metricTrendSamples = result.items || []
+        this.metricTrendSourceCount = result.sourceCount || 0
+      } catch (e) { this.error(e) } finally { this.monitorLoading = false }
+    },
+    ensureTrendMetric () {
+      const keys = this.selectedMonitorTarget?.metricKeys || []
+      if (!keys.includes(this.metricTrendKey)) this.metricTrendKey = keys[0] || 'cpu.percent'
+    },
+    openMonitorTarget (row) {
+      this.editingMonitorTarget = row || null
+      this.monitorTargetForm = row ? { key: row.key, name: row.name, enabled: row.enabled, projectIds: row.projects.map(item => item.id), metricKeys: [...(row.metricKeys || this.metricCatalogDefaultKeys)] } : { key: '', name: '', enabled: true, projectIds: [], metricKeys: [...this.metricCatalogDefaultKeys] }
+      this.monitorTargetDialog = true
+    },
+    selectDefaultMetrics () { this.monitorTargetForm.metricKeys = [...this.metricCatalogDefaultKeys] },
+    async saveMonitorTarget () {
+      this.saving = true
+      try {
+        if (this.editingMonitorTarget) {
+          await axios.put(`/api/admin/monitoring/targets/${this.editingMonitorTarget.id}`, this.monitorTargetForm)
+          ElMessage.success('监控节点已保存')
+        } else {
+          const created = (await axios.post('/api/admin/monitoring/targets', this.monitorTargetForm)).data
+          this.monitorCredential = { targetKey: created.target.key, ingestSecret: created.ingestSecret }
+          this.monitorCredentialDialog = true
+        }
+        this.monitorTargetDialog = false
+        await this.loadMonitorTargets()
+      } catch (e) { this.error(e) } finally { this.saving = false }
+    },
+    async rotateMonitorSecret (target) {
+      try {
+        await ElMessageBox.confirm(`重置 ${target.name} 的上报密钥后，旧 Agent 会立即无法上报。`, '重置上报密钥', { type: 'warning' })
+        const result = (await axios.post(`/api/admin/monitoring/targets/${target.id}/rotate-secret`)).data
+        this.monitorCredential = { targetKey: result.targetKey, ingestSecret: result.ingestSecret }
+        this.monitorCredentialDialog = true
+      } catch (e) { if (!this.isCanceled(e)) this.error(e) }
+    },
+    async deleteMonitorTarget (target) {
+      try { await ElMessageBox.confirm(`确定删除远端监控节点 ${target.name}？其历史指标也会删除。`, '删除监控节点', { type: 'warning' }); await axios.delete(`/api/admin/monitoring/targets/${target.id}`); await this.loadMonitorTargets(); await this.loadMetricSamples(); ElMessage.success('监控节点已删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) }
+    },
+    monitorTargetTypeName (value) { return value === 1 ? '本机' : '远端' },
+    showMetricPoint (point) { this.metricHoverPoint = point },
+    formatChartAxisTime (value) {
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return '—'
+      const points = this.metricTrendChartPoints
+      const duration = points.length > 1 ? new Date(points.at(-1).timestamp) - new Date(points[0].timestamp) : 0
+      const monthDay = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+      if (duration > 7 * 86400000) return monthDay
+      if (duration > 86400000) return `${monthDay} ${time}`
+      return `${time}:${String(date.getSeconds()).padStart(2, '0')}`
+    },
+    metricValue (sample, key) {
+      if (!sample) return null
+      const value = sample.metrics?.[key]
+      return value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value)
+    },
+    formatMetricValue (value, unit) {
+      if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—'
+      if (unit === 'percent') return this.formatPercent(value)
+      if (unit === 'bytes') return this.formatBytes(value)
+      if (unit === 'bytes_per_second') return `${this.formatBytes(value)}/s`
+      if (unit === 'duration_seconds') return this.formatDuration(value)
+      return Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 })
+    },
+    formatPercent (value) { return value === null || value === undefined ? '—' : `${Number(value).toFixed(1)}%` },
+    formatBytes (value) {
+      if (value === null || value === undefined) return '—'
+      const units = ['B', 'KB', 'MB', 'GB', 'TB']; let size = Number(value); let unit = 0
+      while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit++ }
+      return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`
+    },
+    formatDuration (seconds) {
+      if (seconds === null || seconds === undefined) return '—'
+      const days = Math.floor(seconds / 86400); const hours = Math.floor((seconds % 86400) / 3600); const minutes = Math.floor((seconds % 3600) / 60)
+      return days ? `${days}天 ${hours}小时` : hours ? `${hours}小时 ${minutes}分` : `${minutes}分钟`
+    },
+    async searchApplicationLogs () { this.applicationLogPage = 1; await this.loadApplicationLogs() },
+    async loadApplicationLogs () {
+      if (!this.applicationLogSourceId) { this.applicationLogs = []; return }
+      this.applicationLogsLoading = true
+      try {
+        const response = await axios.post('/api/logs/query', this.applicationLogRequest())
+        this.applicationLogs = response.data.items; this.applicationLogTotal = response.data.total; this.applicationLogPartial = response.data.isPartial; this.applicationLogWarning = response.data.warning
+      } catch (e) { this.error(e) } finally { this.applicationLogsLoading = false }
+    },
+    applicationLogRequest () {
+      const seqAdvanced = this.selectedApplicationLogSource?.type === 2 && this.applicationLogQueryMode === 'advanced'
+      return { logSourceId: this.applicationLogSourceId, query: seqAdvanced ? this.applicationLogQuery.trim() || null : null, searchText: seqAdvanced ? null : this.applicationLogSearchText.trim() || null, propertyName: seqAdvanced ? null : this.applicationLogPropertyName.trim() || null, propertyValue: seqAdvanced ? null : this.applicationLogPropertyValue.trim() || null, level: this.applicationLogLevel || null, fromUtc: this.applicationLogRange?.[0]?.toISOString(), toUtc: this.applicationLogRange?.[1]?.toISOString(), page: this.applicationLogPage, pageSize: this.applicationLogPageSize }
+    },
+    async resetApplicationLogs () { this.stopApplicationLogStream(); this.applicationLogQuery = ''; this.applicationLogSearchText = ''; this.applicationLogPropertyName = ''; this.applicationLogPropertyValue = ''; this.applicationLogLevel = ''; this.applicationLogRange = [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()]; this.applicationLogPage = 1; this.applicationLogs = []; this.applicationLogTotal = 0; this.applicationLogWarning = null },
+    startApplicationLogStream () {
+      if (!this.applicationLogSourceId) { ElMessage.warning('请先选择日志源'); return }
+      this.stopApplicationLogStream(); this.applicationLogs = []; this.applicationLogPage = 1; this.applicationLogTotal = 0
+      const request = this.applicationLogRequest(); const params = new URLSearchParams()
+      for (const key of ['logSourceId', 'query', 'searchText', 'propertyName', 'propertyValue', 'level']) if (request[key]) params.set(key, request[key])
+      params.set('fromUtc', new Date().toISOString())
+      const stream = new EventSource(`/api/logs/stream?${params.toString()}`, { withCredentials: true })
+      this.applicationLogEventSource = stream; this.applicationLogLive = true
+      stream.onmessage = event => { const item = JSON.parse(event.data); if (!this.applicationLogs.some(value => value.id === item.id)) this.applicationLogs.unshift(item); if (this.applicationLogs.length > 500) this.applicationLogs.length = 500; this.applicationLogTotal = this.applicationLogs.length }
+      stream.onerror = () => { if (this.applicationLogEventSource === stream) { this.stopApplicationLogStream(); ElMessage.warning('实时日志连接已断开，请检查日志源后重试') } }
+    },
+    stopApplicationLogStream () { this.applicationLogEventSource?.close(); this.applicationLogEventSource = null; this.applicationLogLive = false },
+    async applicationLogSizeChanged () { this.applicationLogPage = 1; if (this.applicationLogs.length) await this.loadApplicationLogs() },
+    async changeApplicationLogPage (page) { if (page < 1 || page === this.applicationLogPage) return; this.applicationLogPage = page; await this.loadApplicationLogs() },
+    openApplicationLog (row) { this.selectedApplicationLog = row; this.applicationLogDialog = true },
+    logSourceTypeName (type) { return ({ 1: '本地 NLog', 2: 'Seq', 3: '远程 Agent' })[type] || type },
+    logLevelType (level) { const value = String(level || '').toLowerCase(); if (value === 'fatal' || value === 'error') return 'danger'; if (value === 'warn' || value === 'warning') return 'warning'; if (value === 'debug' || value === 'trace') return 'info'; return 'success' },
     async openApproval (row) { try { this.selectedApproval = (await axios.get(`/api/approvals/${row.id}`)).data; this.reviewComment = ''; this.approvalDialog = true } catch (e) { this.error(e) } },
     async reviewSelected (approved) {
       if (!this.selectedApproval) return
@@ -483,7 +1142,7 @@ export default {
     riskType (risk) { return ({ Low: 'success', Medium: 'warning', High: 'danger', Critical: 'danger' })[risk] || 'info' },
     outcomeName (outcome) { return ({ success: '成功', failure: '失败', pending: '待处理', rejected: '已拒绝' })[outcome] || outcome },
     outcomeType (outcome) { return ({ success: 'success', failure: 'danger', pending: 'warning', rejected: 'danger' })[outcome] || 'info' },
-    actionName (action) { return ({ 'system.setup': '系统初始化', 'auth.login': '用户登录', 'auth.logout': '用户退出', 'query.execute': 'AI 只读查询', 'query.blocked': '黑名单拦截查询', 'change.submit': '提交 SQL 工单', 'change.review': '审核 SQL 工单', 'change.execute': '执行 SQL 变更', 'datasource.create': '创建数据源', 'datasource.update': '更新数据源', 'datasource.delete': '删除数据源', 'datasource.test': '测试数据源', 'settings.maintenance.update': '更新系统设置', 'maintenance.cleanup': '清理日志与记录', 'user.create': '创建用户', 'user.update': '更新用户', 'user.delete': '删除用户', 'oauth-client.create': '创建 OAuth2 客户端', 'oauth-client.delete': '吊销 OAuth2 客户端' })[action] || action },
+    actionName (action) { return ({ 'system.setup': '系统初始化', 'auth.login': '用户登录', 'auth.logout': '用户退出', 'query.execute': 'AI 只读查询', 'query.blocked': '黑名单拦截查询', 'change.submit': '提交 SQL 工单', 'change.review': '审核 SQL 工单', 'change.execute': '执行 SQL 变更', 'datasource.create': '创建数据源', 'datasource.update': '更新数据源', 'datasource.delete': '删除数据源', 'datasource.test': '测试数据源', 'project.create': '创建项目', 'project.update': '更新项目', 'project.delete': '删除项目', 'logsource.create': '创建日志源', 'logsource.update': '更新日志源', 'logsource.delete': '删除日志源', 'logsource.test': '测试日志源', 'log.query': '读取应用日志', 'settings.maintenance.update': '更新系统设置', 'maintenance.cleanup': '清理日志与记录', 'user.create': '创建用户', 'user.update': '更新用户', 'user.delete': '删除用户', 'oauth-client.create': '创建 OAuth2 客户端', 'oauth-client.delete': '吊销 OAuth2 客户端' })[action] || action },
     isCanceled (e) { return e === 'cancel' || e === 'close' || e?.message === 'cancel' || e?.message === 'close' }
   }
 }

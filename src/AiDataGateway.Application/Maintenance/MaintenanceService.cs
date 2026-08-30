@@ -35,7 +35,7 @@ public sealed class MaintenanceService(
         {
             var settings = await repository.GetAsync(cancellationToken);
             var result = await dataCleaner.CleanupAsync(settings.RetentionDays, cancellationToken);
-            var summary = $"审计日志 {result.AuditLogsDeleted} 条，审批记录 {result.ApprovalRecordsDeleted} 条，日志文件 {result.LogFilesDeleted} 个";
+            var summary = $"审计日志 {result.AuditLogsDeleted} 条，审批记录 {result.ApprovalRecordsDeleted} 条，指标记录 {result.MetricSamplesDeleted} 条，日志文件 {result.LogFilesDeleted} 个";
             settings.MarkCleanup(DateTimeOffset.UtcNow, summary);
             await repository.SaveChangesAsync(cancellationToken);
             await auditWriter.WriteAsync(actor, "maintenance.cleanup", "success", detail: summary, cancellationToken: cancellationToken);

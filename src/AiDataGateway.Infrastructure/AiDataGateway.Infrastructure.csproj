@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AiDataGateway.Application\AiDataGateway.Application.csproj" />
     <ProjectReference Include="..\AiDataGateway.Domain\AiDataGateway.Domain.csproj" />
+    <ProjectReference Include="..\AiDataGateway.Monitoring\AiDataGateway.Monitoring.csproj" />
   </ItemGroup>
 
   <ItemGroup>

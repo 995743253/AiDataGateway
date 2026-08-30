@@ -3,8 +3,11 @@ using AiDataGateway.Domain.DataSources;
 using AiDataGateway.Infrastructure.Databases;
 using AiDataGateway.Infrastructure.Identity;
 using AiDataGateway.Infrastructure.Maintenance;
+using AiDataGateway.Infrastructure.Logs;
 using AiDataGateway.Infrastructure.Persistence;
 using AiDataGateway.Infrastructure.Security;
+using AiDataGateway.Infrastructure.Monitoring;
+using AiDataGateway.Monitoring;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -80,6 +83,9 @@ public static class DependencyInjection
             .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<GatewayDbContext>());
 
         services.AddScoped<IDataSourceRepository, DataSourceRepository>();
+        services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<ILogSourceRepository, LogSourceRepository>();
+        services.AddScoped<IMonitoringRepository, MonitoringRepository>();
         services.AddScoped<IChangeRequestRepository, ChangeRequestRepository>();
         services.AddScoped<IAuditWriter, AuditWriter>();
         services.AddScoped<IAuditLogReader, AuditLogReader>();
@@ -89,8 +95,15 @@ public static class DependencyInjection
         services.AddSingleton<MaintenanceScheduleSignal>();
         services.AddSingleton<IMaintenanceScheduleNotifier>(services => services.GetRequiredService<MaintenanceScheduleSignal>());
         services.AddHostedService<GatewayCleanupBackgroundService>();
+        services.AddSingleton<SystemMetricsCollector>();
+        services.AddHostedService<LocalMetricsBackgroundService>();
         services.AddSingleton<ICredentialProtector, DataProtectionCredentialProtector>();
         services.AddSingleton<IDatabaseAdapterFactory, DatabaseAdapterFactory>();
+        services.AddHttpClient("AiDataGateway.Seq", client => client.Timeout = TimeSpan.FromSeconds(30));
+        services.AddSingleton<ILogSourceAdapter, LocalNLogSourceAdapter>();
+        services.AddSingleton<ILogSourceAdapter, SeqLogSourceAdapter>();
+        services.AddSingleton<ILogSourceAdapter, RemoteAgentLogSourceAdapter>();
+        services.AddSingleton<ILogSourceAdapterFactory, LogSourceAdapterFactory>();
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.SqlServer));
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.MySql));
         services.AddSingleton<IDatabaseAdapter>(new FreeSqlDatabaseAdapter(DatabaseProvider.PostgreSql));

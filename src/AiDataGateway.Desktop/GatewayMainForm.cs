@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
+using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -19,6 +20,8 @@ internal sealed class GatewayMainForm : Form
     private static readonly Color Red = Color.FromArgb(225, 74, 85);
 
     private readonly Uri _baseAddress;
+    private readonly DesktopSettingsStore _desktopSettingsStore;
+    private DesktopSettings _desktopSettings;
     private readonly WebView2 _webView = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.White };
     private readonly Label _status = new() { AutoSize = true, ForeColor = Color.FromArgb(55, 71, 92), Text = "正在启动本地网关…" };
     private readonly Label _runtime = new() { AutoSize = true, ForeColor = Color.FromArgb(107, 119, 138) };
@@ -31,6 +34,8 @@ internal sealed class GatewayMainForm : Form
     private readonly NotifyIcon _trayIcon;
     private readonly ContextMenuStrip _trayMenu;
     private readonly Panel _loadingOverlay;
+    private ToolStripMenuItem _memoryOverlayMenuItem = null!;
+    private MemoryUsageOverlayForm? _memoryOverlay;
     private Panel _titleBar = null!;
     private CaptionButton _minimizeButton = null!;
     private CaptionButton _maximizeButton = null!;
@@ -41,9 +46,11 @@ internal sealed class GatewayMainForm : Form
     private bool _manualResizing;
     private bool _allowExit;
 
-    public GatewayMainForm(Uri baseAddress)
+    public GatewayMainForm(Uri baseAddress, string storagePath)
     {
         _baseAddress = baseAddress;
+        _desktopSettingsStore = new DesktopSettingsStore(storagePath);
+        _desktopSettings = _desktopSettingsStore.Load();
         _brandImage = LoadEmbeddedImage("AiDataGateway.Desktop.Assets.gateway-brand-large.png");
         _smallImage = LoadEmbeddedImage("AiDataGateway.Desktop.Assets.gateway-app-icon.png");
         _appIcon = Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath) ?? (Icon)SystemIcons.Shield.Clone();
@@ -87,7 +94,11 @@ internal sealed class GatewayMainForm : Form
         };
         _trayIcon.DoubleClick += (_, _) => RestoreWindow();
 
-        Shown += async (_, _) => await InitializeWebViewAsync();
+        Shown += async (_, _) =>
+        {
+            ApplyMemoryOverlaySetting();
+            await InitializeWebViewAsync();
+        };
         Resize += (_, _) =>
         {
             UpdateWindowStateAppearance();
@@ -280,6 +291,12 @@ internal sealed class GatewayMainForm : Form
         menu.Items.Add("刷新页面", null, (_, _) => ReloadWebView());
         menu.Items.Add("使用浏览器打开", null, (_, _) => OpenInBrowser());
         menu.Items.Add(new ToolStripSeparator());
+        _memoryOverlayMenuItem = new ToolStripMenuItem("显示内存悬浮球", null, (_, _) => SetMemoryOverlayEnabled(!_desktopSettings.MemoryOverlayEnabled))
+        {
+            Checked = _desktopSettings.MemoryOverlayEnabled
+        };
+        menu.Items.Add(_memoryOverlayMenuItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出 AiDataGateway", null, (_, _) => ExitApplication());
         return menu;
     }
@@ -324,6 +341,7 @@ internal sealed class GatewayMainForm : Form
                 userDataFolder: webViewData);
             await _webView.EnsureCoreWebView2Async(environment);
             _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+            _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
             _webView.CoreWebView2.NavigationStarting += (_, _) => SetStatus("正在加载管理控制台…", Amber);
             _webView.CoreWebView2.NavigationCompleted += (_, eventArgs) =>
             {
@@ -332,6 +350,7 @@ internal sealed class GatewayMainForm : Form
                     _loadingOverlay.Visible = false;
                     _webView.Focus();
                     SetStatus("安全网关运行中", Green);
+                    SendDesktopState();
                 }
                 else
                 {
@@ -386,6 +405,122 @@ internal sealed class GatewayMainForm : Form
         catch (Exception exception)
         {
             MessageBox.Show(exception.Message, "无法打开浏览器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs eventArgs)
+    {
+        if (!IsTrustedWebMessageSource(eventArgs.Source)) return;
+
+        try
+        {
+            using var message = JsonDocument.Parse(eventArgs.WebMessageAsJson);
+            if (!message.RootElement.TryGetProperty("type", out var typeProperty)) return;
+            switch (typeProperty.GetString())
+            {
+                case "desktop.getState":
+                    SendDesktopState();
+                    break;
+                case "desktop.memoryOverlay.set" when message.RootElement.TryGetProperty("enabled", out var enabledProperty):
+                    SetMemoryOverlayEnabled(enabledProperty.GetBoolean());
+                    break;
+            }
+        }
+        catch (JsonException)
+        {
+            // Ignore malformed messages from page scripts.
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore messages with an unexpected JSON shape.
+        }
+    }
+
+    private bool IsTrustedWebMessageSource(string source)
+    {
+        return Uri.TryCreate(source, UriKind.Absolute, out var sourceUri)
+            && string.Equals(sourceUri.Scheme, _baseAddress.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(sourceUri.Host, _baseAddress.Host, StringComparison.OrdinalIgnoreCase)
+            && sourceUri.Port == _baseAddress.Port;
+    }
+
+    private void SendDesktopState()
+    {
+        _webView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            type = "desktop.state",
+            available = true,
+            memoryOverlayEnabled = _desktopSettings.MemoryOverlayEnabled
+        }));
+    }
+
+    private void SetMemoryOverlayEnabled(bool enabled)
+    {
+        _desktopSettings = _desktopSettings with { MemoryOverlayEnabled = enabled };
+        SaveDesktopSettings();
+        ApplyMemoryOverlaySetting();
+        SendDesktopState();
+    }
+
+    private void ApplyMemoryOverlaySetting()
+    {
+        _memoryOverlayMenuItem.Checked = _desktopSettings.MemoryOverlayEnabled;
+        if (!_desktopSettings.MemoryOverlayEnabled)
+        {
+            if (_memoryOverlay is not null)
+            {
+                _memoryOverlay.Close();
+                _memoryOverlay.Dispose();
+                _memoryOverlay = null;
+            }
+            return;
+        }
+
+        if (_memoryOverlay is { IsDisposed: false })
+        {
+            if (!_memoryOverlay.Visible) _memoryOverlay.Show();
+            return;
+        }
+
+        _memoryOverlay = new MemoryUsageOverlayForm
+        {
+            Location = ResolveMemoryOverlayLocation()
+        };
+        _memoryOverlay.PositionCommitted += location =>
+        {
+            _desktopSettings = _desktopSettings with { MemoryOverlayX = location.X, MemoryOverlayY = location.Y };
+            SaveDesktopSettings();
+        };
+        _memoryOverlay.OpenConsoleRequested += RestoreWindow;
+        _memoryOverlay.DisableRequested += () => SetMemoryOverlayEnabled(false);
+        _memoryOverlay.Show();
+    }
+
+    private Point ResolveMemoryOverlayLocation()
+    {
+        var saved = new Point(_desktopSettings.MemoryOverlayX ?? int.MinValue, _desktopSettings.MemoryOverlayY ?? int.MinValue);
+        var overlayBounds = new Rectangle(saved, new Size(116, 116));
+        var savedScreen = Screen.AllScreens.FirstOrDefault(screen => screen.WorkingArea.IntersectsWith(overlayBounds));
+        if (savedScreen is not null)
+        {
+            return new Point(
+                Math.Clamp(saved.X, savedScreen.WorkingArea.Left, Math.Max(savedScreen.WorkingArea.Left, savedScreen.WorkingArea.Right - overlayBounds.Width)),
+                Math.Clamp(saved.Y, savedScreen.WorkingArea.Top, Math.Max(savedScreen.WorkingArea.Top, savedScreen.WorkingArea.Bottom - overlayBounds.Height)));
+        }
+
+        var workingArea = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.WorkingArea;
+        return new Point(workingArea.Right - 140, workingArea.Bottom - 140);
+    }
+
+    private void SaveDesktopSettings()
+    {
+        try
+        {
+            _desktopSettingsStore.Save(_desktopSettings);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _trayIcon.ShowBalloonTip(2_000, "桌面设置未保存", exception.Message, ToolTipIcon.Warning);
         }
     }
 
@@ -667,6 +802,7 @@ internal sealed class GatewayMainForm : Form
     {
         _allowExit = true;
         _trayIcon.Visible = false;
+        _memoryOverlay?.Close();
         Close();
     }
 
@@ -676,6 +812,7 @@ internal sealed class GatewayMainForm : Form
         {
             _trayIcon.Dispose();
             _trayMenu.Dispose();
+            _memoryOverlay?.Dispose();
             _webView.Dispose();
             _brandImage.Dispose();
             _smallImage.Dispose();

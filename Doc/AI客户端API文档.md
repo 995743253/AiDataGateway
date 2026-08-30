@@ -16,6 +16,9 @@ MCP 客户端配置、工具 Schema 和调用示例见 [MCP Server 接入说明]
 AI 客户端只应使用以下业务能力：
 
 - 获取可用数据源；
+- 按项目编号获取关联的数据库、日志源与监控节点；
+- 读取本机 NLog、Seq 或远程 Agent 结构化日志；
+- 读取项目服务器状态指标；
 - 校验 SQL；
 - 执行只读查询；
 - 提交写操作审批单。
@@ -33,7 +36,7 @@ POST /connect/token HTTP/1.1
 Host: 127.0.0.1:5127
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id=<CLIENT_ID>&client_secret=<CLIENT_SECRET>&scope=gateway.datasource.read%20gateway.query.execute%20gateway.change.submit
+grant_type=client_credentials&client_id=<CLIENT_ID>&client_secret=<CLIENT_SECRET>&scope=gateway.datasource.read%20gateway.query.execute%20gateway.change.submit%20gateway.logs.read%20gateway.metrics.read
 ```
 
 默认 Scope：
@@ -43,6 +46,8 @@ grant_type=client_credentials&client_id=<CLIENT_ID>&client_secret=<CLIENT_SECRET
 | `gateway.datasource.read` | 读取对 AI 可见的数据源列表 |
 | `gateway.query.execute` | 执行只读 SQL |
 | `gateway.change.submit` | 提交写操作审批单 |
+| `gateway.logs.read` | 按项目读取本机 NLog、Seq 或远程 Agent 日志 |
+| `gateway.metrics.read` | 按项目读取服务器状态指标 |
 
 AI 默认不具备 `gateway.change.approve` 或 `gateway.admin`。
 
@@ -56,7 +61,7 @@ curl -X POST "http://127.0.0.1:5127/connect/token" \
   --data-urlencode "grant_type=client_credentials" \
   --data-urlencode "client_id=<CLIENT_ID>" \
   --data-urlencode "client_secret=<CLIENT_SECRET>" \
-  --data-urlencode "scope=gateway.datasource.read gateway.query.execute gateway.change.submit"
+  --data-urlencode "scope=gateway.datasource.read gateway.query.execute gateway.change.submit gateway.logs.read gateway.metrics.read"
 ```
 
 使用 PowerShell：
@@ -70,7 +75,7 @@ $tokenResponse = Invoke-RestMethod `
     grant_type    = "client_credentials"
     client_id     = $env:AI_GATEWAY_CLIENT_ID
     client_secret = $env:AI_GATEWAY_CLIENT_SECRET
-    scope         = "gateway.datasource.read gateway.query.execute gateway.change.submit"
+    scope         = "gateway.datasource.read gateway.query.execute gateway.change.submit gateway.logs.read gateway.metrics.read"
   }
 
 $accessToken = $tokenResponse.access_token
@@ -83,7 +88,7 @@ $accessToken = $tokenResponse.access_token
   "access_token": "<ACCESS_TOKEN>",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "scope": "gateway.datasource.read gateway.query.execute gateway.change.submit"
+  "scope": "gateway.datasource.read gateway.query.execute gateway.change.submit gateway.logs.read gateway.metrics.read"
 }
 ```
 
@@ -105,6 +110,9 @@ Authorization: Bearer <ACCESS_TOKEN>
 |---|---|---|---|
 | `GET` | `/api/health` | 无 | 检查网关是否运行 |
 | `GET` | `/api/gateway/datasources` | `gateway.datasource.read` | 获取可用数据源 |
+| `GET` | `/api/gateway/projects/{projectCode}` | `gateway.datasource.read` | 按项目编号获取数据库、日志源和监控节点标识 |
+| `POST` | `/api/gateway/logs/query` | `gateway.logs.read` | 查询项目关联的结构化日志 |
+| `GET` | `/api/gateway/projects/{projectCode}/metrics` | `gateway.metrics.read` | 查询项目关联的服务器指标 |
 | `POST` | `/api/gateway/sql/validate` | Bearer Token | 分析 SQL 风险 |
 | `POST` | `/api/gateway/query` | `gateway.query.execute` | 执行只读 SQL |
 | `POST` | `/api/gateway/changes` | `gateway.change.submit` | 提交写操作审批单 |
@@ -183,6 +191,49 @@ Authorization: Bearer <ACCESS_TOKEN>
 | `3` | Development；当前仍要求写操作审批 |
 
 AI 必须使用返回的 `id` 作为后续请求的 `dataSourceId`，不得猜测或自行构造数据源 ID。
+
+## 5.1 按项目编号解析资源
+
+```http
+GET /api/gateway/projects/order-center
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+响应包含项目的 `dataSources`、`logSources` 和 `monitorTargets` 数组。AI 应优先使用项目编号定位资源，不得把日志文件路径、Seq API Key 或监控上报密钥作为工具参数。
+
+## 5.2 查询项目日志
+
+```http
+POST /api/gateway/logs/query
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+
+{
+  "projectCode": "order-center",
+  "logSourceKey": "order-api-log",
+  "searchText": "request failed",
+  "propertyName": "Application",
+  "propertyValue": "Order.Api",
+  "level": "Error",
+  "fromUtc": "2026-08-29T00:00:00Z",
+  "toUtc": "2026-08-30T00:00:00Z",
+  "page": 1,
+  "pageSize": 100
+}
+```
+
+推荐使用 `searchText` 做不区分大小写的关键词查询，并可搭配 `propertyName`、`propertyValue` 查询结构化属性；这种写法同时适用于本机 NLog、Seq 和远程 Agent。只有熟悉 Seq 语法时才使用 `query` 传递高级 Seq Filter。`fromUtc`、`toUtc` 会在读取文件或请求 Seq 前生效，单次最长 31 天；省略时默认最近 7 天。项目关联多个启用日志源时必须填写 `logSourceKey`。响应事件包含 `timestampUtc`、`level`、`message`、`exception`、`properties`、`rawText`、`incomplete` 和 `parseWarning`。
+
+读取日志会写入网关审计，但日志正文不会复制到内置数据库。详细配置见 [项目与日志接入说明](./项目与日志接入说明.md)。
+
+## 5.3 查询服务器指标
+
+```http
+GET /api/gateway/projects/order-center/metrics?targetKey=order-prod-01&count=100
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+返回按时间倒序排列的基础指标，并在每个采样的 `metrics` 对象中返回该节点启用的扩展指标。项目关联多个启用节点时应填写 `targetKey`；`count` 范围为 1–500。指标键名、单位和节点级选择方法见 [服务器监控使用说明](./服务器监控使用说明.md)。
 
 ## 6. 校验 SQL
 

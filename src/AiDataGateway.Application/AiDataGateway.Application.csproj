@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AiDataGateway.Domain\AiDataGateway.Domain.csproj" />
+    <ProjectReference Include="..\AiDataGateway.Monitoring\AiDataGateway.Monitoring.csproj" />
   </ItemGroup>
 
   <ItemGroup>

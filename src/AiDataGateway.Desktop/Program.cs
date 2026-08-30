@@ -23,15 +23,16 @@ internal static class Program
         GatewayWebHost? webHost = null;
         try
         {
-            var storagePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AiDataGateway");
+            var hostConfiguration = DesktopHostConfiguration.Load(AppContext.BaseDirectory);
             webHost = GatewayWebHost.StartAsync(new GatewayHostOptions
             {
                 Port = 5127,
-                StoragePath = storagePath,
+                ListenAddress = hostConfiguration.ListenAddress,
+                StoragePath = hostConfiguration.StoragePath,
                 WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot")
             }).GetAwaiter().GetResult();
 
-            System.Windows.Forms.Application.Run(new GatewayMainForm(webHost.BaseAddress));
+            System.Windows.Forms.Application.Run(new GatewayMainForm(webHost.BaseAddress, hostConfiguration.StoragePath));
         }
         catch (Exception exception)
         {

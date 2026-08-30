@@ -274,7 +274,7 @@ public sealed class GatewayHostTests
                 ["grant_type"] = "client_credentials",
                 ["client_id"] = clientId!,
                 ["client_secret"] = clientSecret!,
-                ["scope"] = "gateway.datasource.read gateway.query.execute gateway.change.submit"
+                ["scope"] = "gateway.datasource.read gateway.query.execute gateway.change.submit gateway.metrics.read"
             }));
             var tokenBody = await tokenResponse.Content.ReadAsStringAsync();
             Assert.True(tokenResponse.IsSuccessStatusCode, tokenBody);
@@ -315,6 +315,10 @@ public sealed class GatewayHostTests
             var mcpToolNames = mcpToolsBody.GetProperty("result").GetProperty("tools").EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
             Assert.Contains("query_database", mcpToolNames);
             Assert.Contains("submit_change", mcpToolNames);
+            Assert.Contains("list_projects", mcpToolNames);
+            Assert.Contains("list_log_sources", mcpToolNames);
+            Assert.Contains("query_logs", mcpToolNames);
+            Assert.Contains("query_server_metrics", mcpToolNames);
 
             var sqlitePath = Path.Combine(tempPath, "target.db");
             var createDataSource = await client.PostAsJsonAsync("/api/admin/datasources/", new
@@ -338,6 +342,163 @@ public sealed class GatewayHostTests
             var created = JsonSerializer.Deserialize<JsonElement>(createBody);
             var dataSourceId = created.GetProperty("id").GetGuid();
             Assert.Equal("secret_records", Assert.Single(created.GetProperty("blockedTables").EnumerateArray()).GetString());
+
+            var applicationLogPath = Path.Combine(tempPath, "sample-application.log");
+            await File.WriteAllTextAsync(applicationLogPath,
+                "2026-08-29 10:00:00.0000|Info|Sample|started|\n" +
+                "2026-08-29 10:00:01.0000|Error|Sample|request failed\ncontinued message|System.InvalidOperationException: broken\n" +
+                "2026-08-29 10:00:02.0000|Warning|Sample||");
+            var createLogSource = await client.PostAsJsonAsync("/api/admin/log-sources", new
+            {
+                key = "sample-nlog",
+                name = "Sample NLog",
+                type = 1,
+                endpoint = applicationLogPath,
+                nLogConfiguration = "",
+                nLogTargetName = "",
+                nLogLayout = "${longdate}|${level}|${logger}|${message}|${exception}",
+                apiKey = "",
+                enabled = true,
+                projectIds = Array.Empty<Guid>()
+            });
+            var createLogSourceBody = await createLogSource.Content.ReadAsStringAsync();
+            Assert.True(createLogSource.IsSuccessStatusCode, createLogSourceBody);
+            var logSourceId = JsonSerializer.Deserialize<JsonElement>(createLogSourceBody).GetProperty("id").GetGuid();
+
+            var testLogSource = await client.PostAsync($"/api/admin/log-sources/{logSourceId}/test", null);
+            var testLogSourceBody = await testLogSource.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(testLogSource.IsSuccessStatusCode, testLogSourceBody.ToString());
+            Assert.True(testLogSourceBody.GetProperty("success").GetBoolean(), testLogSourceBody.ToString());
+
+            var createMonitorTarget = await client.PostAsJsonAsync("/api/admin/monitoring/targets", new
+            {
+                key = "sample-server",
+                name = "Sample Server",
+                enabled = true,
+                projectIds = Array.Empty<Guid>(),
+                metricKeys = new[] { "cpu.percent", "memory.percent", "disk.percent", "system.uptime_seconds", "network.receive_bytes_per_second", "process.thread_count" }
+            });
+            var createMonitorBody = await createMonitorTarget.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(createMonitorTarget.IsSuccessStatusCode, createMonitorBody.ToString());
+            var monitorTargetId = createMonitorBody.GetProperty("target").GetProperty("id").GetGuid();
+            var monitorSecret = createMonitorBody.GetProperty("ingestSecret").GetString()!;
+
+            var metricCatalog = await client.GetFromJsonAsync<JsonElement>("/api/monitoring/metric-catalog");
+            Assert.True(metricCatalog.GetProperty("items").GetArrayLength() >= 20);
+            using (var configurationRequest = new HttpRequestMessage(HttpMethod.Get, "/api/monitoring/ingest/sample-server/configuration"))
+            {
+                configurationRequest.Headers.Add("X-Monitor-Key", monitorSecret);
+                var configurationResponse = await client.SendAsync(configurationRequest);
+                var configuration = await configurationResponse.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.True(configurationResponse.IsSuccessStatusCode, configuration.ToString());
+                Assert.Contains(configuration.GetProperty("metricKeys").EnumerateArray(), item => item.GetString() == "network.receive_bytes_per_second");
+            }
+
+            using (var badIngest = new HttpRequestMessage(HttpMethod.Post, "/api/monitoring/ingest/sample-server"))
+            {
+                badIngest.Headers.Add("X-Monitor-Key", "wrong-secret");
+                badIngest.Content = JsonContent.Create(new { collectedAtUtc = DateTimeOffset.UtcNow, hostName = "remote-01", osDescription = "Windows", cpuPercent = 12.5, memoryUsedBytes = 400L, memoryTotalBytes = 1000L, diskUsedBytes = 500L, diskTotalBytes = 2000L, networkReceivedBytes = 100L, networkSentBytes = 50L, processWorkingSetBytes = 20L, systemUptimeSeconds = 3600L });
+                Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(badIngest)).StatusCode);
+            }
+
+            using (var ingest = new HttpRequestMessage(HttpMethod.Post, "/api/monitoring/ingest/sample-server"))
+            {
+                ingest.Headers.Add("X-Monitor-Key", monitorSecret);
+                ingest.Content = JsonContent.Create(new { collectedAtUtc = DateTimeOffset.UtcNow, hostName = "remote-01", osDescription = "Windows 11", cpuPercent = 12.5, memoryUsedBytes = 400L, memoryTotalBytes = 1000L, diskUsedBytes = 500L, diskTotalBytes = 2000L, networkReceivedBytes = 100L, networkSentBytes = 50L, processWorkingSetBytes = 20L, systemUptimeSeconds = 3600L, extendedMetrics = new Dictionary<string, double> { ["network.receive_bytes_per_second"] = 1234, ["process.thread_count"] = 17, ["gc.heap_size_bytes"] = 9999 } });
+                Assert.Equal(HttpStatusCode.Accepted, (await client.SendAsync(ingest)).StatusCode);
+            }
+
+            var monitorTargets = await client.GetFromJsonAsync<JsonElement>("/api/monitoring/targets");
+            Assert.Contains(monitorTargets.EnumerateArray(), item => item.GetProperty("key").GetString() == "local");
+            var remoteMonitor = monitorTargets.EnumerateArray().Single(item => item.GetProperty("key").GetString() == "sample-server");
+            Assert.True(remoteMonitor.GetProperty("online").GetBoolean());
+            Assert.Equal(12.5, remoteMonitor.GetProperty("latest").GetProperty("cpuPercent").GetDouble());
+            Assert.Equal(1234, remoteMonitor.GetProperty("latest").GetProperty("metrics").GetProperty("network.receive_bytes_per_second").GetDouble());
+            Assert.False(remoteMonitor.GetProperty("latest").GetProperty("metrics").TryGetProperty("gc.heap_size_bytes", out _));
+
+            var trendResponse = await client.GetAsync($"/api/monitoring/targets/{monitorTargetId}/trend?fromUtc={Uri.EscapeDataString(DateTimeOffset.UtcNow.AddHours(-1).ToString("O"))}&toUtc={Uri.EscapeDataString(DateTimeOffset.UtcNow.AddMinutes(1).ToString("O"))}&maxPoints=100");
+            var trend = await trendResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(trendResponse.IsSuccessStatusCode, trend.ToString());
+            Assert.Equal(1, trend.GetProperty("sourceCount").GetInt32());
+            Assert.Single(trend.GetProperty("items").EnumerateArray());
+
+            var createProject = await client.PostAsJsonAsync("/api/admin/projects", new
+            {
+                code = "sample-project",
+                name = "Sample Project",
+                description = "Integration project",
+                enabled = true,
+                dataSourceIds = new[] { dataSourceId },
+                logSourceIds = new[] { logSourceId },
+                monitorTargetIds = new[] { monitorTargetId }
+            });
+            var createProjectBody = await createProject.Content.ReadAsStringAsync();
+            Assert.True(createProject.IsSuccessStatusCode, createProjectBody);
+            var project = JsonSerializer.Deserialize<JsonElement>(createProjectBody);
+            Assert.Equal(dataSourceId, Assert.Single(project.GetProperty("dataSources").EnumerateArray()).GetProperty("id").GetGuid());
+            Assert.Equal(logSourceId, Assert.Single(project.GetProperty("logSources").EnumerateArray()).GetProperty("id").GetGuid());
+            Assert.Equal(monitorTargetId, Assert.Single(project.GetProperty("monitorTargets").EnumerateArray()).GetProperty("id").GetGuid());
+
+            var createSecondProject = await client.PostAsJsonAsync("/api/admin/projects", new
+            {
+                code = "sample-project-two",
+                name = "Sample Project Two",
+                description = "Shares the same log source",
+                enabled = true,
+                dataSourceIds = Array.Empty<Guid>(),
+                logSourceIds = new[] { logSourceId }
+            });
+            Assert.True(createSecondProject.IsSuccessStatusCode, await createSecondProject.Content.ReadAsStringAsync());
+            var managedLogSources = await client.GetFromJsonAsync<JsonElement>("/api/admin/log-sources");
+            var managedLogSource = Assert.Single(managedLogSources.EnumerateArray());
+            Assert.Equal(2, managedLogSource.GetProperty("projects").GetArrayLength());
+
+            var applicationLogsResponse = await client.PostAsJsonAsync("/api/logs/query", new
+            {
+                logSourceId,
+                query = "request failed",
+                page = 1,
+                pageSize = 20
+            });
+            var applicationLogs = await applicationLogsResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(applicationLogsResponse.IsSuccessStatusCode, applicationLogs.ToString());
+            var applicationLog = Assert.Single(applicationLogs.GetProperty("items").EnumerateArray());
+            Assert.Contains("continued message", applicationLog.GetProperty("message").GetString());
+            Assert.Contains("InvalidOperationException", applicationLog.GetProperty("exception").GetString());
+
+            var mcpProjectsResponse = await aiClient.PostAsJsonAsync("/mcp", new
+            {
+                jsonrpc = "2.0",
+                id = 21,
+                method = "tools/call",
+                @params = new { name = "list_projects", arguments = new { } }
+            });
+            var mcpProjects = await mcpProjectsResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(mcpProjects.GetProperty("result").GetProperty("isError").GetBoolean());
+            Assert.Contains(mcpProjects.GetProperty("result").GetProperty("structuredContent").GetProperty("items").EnumerateArray(),
+                item => item.GetProperty("code").GetString() == "sample-project");
+
+            var mcpLogsResponse = await aiClient.PostAsJsonAsync("/mcp", new
+            {
+                jsonrpc = "2.0",
+                id = 22,
+                method = "tools/call",
+                @params = new { name = "query_logs", arguments = new { projectCode = "sample-project", logSourceKey = "sample-nlog", query = "started", count = 20 } }
+            });
+            var mcpLogs = await mcpLogsResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(mcpLogs.GetProperty("result").GetProperty("isError").GetBoolean());
+            Assert.Single(mcpLogs.GetProperty("result").GetProperty("structuredContent").GetProperty("items").EnumerateArray());
+
+            var mcpMetricsResponse = await aiClient.PostAsJsonAsync("/mcp", new
+            {
+                jsonrpc = "2.0",
+                id = 23,
+                method = "tools/call",
+                @params = new { name = "query_server_metrics", arguments = new { projectCode = "sample-project", targetKey = "sample-server", count = 20 } }
+            });
+            var mcpMetrics = await mcpMetricsResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(mcpMetrics.GetProperty("result").GetProperty("isError").GetBoolean());
+            Assert.Equal(12.5, Assert.Single(mcpMetrics.GetProperty("result").GetProperty("structuredContent").GetProperty("items").EnumerateArray()).GetProperty("cpuPercent").GetDouble());
 
             var blockedQueryResponse = await aiClient.PostAsJsonAsync("/api/gateway/query", new
             {
