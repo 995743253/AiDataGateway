@@ -24,6 +24,7 @@ internal sealed class ChangeRequestRepository(GatewayDbContext dbContext) : ICha
     public async Task<PagedResult<ChangeRequest>> SearchAsync(
         ChangeStatus? status,
         string? keyword,
+        Guid? dataSourceId,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -36,6 +37,11 @@ internal sealed class ChangeRequestRepository(GatewayDbContext dbContext) : ICha
         else if (status is ChangeStatus.Pending or ChangeStatus.Expired)
         {
             query = query.Where(item => item.Status == ChangeStatus.Pending);
+        }
+
+        if (dataSourceId.HasValue)
+        {
+            query = query.Where(item => item.DataSourceId == dataSourceId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(keyword))

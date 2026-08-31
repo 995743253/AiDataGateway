@@ -640,6 +640,12 @@ public sealed class GatewayHostTests
             Assert.Equal("Succeeded", completedApproval.GetProperty("status").GetString());
             Assert.Equal("integration test approval", completedApproval.GetProperty("reviewComment").GetString());
 
+            approvalHistory = await client.GetFromJsonAsync<JsonElement>($"/api/approvals?dataSourceId={dataSourceId}&page=1&pageSize=10");
+            Assert.Equal(1, approvalHistory.GetProperty("total").GetInt32());
+            Assert.Equal(changeId, Assert.Single(approvalHistory.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
+            approvalHistory = await client.GetFromJsonAsync<JsonElement>($"/api/approvals?dataSourceId={Guid.NewGuid()}&page=1&pageSize=10");
+            Assert.Equal(0, approvalHistory.GetProperty("total").GetInt32());
+
             var auditLogs = await client.GetFromJsonAsync<JsonElement>("/api/audit/logs?keyword=select&page=1&pageSize=100");
             Assert.True(auditLogs.GetProperty("total").GetInt32() >= 2);
             var auditItems = auditLogs.GetProperty("items").EnumerateArray().ToArray();

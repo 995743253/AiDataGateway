@@ -73,6 +73,7 @@ internal static class GatewayEndpoints
     private static async Task<IResult> ListApprovalsAsync(
         string? status,
         string? keyword,
+        Guid? dataSourceId,
         int? page,
         int? pageSize,
         IChangeRequestRepository changes,
@@ -89,7 +90,7 @@ internal static class GatewayEndpoints
             statusFilter = parsedStatus;
         }
 
-        var result = await changes.SearchAsync(statusFilter, keyword, page ?? 1, pageSize ?? 20, cancellationToken);
+        var result = await changes.SearchAsync(statusFilter, keyword, dataSourceId, page ?? 1, pageSize ?? 20, cancellationToken);
         var sourceNames = (await dataSources.ListAsync(cancellationToken)).ToDictionary(item => item.Id, item => item.Name);
         return Results.Ok(new
         {

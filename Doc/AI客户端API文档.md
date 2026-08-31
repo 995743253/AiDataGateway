@@ -599,7 +599,7 @@ POST /api/gateway/query           POST /api/gateway/changes
 
 | 方法 | 地址 | 用途 |
 |---|---|---|
-| `GET` | `/api/approvals?page=1&pageSize=20&status=Pending&keyword=table_name` | 分页查询审批历史；`status`、`keyword` 可选 |
+| `GET` | `/api/approvals?page=1&pageSize=20&status=Pending&keyword=table_name&dataSourceId=GUID` | 分页查询审批历史；`status`、`keyword`、`dataSourceId` 可选，按数据源过滤工单 |
 | `GET` | `/api/approvals/{id}` | 查询完整 SQL、审批及执行详情 |
 | `POST` | `/api/approvals/{id}/review` | 人工批准或拒绝 |
 | `GET` | `/api/audit/logs?page=1&pageSize=20&keyword=select&action=query.execute&outcome=success` | 分页查询运行日志；筛选参数均可选 |

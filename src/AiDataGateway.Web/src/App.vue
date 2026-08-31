@@ -142,7 +142,7 @@
               <el-table-column prop="database" label="数据库" min-width="150" show-overflow-tooltip />
               <el-table-column prop="accessMode" label="模式" width="140"><template #default="s">{{ accessName(s.row.accessMode) }}</template></el-table-column>
               <el-table-column label="表黑名单" width="110"><template #default="s"><el-tag v-if="s.row.blockedTables?.length" type="danger" effect="plain">{{ s.row.blockedTables.length }} 张表</el-tag><span v-else>—</span></template></el-table-column>
-              <el-table-column label="操作" width="220"><template #default="s"><el-button size="small" @click="testDataSource(s.row)">测试</el-button><el-button size="small" @click="openDataSource(s.row)">编辑</el-button><el-button size="small" type="danger" @click="deleteDataSource(s.row)">删除</el-button></template></el-table-column>
+              <el-table-column label="操作" width="290"><template #default="s"><el-button size="small" @click="testDataSource(s.row)">测试</el-button><el-button size="small" @click="openDataSource(s.row)">编辑</el-button><el-button size="small" type="primary" plain @click="openDataSourceApprovals(s.row)">审批记录</el-button><el-button size="small" type="danger" @click="deleteDataSource(s.row)">删除</el-button></template></el-table-column>
             </el-table>
           </el-tab-pane>
 
@@ -155,13 +155,14 @@
               <el-table-column label="采集位置" min-width="300"><template #default="s"><div class="log-source-location"><strong>{{ s.row.type === 2 ? 'Seq HTTP API' : s.row.type === 3 ? '远程 Agent' : '本地文件夹' }}</strong><span :title="s.row.endpoint">{{ s.row.endpoint || '从 NLog 配置读取文件位置' }}</span></div></template></el-table-column>
               <el-table-column label="关联项目" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.projects" :key="item.id" effect="plain">{{ item.code }}</el-tag><span v-if="!s.row.projects.length">—</span></div></template></el-table-column>
               <el-table-column label="状态" width="90"><template #default="s"><el-tag :type="s.row.enabled ? 'success' : 'info'">{{ s.row.enabled ? '启用' : '禁用' }}</el-tag></template></el-table-column>
-              <el-table-column label="操作" width="220"><template #default="s"><el-button size="small" @click="testLogSource(s.row)">测试</el-button><el-button size="small" @click="openLogSource(s.row)">编辑</el-button><el-button size="small" type="danger" @click="deleteLogSource(s.row)">删除</el-button></template></el-table-column>
+              <el-table-column label="操作" width="290"><template #default="s"><el-button size="small" @click="testLogSource(s.row)">测试</el-button><el-button size="small" @click="openLogSource(s.row)">编辑</el-button><el-button size="small" type="primary" plain @click="openLogSourceLogs(s.row)">应用日志</el-button><el-button size="small" type="danger" @click="deleteLogSource(s.row)">删除</el-button></template></el-table-column>
             </el-table>
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewLogs && isPageOpen('applicationlogs')" label="应用日志" name="applicationlogs">
             <div class="toolbar app-log-toolbar">
               <div><h3>项目应用日志</h3><p>统一读取本地 NLog 文件或 Seq，保留多行、空字段和未闭合末尾记录。</p></div>
+              <div class="live-log-actions"><el-button type="primary" plain @click="openRealtimeLogs">实时日志 →</el-button></div>
             </div>
             <div class="app-log-filter-panel">
               <div class="app-log-filter-row">
@@ -328,6 +329,7 @@
             <div class="toolbar">
               <div><h3>SQL 审批记录</h3><p>同时查看待审批、已通过、已拒绝和执行失败的完整历史。</p></div>
               <div class="toolbar-actions">
+                <el-tag v-if="approvalDataSourceFilter" closable type="warning" effect="plain" @close="clearApprovalDataSourceFilter">数据源：{{ approvalDataSourceFilter.name }}</el-tag>
                 <el-input v-model="approvalKeyword" class="log-search" clearable placeholder="搜索 SQL、发起者、审批者或意见" @keyup.enter="searchApprovals" />
                 <el-select v-model="approvalFilter" class="status-filter" @change="searchApprovals"><el-option label="全部状态" value="all" /><el-option label="待审批" value="Pending" /><el-option label="执行成功" value="Succeeded" /><el-option label="已拒绝" value="Rejected" /><el-option label="执行失败" value="Failed" /><el-option label="已过期" value="Expired" /></el-select>
                 <el-button type="primary" @click="searchApprovals">查询</el-button><el-button @click="resetApprovalSearch">重置</el-button>
@@ -620,7 +622,7 @@ export default {
     },
     loginForm: { userName: 'admin', password: '', rememberMe: true },
     dataSources: [], projects: [], logSources: [], monitorTargets: [], metricSamples: [], metricTrendSamples: [], metricCatalog: [], metricCatalogDefaultKeys: [], metricCatalogRequiredKeys: [], approvals: [], auditLogs: [], applicationLogs: [], users: [], clients: [], roles: [],
-    approvalFilter: 'all', approvalKeyword: '', approvalPage: 1, approvalPageSize: 20, approvalTotal: 0, approvalAllTotal: 0, pendingApprovalTotal: 0,
+    approvalFilter: 'all', approvalKeyword: '', approvalDataSourceFilter: null, approvalPage: 1, approvalPageSize: 20, approvalTotal: 0, approvalAllTotal: 0, pendingApprovalTotal: 0,
     logKeyword: '', logOutcome: '', auditLogPage: 1, auditLogPageSize: 20, auditLogTotal: 0, auditLogAllTotal: 0,
     dataSourceDialog: false, editingDataSource: null, dataSourceForm: {},
     projectDialog: false, editingProject: null, projectForm: {},
@@ -888,7 +890,7 @@ export default {
     },
     async loadAuditLogMetrics () { this.auditLogAllTotal = (await axios.get('/api/audit/logs', { params: { page: 1, pageSize: 1 } })).data.total },
     async loadApprovals () {
-      const response = await axios.get('/api/approvals', { params: { status: this.approvalFilter === 'all' ? undefined : this.approvalFilter, keyword: this.approvalKeyword.trim() || undefined, page: this.approvalPage, pageSize: this.approvalPageSize } })
+      const response = await axios.get('/api/approvals', { params: { status: this.approvalFilter === 'all' ? undefined : this.approvalFilter, keyword: this.approvalKeyword.trim() || undefined, dataSourceId: this.approvalDataSourceFilter?.id || undefined, page: this.approvalPage, pageSize: this.approvalPageSize } })
       this.approvals = response.data.items
       this.approvalTotal = response.data.total
       this.approvalAllTotal = this.approvalFilter === 'all' && !this.approvalKeyword.trim() ? response.data.total : this.approvalAllTotal
@@ -900,7 +902,8 @@ export default {
       this.auditLogAllTotal = !this.logKeyword.trim() && !this.logOutcome ? response.data.total : this.auditLogAllTotal
     },
     async searchApprovals () { this.approvalPage = 1; await this.loadApprovals() },
-    async resetApprovalSearch () { this.approvalFilter = 'all'; this.approvalKeyword = ''; this.approvalPage = 1; await this.loadApprovals() },
+    async resetApprovalSearch () { this.approvalFilter = 'all'; this.approvalKeyword = ''; this.approvalDataSourceFilter = null; this.approvalPage = 1; await this.loadApprovals() },
+    async clearApprovalDataSourceFilter () { this.approvalDataSourceFilter = null; this.approvalPage = 1; await this.loadApprovals() },
     async approvalSizeChanged () { this.approvalPage = 1; await this.loadApprovals() },
     async changeApprovalPage (page) { if (page < 1 || page > this.approvalPageCount || page === this.approvalPage) return; this.approvalPage = page; await this.loadApprovals() },
     async searchAuditLogs () { this.auditLogPage = 1; await this.loadAuditLogs() },
@@ -913,6 +916,26 @@ export default {
     async openApplicationLogPage () { if (!this.canViewLogs) return; await this.goTo('applicationlogs') },
     async openMonitoringPage () { if (!this.canViewMetrics) return; await this.goTo('monitoring') },
     async openApprovalPage (status = 'all') { if (!this.canApprove) return; this.approvalFilter = status; this.approvalKeyword = ''; this.approvalPage = 1; await this.goTo('approvals') },
+    async openLogSourceLogs (row) {
+      if (!row.enabled) { ElMessage.warning('该日志源已禁用，请先启用后再查看应用日志'); return }
+      this.applicationLogSourceId = row.id
+      await this.goTo('applicationlogs')
+      await this.searchApplicationLogs()
+    },
+    async openRealtimeLogs () {
+      if (!this.canViewLogs) return
+      this.realtimeLogSourceId = this.selectedApplicationLogSource?.enabled ? this.applicationLogSourceId : ''
+      this.clearRealtimeLogs()
+      await this.goTo('realtimelogs')
+    },
+    async openDataSourceApprovals (row) {
+      if (!this.canApprove) { ElMessage.warning('当前账号没有审批权限（Administrator/Approver），无法查看审批记录'); return }
+      this.approvalDataSourceFilter = { id: row.id, name: row.name }
+      this.approvalFilter = 'all'
+      this.approvalKeyword = ''
+      this.approvalPage = 1
+      await this.goTo('approvals')
+    },
     async openLogPage () { if (!this.canViewLogs) return; this.logKeyword = ''; this.logOutcome = ''; this.auditLogPage = 1; await this.goTo('logs') },
     async loadUsers () { const [users, roles] = await Promise.all([axios.get('/api/admin/users'), axios.get('/api/admin/roles')]); this.users = users.data; this.roles = roles.data },
     async loadClients () { this.clients = (await axios.get('/api/admin/oauth-clients')).data },
