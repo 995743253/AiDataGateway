@@ -615,7 +615,7 @@ axios.defaults.withCredentials = true
 
 export default {
   data: () => ({
-    loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', openTabs: ['overview'], sidebarCollapsed: localStorage.getItem('gateway.sidebarCollapsed') === 'true', uiTheme: localStorage.getItem('gateway.uiTheme') === 'dark' ? 'dark' : 'light', generatedClient: null,
+    loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', openTabs: ['overview'], sidebarCollapsed: localStorage.getItem('gateway.sidebarCollapsed') === 'true', uiTheme: localStorage.getItem('gateway.uiTheme') === 'dark' ? 'dark' : 'light', zhCn, generatedClient: null,
     eventSource: null, eventConnected: false, eventRefreshTimer: null,
     setup: { userName: 'admin', email: '', displayName: '管理员', password: '', aiClientName: 'Local AI Client' },
     setupRules: {

@@ -21,8 +21,7 @@ public partial class MemoryOverlayWindow : Window
 
     private readonly DispatcherTimer _refreshTimer;
     private bool _dragging;
-    private Point _dragStartPointer;
-    private Point _dragStartLocation;
+    private Point _grabOffset;
     private int _memoryPercent;
 
     public event Action<Point>? PositionCommitted;
@@ -104,7 +103,7 @@ public partial class MemoryOverlayWindow : Window
     private void DrawRing(int percent)
     {
         var center = new Point(Width / 2, Height / 2);
-        var radius = (Width - 17) / 2;
+        var radius = (Width - 12) / 2;
         var start = new Point(center.X, center.Y - radius);
 
         TrackRing.Data = CirclePath(start, radius, 359.99);
@@ -135,17 +134,20 @@ public partial class MemoryOverlayWindow : Window
         }
 
         _dragging = true;
-        _dragStartPointer = ScreenToDip(PointToScreen(eventArgs.GetPosition(this)));
-        _dragStartLocation = new Point(Left, Top);
+        var cursor = ScreenToDip(GetCursorPhysical());
+        _grabOffset = new Point(cursor.X - Left, cursor.Y - Top);
         CaptureMouse();
     }
 
     private void OnDragMove(object sender, MouseEventArgs eventArgs)
     {
         if (!_dragging) return;
-        var pointer = ScreenToDip(PointToScreen(eventArgs.GetPosition(this)));
-        var proposed = _dragStartLocation + (pointer - _dragStartPointer);
-        var workArea = GetWorkAreasInDips().FirstOrDefault(area => ScreenInterop.ContainsPoint(area, pointer));
+        // Absolute cursor position (never window-relative): deriving it from
+        // GetPosition on a moving window feeds the motion back into itself
+        // and makes the ball trail or jump behind the pointer.
+        var cursor = ScreenToDip(GetCursorPhysical());
+        var proposed = new Point(cursor.X - _grabOffset.X, cursor.Y - _grabOffset.Y);
+        var workArea = GetWorkAreasInDips().FirstOrDefault(area => ScreenInterop.ContainsPoint(area, cursor));
         if (workArea.IsEmpty) workArea = SystemParameters.WorkArea;
         Left = ScreenInterop.Clamp(proposed.X, workArea.Left, workArea.Right - Width);
         Top = ScreenInterop.Clamp(proposed.Y, workArea.Top, workArea.Bottom - Height);
@@ -156,6 +158,12 @@ public partial class MemoryOverlayWindow : Window
         var fromDevice = (PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource)
             ?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
         return fromDevice.Transform(physical);
+    }
+
+    private static Point GetCursorPhysical()
+    {
+        if (!GetCursorPos(out var point)) return new Point();
+        return new Point(point.X, point.Y);
     }
 
     private void OnDragEnd(object sender, MouseButtonEventArgs eventArgs)
@@ -173,6 +181,17 @@ public partial class MemoryOverlayWindow : Window
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out CursorPoint point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CursorPoint
+    {
+        public int X;
+        public int Y;
+    }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     private struct MemoryStatusEx

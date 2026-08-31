@@ -51,9 +51,12 @@ public partial class App : System.Windows.Application
     {
         if (_webHost is not null)
         {
+            // The console page keeps an SSE connection open, which StopAsync
+            // would otherwise wait on for the full graceful-shutdown timeout
+            // while the UI thread is blocked here. Bound the wait instead.
             try
             {
-                _webHost.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                Task.Run(() => _webHost.DisposeAsync().AsTask()).Wait(TimeSpan.FromSeconds(3));
             }
             catch (Exception exception)
             {
