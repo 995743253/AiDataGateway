@@ -257,9 +257,34 @@ public sealed class GatewayHostTests
             disposableAiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", disposableToken.GetProperty("access_token").GetString());
             Assert.Equal(HttpStatusCode.OK, (await disposableAiClient.GetAsync("/api/gateway/datasources")).StatusCode);
 
+            var updateDisposableClient = await client.PutAsJsonAsync($"/api/admin/oauth-clients/{disposableClientId}", new
+            {
+                displayName = "Updated OAuth Client",
+                scopes = new[] { "gateway.logs.read" }
+            });
+            Assert.Equal(HttpStatusCode.NoContent, updateDisposableClient.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await disposableAiClient.GetAsync("/api/gateway/datasources")).StatusCode);
+            var managedClients = await client.GetFromJsonAsync<JsonElement>("/api/admin/oauth-clients");
+            var updatedClient = Assert.Single(managedClients.EnumerateArray(), item => item.GetProperty("clientId").GetString() == disposableClientId);
+            Assert.Equal("Updated OAuth Client", updatedClient.GetProperty("displayName").GetString());
+            Assert.Equal("gateway.logs.read", Assert.Single(updatedClient.GetProperty("scopes").EnumerateArray()).GetString());
+            var updatedTokenResponse = await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = disposableClientId,
+                ["client_secret"] = disposableClientSecret,
+                ["scope"] = "gateway.logs.read"
+            }));
+            updatedTokenResponse.EnsureSuccessStatusCode();
+            var updatedToken = await updatedTokenResponse.Content.ReadFromJsonAsync<JsonElement>();
+            using var updatedAiClient = new HttpClient { BaseAddress = host.BaseAddress };
+            updatedAiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", updatedToken.GetProperty("access_token").GetString());
+            Assert.Equal(HttpStatusCode.OK, (await updatedAiClient.GetAsync("/api/log-sources")).StatusCode);
+
             var deleteDisposableClient = await client.DeleteAsync($"/api/admin/oauth-clients/{disposableClientId}");
             Assert.Equal(HttpStatusCode.NoContent, deleteDisposableClient.StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await disposableAiClient.GetAsync("/api/gateway/datasources")).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await updatedAiClient.GetAsync("/api/log-sources")).StatusCode);
             var tokenAfterDeletion = await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "client_credentials",
@@ -465,6 +490,27 @@ public sealed class GatewayHostTests
             var applicationLog = Assert.Single(applicationLogs.GetProperty("items").EnumerateArray());
             Assert.Contains("continued message", applicationLog.GetProperty("message").GetString());
             Assert.Contains("InvalidOperationException", applicationLog.GetProperty("exception").GetString());
+
+            using (var streamTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
+            using (var streamRequest = new HttpRequestMessage(HttpMethod.Get,
+                       $"/api/logs/stream?logSourceId={logSourceId}&fromUtc={Uri.EscapeDataString(DateTimeOffset.UtcNow.ToString("O"))}"))
+            {
+                var streamResponseTask = client.SendAsync(streamRequest, HttpCompletionOption.ResponseHeadersRead, streamTimeout.Token);
+                await Task.Delay(500, streamTimeout.Token);
+                await File.AppendAllTextAsync(applicationLogPath,
+                    $"\n{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.ffff}|Info|Sample|realtime marker requestId=live-1|", streamTimeout.Token);
+                using var streamResponse = await streamResponseTask;
+                streamResponse.EnsureSuccessStatusCode();
+                await using var eventStream = await streamResponse.Content.ReadAsStreamAsync(streamTimeout.Token);
+                using var eventReader = new StreamReader(eventStream);
+                var eventLine = await eventReader.ReadLineAsync(streamTimeout.Token);
+                Assert.NotNull(eventLine);
+                Assert.StartsWith("data: ", eventLine);
+                var realtimeEvent = JsonSerializer.Deserialize<JsonElement>(eventLine[6..]);
+                Assert.False(string.IsNullOrWhiteSpace(realtimeEvent.GetProperty("id").GetString()));
+                Assert.Contains("realtime marker", realtimeEvent.GetProperty("message").GetString());
+                Assert.Equal("live-1", realtimeEvent.GetProperty("properties").GetProperty("requestId").GetString());
+            }
 
             var mcpProjectsResponse = await aiClient.PostAsJsonAsync("/mcp", new
             {

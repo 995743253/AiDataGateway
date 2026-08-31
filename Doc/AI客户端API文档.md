@@ -609,6 +609,7 @@ POST /api/gateway/query           POST /api/gateway/changes
 | `PUT` | `/api/admin/users/{id}` | 编辑用户显示名称、状态和角色 |
 | `DELETE` | `/api/admin/users/{id}` | 永久删除无历史记录的非当前、非最后管理员账号 |
 | `DELETE` | `/api/admin/oauth-clients/{clientId}` | 吊销客户端并删除关联授权和 Token |
+| `PUT` | `/api/admin/oauth-clients/{clientId}` | 修改客户端显示名称和 Scope；撤销旧 Token，不改变 Secret |
 | `GET` | `/api/events` | 建立 SSE 长连接，接收表变更通知 |
 
 `/api/events` 由服务端在业务数据提交后主动发送 `gateway-change` 事件。管理页面收到事件后按动作类型刷新审批、日志、数据源、用户或 OAuth2 客户端列表，不使用定时轮询。

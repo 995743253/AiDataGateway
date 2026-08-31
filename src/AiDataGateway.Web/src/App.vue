@@ -73,6 +73,7 @@
             <el-sub-menu v-if="canViewLogs || canViewMetrics" index="observability">
               <template #title><span class="menu-glyph">◉</span><span>观测中心</span></template>
               <el-menu-item v-if="canViewLogs" index="applicationlogs">应用日志</el-menu-item>
+              <el-menu-item v-if="canViewLogs" index="realtimelogs">实时日志</el-menu-item>
               <el-menu-item v-if="canViewMetrics" index="monitoring">服务器监控</el-menu-item>
               <el-menu-item v-if="canViewLogs" index="logs">网关审计</el-menu-item>
             </el-sub-menu>
@@ -161,7 +162,6 @@
           <el-tab-pane v-if="canViewLogs && isPageOpen('applicationlogs')" label="应用日志" name="applicationlogs">
             <div class="toolbar app-log-toolbar">
               <div><h3>项目应用日志</h3><p>统一读取本地 NLog 文件或 Seq，保留多行、空字段和未闭合末尾记录。</p></div>
-              <div class="live-log-actions"><el-tag v-if="applicationLogLive" type="success" effect="dark"><span class="live-dot" />实时接收中</el-tag><el-button :type="applicationLogLive ? 'danger' : 'success'" plain @click="applicationLogLive ? stopApplicationLogStream() : startApplicationLogStream()">{{ applicationLogLive ? '停止实时' : '查看实时日志' }}</el-button></div>
             </div>
             <div class="app-log-filter-panel">
               <div class="app-log-filter-row">
@@ -193,6 +193,27 @@
             </el-table>
             <el-empty v-if="!applicationLogsLoading && applicationLogs.length === 0" description="请选择日志源并查询" />
             <div class="pagination-panel"><span class="pagination-summary">当前第 {{ applicationLogPage }} 页，共返回 {{ applicationLogs.length }} 条<span v-if="applicationLogTotal">，查询窗口 {{ applicationLogTotal }} 条</span></span><div class="pagination-controls"><el-select v-model="applicationLogPageSize" class="page-size-select" @change="applicationLogSizeChanged"><el-option v-for="size in [20, 50, 100, 200]" :key="size" :label="`${size} 条`" :value="size" /></el-select><el-button :disabled="applicationLogPage <= 1" @click="changeApplicationLogPage(applicationLogPage - 1)">上一页</el-button><strong class="page-indicator">第 {{ applicationLogPage }} 页</strong><el-button type="primary" plain :disabled="!applicationLogHasNext" @click="changeApplicationLogPage(applicationLogPage + 1)">下一页</el-button></div></div>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="canViewLogs && isPageOpen('realtimelogs')" label="实时日志" name="realtimelogs">
+            <div class="toolbar realtime-log-toolbar"><div><h3>实时日志控制台</h3><p>独立查看新增日志，不影响历史日志查询；页面最多保留最近 500 条。</p></div><div class="live-log-actions"><el-tag :type="realtimeLogConnected ? 'success' : 'info'" effect="dark"><span class="live-dot" />{{ realtimeLogConnected ? '实时接收中' : '未连接' }}</el-tag></div></div>
+            <div class="app-log-filter-panel realtime-filter-panel">
+              <div class="app-log-filter-row">
+                <el-select v-model="realtimeLogSourceId" class="log-source-select" filterable placeholder="选择日志源" @change="stopRealtimeLogStream"><el-option v-for="item in logSources.filter(x => x.enabled)" :key="item.id" :label="`[${item.type === 2 ? 'Seq API' : item.type === 3 ? '远程 Agent' : '本地文件'}] ${item.name}（${item.key}）`" :value="item.id" /></el-select>
+                <el-input v-model="realtimeLogSearchText" class="log-search" clearable placeholder="只看包含此关键词的新日志（可选）" />
+                <el-select v-model="realtimeLogLevel" class="status-filter" clearable placeholder="全部级别"><el-option v-for="level in logLevels" :key="level" :label="level" :value="level" /></el-select>
+                <template v-if="selectedRealtimeLogSource?.type === 2"><el-input v-model="realtimeLogPropertyName" class="log-property" clearable placeholder="Seq 属性名（可选）" /><el-input v-model="realtimeLogPropertyValue" class="log-property" clearable placeholder="属性值（可选）" /></template>
+                <div class="filter-buttons"><el-button v-if="!realtimeLogConnected" type="success" @click="startRealtimeLogStream">开始接收</el-button><el-button v-else type="danger" @click="stopRealtimeLogStream">停止接收</el-button><el-button @click="clearRealtimeLogs">清空屏幕</el-button></div>
+              </div>
+            </div>
+            <el-alert v-if="realtimeLogError" :title="realtimeLogError" type="warning" show-icon :closable="false" class="log-warning" />
+            <el-table :data="realtimeLogs" stripe border max-height="calc(100vh - 300px)" class="paged-table realtime-log-table" @row-dblclick="openApplicationLog">
+              <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
+              <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
+              <el-table-column prop="message" label="消息" min-width="420" show-overflow-tooltip />
+              <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
+            </el-table>
+            <el-empty v-if="!realtimeLogs.length" :description="realtimeLogConnected ? '正在等待新日志…' : '请选择日志源并点击“开始接收”'" />
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewMetrics && isPageOpen('monitoring')" label="服务器监控" name="monitoring">
@@ -407,11 +428,11 @@
 
           <el-tab-pane v-if="isAdmin && isPageOpen('clients')" label="OAuth2 客户端" name="clients">
           <section class="secondary-page">
-          <div class="toolbar"><div><h2>OAuth2 客户端</h2><p>管理本地 AI 使用的客户端身份和权限范围。</p></div><el-button type="primary" @click="createClient">创建客户端</el-button></div>
+          <div class="toolbar"><div><h2>OAuth2 客户端</h2><p>客户端名称和权限可随时调整；修改权限后已签发 Token 会立即撤销。</p></div><el-button type="primary" @click="openClientDialog()">创建客户端</el-button></div>
           <el-table :data="clients" stripe>
             <el-table-column prop="displayName" label="名称" min-width="180" /><el-table-column prop="clientId" label="Client ID" min-width="300" />
-            <el-table-column label="权限" min-width="360"><template #default="s"><div class="permission-list"><el-tag v-for="permission in s.row.permissions" :key="permission" effect="plain">{{ permission }}</el-tag></div></template></el-table-column>
-            <el-table-column label="操作" width="110"><template #default="s"><el-button size="small" type="danger" @click="deleteClient(s.row)">吊销删除</el-button></template></el-table-column>
+            <el-table-column label="权限" min-width="360"><template #default="s"><div class="permission-list"><el-tag v-for="scope in s.row.scopes" :key="scope" effect="plain">{{ oauthScopeName(scope) }}</el-tag><span v-if="!s.row.scopes?.length">无业务权限</span></div></template></el-table-column>
+            <el-table-column label="操作" width="180"><template #default="s"><el-button size="small" @click="openClientDialog(s.row)">编辑权限</el-button><el-button size="small" type="danger" @click="deleteClient(s.row)">吊销删除</el-button></template></el-table-column>
           </el-table>
           </section>
           </el-tab-pane>
@@ -567,6 +588,15 @@
         <el-form :model="newUser" label-width="100px"><el-form-item label="用户名"><el-input v-model="newUser.userName" :disabled="!!editingUser" /></el-form-item><el-form-item label="显示名称"><el-input v-model="newUser.displayName" /></el-form-item><el-form-item label="邮箱"><el-input v-model="newUser.email" :disabled="!!editingUser" /></el-form-item><el-form-item v-if="!editingUser" label="密码"><el-input v-model="newUser.password" type="password" show-password /></el-form-item><el-form-item label="角色"><el-select v-model="newUser.roles" multiple class="full-width"><el-option v-for="r in roles" :key="r" :label="r" :value="r" /></el-select></el-form-item><el-form-item v-if="editingUser" label="账号状态"><el-switch v-model="newUser.enabled" active-text="启用" inactive-text="禁用" /></el-form-item></el-form>
         <template #footer><el-button @click="userDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveUser">{{ editingUser ? '保存' : '创建' }}</el-button></template>
       </el-dialog>
+      <el-dialog v-model="clientDialog" :title="editingClient ? '编辑 OAuth2 客户端' : '创建 OAuth2 客户端'" width="680px" destroy-on-close>
+        <el-form :model="clientForm" label-width="100px">
+          <el-form-item label="客户端名称"><el-input v-model="clientForm.displayName" placeholder="例如：本地开发 AI" /></el-form-item>
+          <el-form-item v-if="editingClient" label="Client ID"><el-input :model-value="editingClient.clientId" disabled /></el-form-item>
+          <el-form-item label="权限范围"><el-checkbox-group v-model="clientForm.scopes" class="oauth-scope-list"><el-checkbox v-for="item in oauthScopeOptions" :key="item.value" :value="item.value"><span>{{ item.label }}</span><small>{{ item.description }}</small></el-checkbox></el-checkbox-group></el-form-item>
+          <el-alert v-if="editingClient" title="保存后该客户端已签发的 Token 会被撤销，AI 需要重新获取 Token；Client Secret 不会改变。" type="warning" show-icon :closable="false" />
+        </el-form>
+        <template #footer><el-button @click="clientDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveClient">{{ editingClient ? '保存权限' : '创建并显示 Secret' }}</el-button></template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -597,16 +627,19 @@ export default {
     logSourceDialog: false, editingLogSource: null, logSourceForm: {},
     monitorTargetDialog: false, editingMonitorTarget: null, monitorTargetForm: {}, monitorCredentialDialog: false, monitorCredential: null,
     selectedMonitorTargetId: '', monitorLoading: false, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
-    applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false, applicationLogEventSource: null, applicationLogLive: false,
+    applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
+    realtimeLogs: [], realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogError: null,
     applicationLogDialog: false, selectedApplicationLog: null,
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
+    clientDialog: false, editingClient: null, clientForm: { displayName: '', scopes: [] },
     maintenanceSettings: { cleanupEnabled: true, retentionDays: 3, cleanupTimeLocal: '03:00', approvalExpirationMinutes: 15, lastCleanupAtUtc: null, lastCleanupSummary: null },
     desktopSettings: { available: false, memoryOverlayEnabled: false }, desktopMessageHandler: null,
     providers: [{ value: 1, label: 'SQL Server', port: 1433 }, { value: 2, label: 'MySQL', port: 3306 }, { value: 3, label: 'PostgreSQL', port: 5432 }, { value: 4, label: 'SQLite', port: 1 }, { value: 5, label: 'Oracle', port: 1521 }, { value: 6, label: 'MariaDB', port: 3306 }, { value: 7, label: '达梦 DM8', port: 5236 }, { value: 8, label: 'Firebird', port: 3050 }],
     accessModes: [{ value: 0, label: '禁用' }, { value: 1, label: '只读' }, { value: 2, label: '写入需审批' }, { value: 3, label: '开发模式' }],
     logLevels: ['Trace', 'Debug', 'Information', 'Info', 'Warning', 'Warn', 'Error', 'Fatal'],
-    logDateShortcuts: [{ text: '最近 15 分钟', value: () => [new Date(Date.now() - 15 * 60 * 1000), new Date()] }, { text: '最近 1 小时', value: () => [new Date(Date.now() - 60 * 60 * 1000), new Date()] }, { text: '最近 24 小时', value: () => [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()] }, { text: '最近 7 天', value: () => [new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), new Date()] }]
+    logDateShortcuts: [{ text: '最近 15 分钟', value: () => [new Date(Date.now() - 15 * 60 * 1000), new Date()] }, { text: '最近 1 小时', value: () => [new Date(Date.now() - 60 * 60 * 1000), new Date()] }, { text: '最近 24 小时', value: () => [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()] }, { text: '最近 7 天', value: () => [new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), new Date()] }],
+    oauthScopeOptions: [{ value: 'gateway.datasource.read', label: '读取数据源', description: '查看可用项目和数据源标识' }, { value: 'gateway.query.execute', label: '执行只读查询', description: '运行受网关约束的 SELECT 查询' }, { value: 'gateway.change.submit', label: '提交变更工单', description: '提交写入 SQL 等待人工审批' }, { value: 'gateway.logs.read', label: '读取应用日志', description: '查询项目关联的本地、Seq 或远程日志' }, { value: 'gateway.metrics.read', label: '读取服务器指标', description: '查询项目关联的服务器监控数据' }]
   }),
   computed: {
     isAdmin () { return this.user?.roles?.includes('Administrator') },
@@ -617,6 +650,7 @@ export default {
     approvalPageCount () { return Math.max(1, Math.ceil(this.approvalTotal / this.approvalPageSize)) },
     auditLogPageCount () { return Math.max(1, Math.ceil(this.auditLogTotal / this.auditLogPageSize)) },
     selectedApplicationLogSource () { return this.logSources.find(item => item.id === this.applicationLogSourceId) },
+    selectedRealtimeLogSource () { return this.logSources.find(item => item.id === this.realtimeLogSourceId) },
     selectedMonitorTarget () { return this.monitorTargets.find(item => item.id === this.selectedMonitorTargetId) },
     onlineMonitorCount () { return this.monitorTargets.filter(item => item.online).length },
     gatewayBaseUrl () { return window.location.origin },
@@ -732,7 +766,7 @@ export default {
     }
   },
   async created () { this.initializeDesktopBridge(); await this.bootstrap() },
-  beforeUnmount () { this.disconnectEvents(); this.stopApplicationLogStream(); this.disposeDesktopBridge() },
+  beforeUnmount () { this.disconnectEvents(); this.stopRealtimeLogStream(); this.disposeDesktopBridge() },
   methods: {
     initializeDesktopBridge () {
       if (!window.chrome?.webview) return
@@ -812,6 +846,7 @@ export default {
       if (this.activeTab === 'datasources') await this.loadDataSources()
       if (this.activeTab === 'logsources') await this.loadResourceCatalog()
       if (this.activeTab === 'applicationlogs') await this.loadLogSources()
+      if (this.activeTab === 'realtimelogs') await this.loadLogSources()
       if (this.activeTab === 'monitoring') { await this.loadMonitorTargets(); await this.loadMetricSamples() }
       if (this.activeTab === 'approvals') await this.loadApprovals()
       if (this.activeTab === 'logs') await this.loadAuditLogs()
@@ -821,7 +856,12 @@ export default {
     },
     async loadDataSources () { this.dataSources = (await axios.get('/api/admin/datasources')).data },
     async loadProjects () { this.projects = (await axios.get('/api/admin/projects')).data },
-    async loadLogSources () { this.logSources = (await axios.get(this.canOperate ? '/api/admin/log-sources' : '/api/log-sources')).data },
+    async loadLogSources () {
+      this.logSources = (await axios.get(this.canOperate ? '/api/admin/log-sources' : '/api/log-sources')).data
+      const enabled = this.logSources.filter(item => item.enabled)
+      if (!enabled.some(item => item.id === this.applicationLogSourceId)) this.applicationLogSourceId = enabled[0]?.id || ''
+      if (!enabled.some(item => item.id === this.realtimeLogSourceId)) this.realtimeLogSourceId = enabled.find(item => item.type === 2)?.id || enabled[0]?.id || ''
+    },
     async loadMonitorTargets () {
       if (!this.metricCatalog.length) await this.loadMetricCatalog()
       this.monitorTargets = (await axios.get('/api/monitoring/targets')).data
@@ -946,14 +986,14 @@ export default {
     async deleteProject (row) { try { await ElMessageBox.confirm(`确定删除项目 ${row.name}？关联的数据源和日志源本身不会被删除。`, '删除项目', { type: 'warning' }); await axios.delete(`/api/admin/projects/${row.id}`); await this.loadResourceCatalog(); ElMessage.success('项目已删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
     openLogSource (row) {
       this.editingLogSource = row || null
-      this.logSourceForm = row ? { key: row.key, name: row.name, type: row.type, endpoint: row.endpoint, nLogConfiguration: row.nLogConfiguration || '', nLogTargetName: row.nLogTargetName || '', nLogLayout: row.nLogLayout || '', apiKey: '', enabled: row.enabled, projectIds: row.projects.map(item => item.id) } : { key: '', name: '', type: 1, endpoint: '', nLogConfiguration: '', nLogTargetName: '', nLogLayout: '${longdate}|${level}|${logger}|${message}|${exception}', apiKey: '', enabled: true, projectIds: [] }
+      this.logSourceForm = row ? { key: row.key, name: row.name, type: row.type, endpoint: row.endpoint, nLogConfiguration: row.nLogConfiguration || '', nLogTargetName: row.nLogTargetName || '', nLogLayout: row.nLogLayout || '', apiKey: '', enabled: row.enabled, projectIds: row.projects.map(item => item.id) } : { key: '', name: '', type: 1, endpoint: '', nLogConfiguration: '', nLogTargetName: '', nLogLayout: '', apiKey: '', enabled: true, projectIds: [] }
       this.logSourceDialog = true
     },
     selectLogSourceType (type) { if (this.logSourceForm.type === type) return; this.logSourceForm.type = type; this.logSourceTypeChanged(type) },
     logSourceTypeChanged (type) { this.logSourceForm.endpoint = type === 2 ? 'http://127.0.0.1:5341' : type === 3 ? 'http://127.0.0.1:5188' : ''; this.logSourceForm.apiKey = '' },
     async saveLogSource () {
       this.saving = true
-      try { if (this.editingLogSource) await axios.put(`/api/admin/log-sources/${this.editingLogSource.id}`, this.logSourceForm); else await axios.post('/api/admin/log-sources', this.logSourceForm); this.logSourceDialog = false; await this.loadResourceCatalog(); ElMessage.success('日志源已保存') } catch (e) { this.error(e) } finally { this.saving = false }
+      try { const response = this.editingLogSource ? await axios.put(`/api/admin/log-sources/${this.editingLogSource.id}`, this.logSourceForm) : await axios.post('/api/admin/log-sources', this.logSourceForm); this.applicationLogSourceId = response.data.id; this.realtimeLogSourceId = response.data.id; this.logSourceDialog = false; await this.loadResourceCatalog(); ElMessage.success('日志源已保存，可直接到应用日志点击查询，无需先测试') } catch (e) { this.error(e) } finally { this.saving = false }
     },
     async testLogSource (row) { try { const response = await axios.post(`/api/admin/log-sources/${row.id}/test`); ElMessage({ type: response.data.success ? 'success' : 'error', message: response.data.message, duration: 6000 }) } catch (e) { this.error(e) } },
     async deleteLogSource (row) { try { await ElMessageBox.confirm(`确定删除日志源 ${row.name}？不会删除本地日志文件或 Seq 数据。`, '删除日志源', { type: 'warning' }); await axios.delete(`/api/admin/log-sources/${row.id}`); await this.loadResourceCatalog(); ElMessage.success('日志源已删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
@@ -1057,7 +1097,11 @@ export default {
       const days = Math.floor(seconds / 86400); const hours = Math.floor((seconds % 86400) / 3600); const minutes = Math.floor((seconds % 3600) / 60)
       return days ? `${days}天 ${hours}小时` : hours ? `${hours}小时 ${minutes}分` : `${minutes}分钟`
     },
-    async searchApplicationLogs () { this.applicationLogPage = 1; await this.loadApplicationLogs() },
+    async searchApplicationLogs () {
+      if (!this.logSources.length || !this.logSources.some(item => item.id === this.applicationLogSourceId && item.enabled)) await this.loadLogSources()
+      if (!this.applicationLogSourceId) { ElMessage.warning('没有可用日志源，请先创建并启用日志源'); return }
+      this.applicationLogPage = 1; await this.loadApplicationLogs()
+    },
     async loadApplicationLogs () {
       if (!this.applicationLogSourceId) { this.applicationLogs = []; return }
       this.applicationLogsLoading = true
@@ -1070,19 +1114,29 @@ export default {
       const seqAdvanced = this.selectedApplicationLogSource?.type === 2 && this.applicationLogQueryMode === 'advanced'
       return { logSourceId: this.applicationLogSourceId, query: seqAdvanced ? this.applicationLogQuery.trim() || null : null, searchText: seqAdvanced ? null : this.applicationLogSearchText.trim() || null, propertyName: seqAdvanced ? null : this.applicationLogPropertyName.trim() || null, propertyValue: seqAdvanced ? null : this.applicationLogPropertyValue.trim() || null, level: this.applicationLogLevel || null, fromUtc: this.applicationLogRange?.[0]?.toISOString(), toUtc: this.applicationLogRange?.[1]?.toISOString(), page: this.applicationLogPage, pageSize: this.applicationLogPageSize }
     },
-    async resetApplicationLogs () { this.stopApplicationLogStream(); this.applicationLogQuery = ''; this.applicationLogSearchText = ''; this.applicationLogPropertyName = ''; this.applicationLogPropertyValue = ''; this.applicationLogLevel = ''; this.applicationLogRange = [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()]; this.applicationLogPage = 1; this.applicationLogs = []; this.applicationLogTotal = 0; this.applicationLogWarning = null },
-    startApplicationLogStream () {
-      if (!this.applicationLogSourceId) { ElMessage.warning('请先选择日志源'); return }
-      this.stopApplicationLogStream(); this.applicationLogs = []; this.applicationLogPage = 1; this.applicationLogTotal = 0
-      const request = this.applicationLogRequest(); const params = new URLSearchParams()
-      for (const key of ['logSourceId', 'query', 'searchText', 'propertyName', 'propertyValue', 'level']) if (request[key]) params.set(key, request[key])
-      params.set('fromUtc', new Date().toISOString())
+    async resetApplicationLogs () { this.applicationLogQuery = ''; this.applicationLogSearchText = ''; this.applicationLogPropertyName = ''; this.applicationLogPropertyValue = ''; this.applicationLogLevel = ''; this.applicationLogRange = [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()]; this.applicationLogPage = 1; this.applicationLogs = []; this.applicationLogTotal = 0; this.applicationLogWarning = null },
+    async startRealtimeLogStream () {
+      if (!this.logSources.length) await this.loadLogSources()
+      if (!this.realtimeLogSourceId) { ElMessage.warning('请先选择日志源'); return }
+      this.stopRealtimeLogStream(); this.realtimeLogError = null
+      const params = new URLSearchParams({ logSourceId: this.realtimeLogSourceId, fromUtc: new Date().toISOString() })
+      if (this.realtimeLogSearchText.trim()) params.set('searchText', this.realtimeLogSearchText.trim())
+      if (this.realtimeLogLevel) params.set('level', this.realtimeLogLevel)
+      if (this.realtimeLogPropertyName.trim()) params.set('propertyName', this.realtimeLogPropertyName.trim())
+      if (this.realtimeLogPropertyValue.trim()) params.set('propertyValue', this.realtimeLogPropertyValue.trim())
       const stream = new EventSource(`/api/logs/stream?${params.toString()}`, { withCredentials: true })
-      this.applicationLogEventSource = stream; this.applicationLogLive = true
-      stream.onmessage = event => { const item = JSON.parse(event.data); if (!this.applicationLogs.some(value => value.id === item.id)) this.applicationLogs.unshift(item); if (this.applicationLogs.length > 500) this.applicationLogs.length = 500; this.applicationLogTotal = this.applicationLogs.length }
-      stream.onerror = () => { if (this.applicationLogEventSource === stream) { this.stopApplicationLogStream(); ElMessage.warning('实时日志连接已断开，请检查日志源后重试') } }
+      this.realtimeLogEventSource = stream
+      stream.onopen = () => { if (this.realtimeLogEventSource === stream) this.realtimeLogConnected = true }
+      stream.onmessage = event => {
+        const item = JSON.parse(event.data)
+        if (!item.id || this.realtimeLogs.some(value => value.id === item.id)) return
+        this.realtimeLogs.unshift(item)
+        if (this.realtimeLogs.length > 500) this.realtimeLogs.length = 500
+      }
+      stream.onerror = () => { if (this.realtimeLogEventSource === stream) { this.stopRealtimeLogStream(); this.realtimeLogError = '实时日志连接已断开，请检查日志源连接和权限后重新开始。' } }
     },
-    stopApplicationLogStream () { this.applicationLogEventSource?.close(); this.applicationLogEventSource = null; this.applicationLogLive = false },
+    stopRealtimeLogStream () { this.realtimeLogEventSource?.close(); this.realtimeLogEventSource = null; this.realtimeLogConnected = false },
+    clearRealtimeLogs () { this.realtimeLogs = []; this.realtimeLogError = null },
     async applicationLogSizeChanged () { this.applicationLogPage = 1; if (this.applicationLogs.length) await this.loadApplicationLogs() },
     async changeApplicationLogPage (page) { if (page < 1 || page === this.applicationLogPage) return; this.applicationLogPage = page; await this.loadApplicationLogs() },
     openApplicationLog (row) { this.selectedApplicationLog = row; this.applicationLogDialog = true },
@@ -1124,7 +1178,25 @@ export default {
       try { const wasEditing = !!this.editingUser; if (wasEditing) await axios.put(`/api/admin/users/${this.editingUser.id}`, { displayName: this.newUser.displayName, enabled: this.newUser.enabled, roles: this.newUser.roles }); else await axios.post('/api/admin/users', this.newUser); this.userDialog = false; this.editingUser = null; await this.loadUsers(); ElMessage.success(wasEditing ? '用户已保存' : '用户已创建') } catch (e) { this.error(e) } finally { this.saving = false }
     },
     async deleteUser (row) { try { await ElMessageBox.confirm(`确定永久删除用户 ${row.userName}？已有审批或审计历史的用户将被拒绝删除，请改为禁用。`, '删除用户', { type: 'warning', confirmButtonText: '永久删除' }); await axios.delete(`/api/admin/users/${row.id}`); await this.loadUsers(); ElMessage.success('用户已删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
-    async createClient () { try { const { value } = await ElMessageBox.prompt('客户端名称', '创建 OAuth2 客户端', { inputValue: 'Local AI Client' }); this.generatedClient = (await axios.post('/api/admin/oauth-clients', { displayName: value })).data; await this.loadClients() } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
+    openClientDialog (row) {
+      this.editingClient = row || null
+      this.clientForm = row ? { displayName: row.displayName || '', scopes: [...(row.scopes || [])] } : { displayName: 'Local AI Client', scopes: this.oauthScopeOptions.map(item => item.value) }
+      this.clientDialog = true
+    },
+    async saveClient () {
+      if (!this.clientForm.displayName.trim()) { ElMessage.warning('请输入客户端名称'); return }
+      this.saving = true
+      try {
+        if (this.editingClient) {
+          await axios.put(`/api/admin/oauth-clients/${encodeURIComponent(this.editingClient.clientId)}`, { displayName: this.clientForm.displayName.trim(), scopes: this.clientForm.scopes })
+          ElMessage.success('客户端名称和权限已更新，请让 AI 重新获取 Token')
+        } else {
+          this.generatedClient = (await axios.post('/api/admin/oauth-clients', { displayName: this.clientForm.displayName.trim(), scopes: this.clientForm.scopes })).data
+        }
+        this.clientDialog = false; await this.loadClients()
+      } catch (e) { this.error(e) } finally { this.saving = false }
+    },
+    oauthScopeName (scope) { return this.oauthScopeOptions.find(item => item.value === scope)?.label || scope },
     async deleteClient (row) { try { await ElMessageBox.confirm(`吊销并删除 ${row.displayName || row.clientId}？该客户端将无法获取新 Token，已签发 Token 也会立即失效。`, '吊销 OAuth2 客户端', { type: 'warning', confirmButtonText: '吊销并删除' }); await axios.delete(`/api/admin/oauth-clients/${encodeURIComponent(row.clientId)}`); await this.loadClients(); ElMessage.success('OAuth2 客户端已吊销并删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
     async saveMaintenanceSettings () {
       this.saving = true

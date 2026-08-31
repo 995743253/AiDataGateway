@@ -10,7 +10,7 @@ namespace AiDataGateway.Infrastructure.Logs;
 
 public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
 {
-    private const int MaximumReadBytes = 8 * 1024 * 1024;
+    private const int MaximumReadBytes = 10 * 1024 * 1024;
     public LogSourceType Type => LogSourceType.LocalNLog;
 
     public Task<LogSourceTestResult> TestAsync(LogSourceConnection connection, CancellationToken cancellationToken = default)
@@ -68,7 +68,7 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
         var items = filtered.Skip(skip).Take(options.PageSize).ToArray();
         var partial = chunks.Any(item => item.Truncated) || files.Count > chunks.Count;
         return new LogQueryResult(items, options.Page, options.PageSize, filtered.Length, partial,
-            partial ? "日志文件较大，仅在所选日期文件的最近 8 MB 内容中查询；可缩小时间范围以查看更完整的结果。" : null);
+            partial ? "日志文件较大，仅在所选日期文件的最近 10 MB（含 10 MB）内容中查询；可缩小时间范围以查看更完整的结果。" : null);
     }
 
     internal static IReadOnlyList<StructuredLogEvent> ParseForTest(string text, string layout, bool json = false, bool truncated = false) =>
@@ -241,16 +241,107 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
         {
             var raw = records[index];
             var fields = parser.Parse(raw);
-            fields["_file"] = file;
+            if (fields.Count == 0 || LevelTokenPolluted(fields))
+            {
+                var envelope = ParseCommonNLogEnvelope(raw);
+                if (envelope.Count > 0) fields = envelope;
+            }
             var timestamp = ParseTimestamp(GetString(fields, "timestamp", "longdate", "date", "time"));
             var level = GetString(fields, "level");
             var message = fields.ContainsKey("message") ? GetString(fields, "message") : raw;
             var exception = GetString(fields, "exception");
+            EnrichMessageProperties(fields, message);
+            fields["_file"] = file;
             var incomplete = truncated && index == 0;
             results.Add(new StructuredLogEvent(EventId(raw), timestamp, level, message, exception, fields, raw,
                 incomplete, incomplete ? "日志文件只读取了尾部，第一条记录可能不完整。" : null));
         }
         return results;
+    }
+
+    private static bool LevelTokenPolluted(Dictionary<string, object?> fields)
+    {
+        if (!fields.TryGetValue("level", out var value) || value is null) return false;
+        return !LevelTokenRegex().IsMatch(value.ToString() ?? string.Empty);
+    }
+
+    private static Dictionary<string, object?> ParseCommonNLogEnvelope(string raw)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var match = CommonNLogEnvelopeRegex().Match(raw);
+        if (!match.Success) return result;
+
+        result["timestamp"] = match.Groups["timestamp"].Value;
+        result["level"] = match.Groups["level"].Value;
+        if (match.Groups["threadid"].Success)
+        {
+            result["threadid"] = match.Groups["threadid"].Value;
+        }
+
+        var body = match.Groups["body"].Value;
+        var separator = body.LastIndexOf('|');
+        if (separator < 0)
+        {
+            result["message"] = body.Length == 0 ? null : body;
+            return result;
+        }
+
+        var message = body[..separator];
+        var exception = body[(separator + 1)..];
+        result["message"] = message.Length == 0 ? null : message;
+        result["exception"] = exception.Length == 0 ? null : exception;
+        return result;
+    }
+
+    private static void EnrichMessageProperties(Dictionary<string, object?> fields, string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        var prefix = MessagePrefixRegex().Match(message);
+        if (prefix.Success)
+        {
+            fields.TryAdd("source", prefix.Groups["source"].Value);
+            if (prefix.Groups["version"].Success) fields.TryAdd("version", prefix.Groups["version"].Value);
+        }
+
+        foreach (Match pair in KeyValueRegex().Matches(message))
+        {
+            var key = pair.Groups["key"].Value;
+            var value = pair.Groups["value"].Value.Trim();
+            if (value.Length >= 2 && value[0] == value[^1] && value[0] is '\'' or '"') value = value[1..^1];
+            fields.TryAdd(key, value);
+            if (fields.Count >= 200) break;
+        }
+
+        for (var start = 0; start < message.Length && fields.Count < 200; start++)
+        {
+            if (message[start] is not ('{' or '[')) continue;
+            var end = FindJsonEnd(message, start);
+            if (end < 0) continue;
+            try
+            {
+                using var document = JsonDocument.Parse(message[start..(end + 1)]);
+                var labelMatch = JsonLabelRegex().Match(message[..start]);
+                if (labelMatch.Success) fields.TryAdd("payloadLabel", labelMatch.Groups["label"].Value.Trim());
+                if (document.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var property in document.RootElement.EnumerateObject())
+                    {
+                        var key = fields.ContainsKey(property.Name) ? $"payload.{property.Name}" : property.Name;
+                        fields.TryAdd(key, JsonValue(property.Value));
+                    }
+                }
+                else
+                {
+                    fields.TryAdd("payload", JsonValue(document.RootElement));
+                }
+                start = end;
+            }
+            catch (JsonException)
+            {
+                // Bracketed logger names and incomplete payloads are valid message text, not structured JSON.
+            }
+        }
     }
 
     private static IReadOnlyList<string> SplitRecords(string text, string layout)
@@ -397,4 +488,19 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
 
     [GeneratedRegex(@"^\s*(?:\[)?\d{4}[-/]\d{2}[-/]\d{2}[ T]", RegexOptions.CultureInvariant)]
     private static partial Regex TimestampStartRegex();
+
+    [GeneratedRegex(@"^\s*\[(?<source>[^\]\r\n]+)\](?:\s*\[(?<version>[^\]\r\n]+)\])?", RegexOptions.CultureInvariant)]
+    private static partial Regex MessagePrefixRegex();
+
+    [GeneratedRegex(@"(?<![\p{L}\p{N}_])(?<key>[\p{L}_][\p{L}\p{N}_.-]{0,79})\s*=\s*(?<value>""(?:\\.|[^""])*""|'(?:\\.|[^'])*'|[^\s,;|]+)", RegexOptions.CultureInvariant)]
+    private static partial Regex KeyValueRegex();
+
+    [GeneratedRegex(@"(?<label>(?:[A-Z\p{Lo}][\p{L}\p{N}_.-]*)(?:\s+[A-Z\p{Lo}][\p{L}\p{N}_.-]*){0,5})\s*:\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex JsonLabelRegex();
+
+    [GeneratedRegex(@"\A(?<timestamp>\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\s*\|\s*(?<level>Trace|Debug|Info|Information|Warn|Warning|Error|Fatal)(?:\[(?<threadid>[^\]\r\n]*)\])?(?<body>[\s\S]*)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex CommonNLogEnvelopeRegex();
+
+    [GeneratedRegex(@"\A\s*(?:Trace|Debug|Info(?:rmation)?|Warn(?:ing)?|Error|Fatal)\s*\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex LevelTokenRegex();
 }

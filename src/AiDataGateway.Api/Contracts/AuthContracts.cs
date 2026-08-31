@@ -5,3 +5,4 @@ public sealed record LoginRequest(string UserName, string Password, bool Remembe
 public sealed record CreateUserRequest(string UserName, string Email, string DisplayName, string Password, string[] Roles);
 public sealed record UpdateUserRequest(string DisplayName, bool Enabled, string[] Roles);
 public sealed record CreateOAuthClientRequest(string DisplayName, string[]? Scopes = null);
+public sealed record UpdateOAuthClientRequest(string DisplayName, string[] Scopes);

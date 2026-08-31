@@ -6,7 +6,7 @@
 
 - ASP.NET Core Identity 用户、密码、角色、锁定和会话管理；支持编辑、启用/禁用和受限永久删除。
 - OpenIddict OAuth2/OIDC 服务，支持 Authorization Code + PKCE、Client Credentials 和 Refresh Token。
-- OAuth2 客户端支持吊销删除，并使关联授权和已签发 Token 立即失效。
+- OAuth2 客户端支持编辑名称/Scope 和吊销删除；权限调整后旧 Token 立即失效，Client Secret 保持不变。
 - AI 客户端默认只能获得项目/数据源读取、只读查询、日志读取、服务器指标读取和提交变更 Scope。
 - EF Core + SQLite 保存本地配置、用户、OAuth 客户端、审批和审计。
 - Data Protection 密钥由当前 Windows 用户的 DPAPI 保护。
@@ -20,7 +20,7 @@
 - SQL 只读分类、多语句拦截、无条件 UPDATE/DELETE 拦截和危险 DDL 默认拒绝。
 - 写操作进入本地审批，由 Administrator/Approver 批准后执行。
 - 独立审批历史与完整 SQL 详情页，保留审批人、意见、执行状态和错误。
-- 应用日志页面统一查看 NLog/Seq 结构化事件；网关审计页面记录 AI 查询、日志读取、审批、配置和认证操作。
+- 应用日志页面统一查看结构化事件并可直接搜索加载；独立“实时日志”页通过 SSE 查看新增日志；网关审计记录 AI 查询、日志读取、审批、配置和认证操作。
 - 内置本机 CPU、内存、磁盘、网络和运行时间采集；远端服务器使用独立轻量 Agent 与节点级上报密钥。
 - 系统设置可配置新工单审批有效期；同时支持按天保留审批记录、审计日志和本地日志文件，默认保留 3 天。
 - Windows 客户端支持可开关的内存使用悬浮球，实时显示使用率和容量，可拖动、置顶并记住桌面位置。

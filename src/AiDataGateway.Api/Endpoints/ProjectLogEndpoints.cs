@@ -9,6 +9,8 @@ namespace AiDataGateway.Api.Endpoints;
 
 internal static class ProjectLogEndpoints
 {
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
     public static IEndpointRouteBuilder MapProjectLogEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var projects = endpoints.MapGroup("/api/admin/projects")
@@ -76,7 +78,7 @@ internal static class ProjectLogEndpoints
         await foreach (var item in service.StreamAsync(new LogQueryRequest(logSourceId, query, level, fromUtc, null,
                            searchText, propertyName, propertyValue, 1, 200), GatewayPrincipal.Actor(context.User), cancellationToken))
         {
-            await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(item)}\n\n", cancellationToken);
+            await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(item, WebJson)}\n\n", cancellationToken);
             await context.Response.Body.FlushAsync(cancellationToken);
         }
     }

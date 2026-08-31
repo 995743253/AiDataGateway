@@ -111,6 +111,13 @@ button { font: inherit; }
 .seq-query-mode { display: flex; align-items: center; gap: 14px; color: #69778a; font-size: 13px; }
 .live-log-actions { display: flex; align-items: center; gap: 10px; }
 .live-log-actions .live-dot { display: inline-block; margin-right: 6px; }
+.realtime-log-toolbar { align-items: center; }
+.realtime-filter-panel { background: linear-gradient(110deg, #f4fbf8, #f7faff); border-color: #cfe7dc; }
+.realtime-log-table { border-radius: 8px; }
+.oauth-scope-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; width: 100%; }
+.oauth-scope-list .el-checkbox { align-items: flex-start; height: auto; min-height: 58px; margin: 0; padding: 10px 12px; border: 1px solid #dce5ef; border-radius: 8px; }
+.oauth-scope-list .el-checkbox__label { display: grid; gap: 3px; white-space: normal; }
+.oauth-scope-list small { color: #7a8798; line-height: 1.45; }
 .log-source-select { width: 250px; }
 .log-source-location { display: grid; gap: 3px; min-width: 0; }
 .log-source-location strong { color: #30445f; font-size: 13px; }

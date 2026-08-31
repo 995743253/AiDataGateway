@@ -65,7 +65,7 @@ public sealed class NLogParserTests
         {
             var now = DateTimeOffset.Now;
             var file = Path.Combine(directory, $"DEBUG_{now:yyyy-MM-dd-HH}.log");
-            var text = $"{now:yyyy-MM-dd HH:mm:ss.ffff}|DEBUG[197][ServicesSTD.Module_WIP] 查询人员和仓库信息|\r\n";
+            var text = $"{now:yyyy-MM-dd HH:mm:ss.ffff}|DEBUG[197][ServicesSTD.Module_WIP] [2.1.0] 查询人员和仓库信息 requestId=abc-123 Service Response Content:{{\"success\":true,\"count\":2,\"data\":{{\"name\":\"人员\"}}}}|\r\n";
             await File.WriteAllBytesAsync(file, Encoding.GetEncoding("GB18030").GetBytes(text));
             var adapter = new LocalNLogSourceAdapter();
             var result = await adapter.QueryAsync(new LogSourceConnection(LogSourceType.LocalNLog, directory,
@@ -76,8 +76,45 @@ public sealed class NLogParserTests
             Assert.Equal("DEBUG", item.Level);
             Assert.Equal("197", item.Properties["threadid"]);
             Assert.Contains("人员和仓库", item.Message);
+            Assert.Equal("ServicesSTD.Module_WIP", item.Properties["source"]);
+            Assert.Equal("2.1.0", item.Properties["version"]);
+            Assert.Equal("abc-123", item.Properties["requestId"]);
+            Assert.Equal(true, item.Properties["success"]);
+            Assert.Equal(2L, item.Properties["count"]);
+            Assert.Equal("Service Response Content", item.Properties["payloadLabel"]);
         }
         finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void Incorrect_layout_falls_back_to_common_nlog_envelope()
+    {
+        const string input = "2026-03-06 17:00:33.5606|DEBUG[197][ServicesSTD.Module_WIP.warehouse_fail_eaiqueue_info_get] [2.1.0.00000000] Service Request Content:{ \"StockIn_Type\": 0 }|";
+        const string staleUiDefault = "${longdate}|${level}|${logger}|${message}|${exception}";
+
+        var item = Assert.Single(LocalNLogSourceAdapter.ParseForTest(input, staleUiDefault));
+
+        Assert.NotNull(item.TimestampUtc);
+        Assert.Equal("DEBUG", item.Level);
+        Assert.Equal("197", item.Properties["threadid"]);
+        Assert.Equal("ServicesSTD.Module_WIP.warehouse_fail_eaiqueue_info_get", item.Properties["source"]);
+        Assert.Equal("2.1.0.00000000", item.Properties["version"]);
+        Assert.Equal("Service Request Content", item.Properties["payloadLabel"]);
+        Assert.Equal(0L, item.Properties["StockIn_Type"]);
+        Assert.StartsWith("[ServicesSTD.Module_WIP.warehouse_fail_eaiqueue_info_get]", item.Message);
+    }
+
+    [Fact]
+    public void Message_with_enough_pipes_does_not_pollute_level_fields()
+    {
+        const string input = "2026-03-06 17:00:33.5606|DEBUG[197][ServicesSTD.Module_WIP] a|b|c|";
+        const string staleUiDefault = "${longdate}|${level}|${logger}|${message}|${exception}";
+
+        var item = Assert.Single(LocalNLogSourceAdapter.ParseForTest(input, staleUiDefault));
+
+        Assert.Equal("DEBUG", item.Level);
+        Assert.Equal("ServicesSTD.Module_WIP", item.Properties["source"]);
+        Assert.Equal("[ServicesSTD.Module_WIP] a|b|c", item.Message);
     }
 
     [Fact]
@@ -95,6 +132,29 @@ public sealed class NLogParserTests
         Assert.Contains("@Level = 'Error'", filter);
         Assert.Contains("@Timestamp >= DateTime('2026-08-29T00:00:00.000Z')", filter);
         Assert.Contains("@Timestamp <= DateTime('2026-08-30T00:00:00.000Z')", filter);
+    }
+
+    [Fact]
+    public async Task Local_source_includes_exactly_ten_megabytes_and_truncates_above_it()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"AiDataGateway-NLog-{Guid.NewGuid():N}.log");
+        try
+        {
+            await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                stream.SetLength(10L * 1024 * 1024);
+            var adapter = new LocalNLogSourceAdapter();
+            var connection = new LogSourceConnection(LogSourceType.LocalNLog, path, string.Empty, string.Empty, string.Empty, string.Empty);
+            var range = new LogQueryOptions(FromUtc: DateTimeOffset.UtcNow.AddMinutes(-1), ToUtc: DateTimeOffset.UtcNow.AddMinutes(1));
+
+            var exact = await adapter.QueryAsync(connection, range);
+            Assert.False(exact.IsPartial);
+
+            await using (var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read))
+                stream.SetLength(10L * 1024 * 1024 + 1);
+            var over = await adapter.QueryAsync(connection, range);
+            Assert.True(over.IsPartial);
+        }
+        finally { File.Delete(path); }
     }
 
     [Fact]

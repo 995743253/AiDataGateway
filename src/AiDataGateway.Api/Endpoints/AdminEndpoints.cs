@@ -146,11 +146,16 @@ internal static class AdminEndpoints
             var clients = new List<object>();
             await foreach (var application in manager.ListAsync())
             {
+                var permissions = await manager.GetPermissionsAsync(application);
                 clients.Add(new
                 {
                     clientId = await manager.GetClientIdAsync(application),
                     displayName = await manager.GetDisplayNameAsync(application),
-                    permissions = await manager.GetPermissionsAsync(application)
+                    permissions,
+                    scopes = permissions
+                        .Where(value => value.StartsWith(OpenIddictConstants.Permissions.Prefixes.Scope, StringComparison.Ordinal))
+                        .Select(value => value[OpenIddictConstants.Permissions.Prefixes.Scope.Length..])
+                        .ToArray()
                 });
             }
             return Results.Ok(clients);
@@ -166,6 +171,45 @@ internal static class AdminEndpoints
             await manager.CreateAsync(OAuthDescriptorFactory.CreateAiClient(clientId, request.DisplayName, secret, allowedScopes));
             await auditWriter.WriteAsync(GatewayPrincipal.Actor(context.User), "oauth-client.create", "success", detail: clientId);
             return Results.Ok(new { clientId, clientSecret = secret, scopes = allowedScopes });
+        });
+
+        admin.MapPut("/oauth-clients/{clientId}", async (
+            string clientId,
+            UpdateOAuthClientRequest request,
+            HttpContext context,
+            IOpenIddictApplicationManager applicationManager,
+            IOpenIddictAuthorizationManager authorizationManager,
+            IOpenIddictTokenManager tokenManager,
+            IAuditWriter auditWriter,
+            CancellationToken cancellationToken) =>
+        {
+            var application = await applicationManager.FindByClientIdAsync(clientId, cancellationToken);
+            if (application is null) return Results.NotFound();
+            if (string.IsNullOrWhiteSpace(request.DisplayName)) return Results.BadRequest(new { message = "客户端名称不能为空。" });
+
+            var scopes = (request.Scopes ?? [])
+                .Intersect(GatewayScopes.AiClientDefaults, StringComparer.Ordinal)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var descriptor = new OpenIddictApplicationDescriptor();
+            await applicationManager.PopulateAsync(descriptor, application, cancellationToken);
+            descriptor.DisplayName = request.DisplayName.Trim();
+            descriptor.Permissions.RemoveWhere(value =>
+                value.StartsWith(OpenIddictConstants.Permissions.Prefixes.Scope, StringComparison.Ordinal));
+            foreach (var scope in scopes)
+                descriptor.Permissions.Add(OpenIddictConstants.Permissions.Prefixes.Scope + scope);
+            await applicationManager.UpdateAsync(application, descriptor, cancellationToken);
+
+            var applicationId = await applicationManager.GetIdAsync(application, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(applicationId))
+            {
+                await tokenManager.RevokeByApplicationIdAsync(applicationId, cancellationToken);
+                await authorizationManager.RevokeByApplicationIdAsync(applicationId, cancellationToken);
+            }
+
+            await auditWriter.WriteAsync(GatewayPrincipal.Actor(context.User), "oauth-client.update", "success",
+                detail: $"{clientId}: {string.Join(',', scopes)}", cancellationToken: cancellationToken);
+            return Results.NoContent();
         });
 
         admin.MapDelete("/oauth-clients/{clientId}", async (
