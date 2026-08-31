@@ -1,0 +1,155 @@
+<Window x:Class="AiDataGateway.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="AiDataGateway · 本地 AI 数据安全网关"
+        Width="1380" Height="880" MinWidth="1024" MinHeight="680"
+        WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize"
+        Background="#0F2745" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="12"
+        Icon="/Assets/gateway-app.ico">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="44" ResizeBorderThickness="5" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <LinearGradientBrush x:Key="TitleBarBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Offset="0" Color="#0F2745" />
+            <GradientStop Offset="1" Color="#1769AA" />
+        </LinearGradientBrush>
+        <Style x:Key="CaptionButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="HoverHost" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverHost" Property="Background" Value="#2CFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="HoverHost" Property="Background" Value="#48081F3A" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CloseCaptionButtonStyle" BasedOn="{StaticResource CaptionButtonStyle}" TargetType="Button">
+            <Setter Property="Foreground" Value="White" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E81123" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#C40E1D" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="FooterButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="Margin" Value="7,0,0,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Foreground" Value="#32445B" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#CDD7E3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="HoverHost" CornerRadius="3" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Background="{TemplateBinding Background}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverHost" Property="Background" Value="#EEF4FA" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="HoverHost" Property="Background" Value="#E1EAF4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="AccentFooterButtonStyle" BasedOn="{StaticResource FooterButtonStyle}" TargetType="Button">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#1E99CD" />
+            <Setter Property="BorderBrush" Value="#1E99CD" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#26A9DA" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#1685B4" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="44" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="44" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{StaticResource TitleBarBrush}">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="MinimizeButton" Style="{StaticResource CaptionButtonStyle}" Content="&#xE921;" Click="OnMinimizeClick" />
+                    <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButtonStyle}" Content="&#xE922;" Click="OnMaximizeClick" />
+                    <Button Style="{StaticResource CloseCaptionButtonStyle}" Content="&#xE8BB;" Click="OnCloseClick" />
+                </StackPanel>
+                <Image DockPanel.Dock="Left" Source="/Assets/gateway-app-icon.png" Width="30" Height="30" Margin="12,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
+                <TextBlock DockPanel.Dock="Left" Text="AiDataGateway" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Left" Text="本地 AI 数据安全网关" Margin="14,0,0,0" FontSize="11.5" Foreground="#C8DDF1" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Background="White">
+            <wv2:WebView2 x:Name="WebView" DefaultBackgroundColor="Transparent" />
+            <Grid x:Name="LoadingOverlay" Background="#F1F6FD">
+                <Border Width="480" Height="365" CornerRadius="22" Background="White" BorderBrush="#D7E2EF" BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="26" ShadowDepth="4" Direction="315" Opacity="0.18" Color="#324D6C" />
+                    </Border.Effect>
+                    <StackPanel VerticalAlignment="Center">
+                        <Image Source="/Assets/gateway-brand-large.png" Width="140" Height="140" HorizontalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
+                        <TextBlock x:Name="LoadingTitle" Text="正在建立安全通道" FontSize="17" FontWeight="SemiBold" Foreground="#0F2745" Margin="0,18,0,0" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="LoadingMessage" Text="正在连接本地 API 与受保护的数据访问工作区…" FontSize="12.5" Foreground="#67758B" Margin="0,8,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="390" />
+                        <ProgressBar IsIndeterminate="True" Width="296" Height="5" Margin="0,26,0,0" BorderThickness="0" Foreground="#1E99CD" Background="#E3ECF6" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#F8FAFD" BorderBrush="#D7DFEA" BorderThickness="0,1,0,0" Padding="14,5,10,5">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse x:Name="StatusDot" Width="9" Height="9" Margin="2,0,9,0" Fill="#F2A82D" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusText" Text="正在启动本地网关…" Foreground="#37475C" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock x:Name="EndpointText" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#6B778A" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Style="{StaticResource AccentFooterButtonStyle}" Content="刷新" Click="OnReloadClick" />
+                    <Button Style="{StaticResource FooterButtonStyle}" Content="浏览器打开" Click="OnOpenInBrowserClick" />
+                    <Button Style="{StaticResource FooterButtonStyle}" Content="隐藏" Click="OnHideToTrayClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

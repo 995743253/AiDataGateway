@@ -36,6 +36,7 @@
         </button>
         <div class="header-actions">
           <span class="live-state" :class="{ online: eventConnected }"><span class="live-dot" />{{ eventConnected ? '实时同步' : '正在连接' }}</span>
+          <button class="theme-toggle" type="button" :title="uiTheme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'" @click="toggleUiTheme">{{ uiTheme === 'dark' ? '☀️' : '🌙' }}</button>
           <el-dropdown trigger="click" @command="handleUserCommand">
             <button class="user-menu-trigger" type="button">
               <el-avatar :size="36">{{ userInitials }}</el-avatar>
@@ -611,7 +612,7 @@ axios.defaults.withCredentials = true
 
 export default {
   data: () => ({
-    loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', openTabs: ['overview'], sidebarCollapsed: localStorage.getItem('gateway.sidebarCollapsed') === 'true', generatedClient: null,
+    loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', openTabs: ['overview'], sidebarCollapsed: localStorage.getItem('gateway.sidebarCollapsed') === 'true', uiTheme: localStorage.getItem('gateway.uiTheme') === 'dark' ? 'dark' : 'light', generatedClient: null,
     eventSource: null, eventConnected: false, eventRefreshTimer: null,
     setup: { userName: 'admin', email: '', displayName: '管理员', password: '', aiClientName: 'Local AI Client' },
     setupRules: {
@@ -767,7 +768,7 @@ export default {
       return Object.keys(this.selectedLogDetail.rows?.[0] || {})
     }
   },
-  async created () { this.initializeDesktopBridge(); await this.bootstrap() },
+  async created () { this.applyUiTheme(); this.initializeDesktopBridge(); await this.bootstrap() },
   beforeUnmount () { this.disconnectEvents(); this.stopRealtimeLogStream(); this.disposeDesktopBridge() },
   methods: {
     initializeDesktopBridge () {
@@ -814,6 +815,12 @@ export default {
     },
     async logout () { this.disconnectEvents(); await axios.post('/api/auth/logout'); this.user = null; this.activeTab = 'overview'; this.openTabs = ['overview'] },
     async handleUserCommand (command) { if (command === 'logout') return this.logout(); await this.goTo(command) },
+    applyUiTheme () { document.documentElement.classList.toggle('dark', this.uiTheme === 'dark') },
+    toggleUiTheme () {
+      this.uiTheme = this.uiTheme === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('gateway.uiTheme', this.uiTheme)
+      this.applyUiTheme()
+    },
     toggleSidebar () {
       this.sidebarCollapsed = !this.sidebarCollapsed
       localStorage.setItem('gateway.sidebarCollapsed', String(this.sidebarCollapsed))

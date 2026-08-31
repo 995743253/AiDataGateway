@@ -1,15 +1,18 @@
 using System.Runtime.InteropServices;
+using System.Windows;
 
 namespace AiDataGateway.Desktop;
 
+// WindowChrome owns drag, resize and caption hit-testing for the borderless
+// window; this helper only keeps the DWM polish and the maximize work-area
+// fix that WindowChrome does not provide on its own.
 internal static class CustomWindowChrome
 {
+    private const int WmGetMinMaxInfo = 0x0024;
     private const int DwmwaWindowCornerPreference = 33;
     private const int DwmwaBorderColor = 34;
     private const int DwmWindowCornerPreferenceRound = 2;
     private const uint MonitorDefaultToNearest = 2;
-    private const int WmNcLeftButtonDown = 0x00A1;
-    private const int HtCaption = 2;
 
     public static void ApplyVisuals(IntPtr windowHandle)
     {
@@ -46,15 +49,20 @@ internal static class CustomWindowChrome
         Marshal.StructureToPtr(minMaxInfo, minMaxInfoPointer, false);
     }
 
-    public static void BeginWindowDrag(IntPtr windowHandle)
+    public static IntPtr HookMinMaxInfo(Window window)
     {
-        if (windowHandle == IntPtr.Zero)
+        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        var source = System.Windows.Interop.HwndSource.FromHwnd(handle);
+        source?.AddHook((windowHandle, message, wParam, lParam, ref handled) =>
         {
-            return;
-        }
-
-        ReleaseCapture();
-        _ = SendMessage(windowHandle, WmNcLeftButtonDown, new IntPtr(HtCaption), IntPtr.Zero);
+            if (message == WmGetMinMaxInfo)
+            {
+                ConstrainMaximizedBounds(windowHandle, lParam);
+                handled = true;
+            }
+            return IntPtr.Zero;
+        });
+        return handle;
     }
 
     private static void TrySetDwmAttribute(IntPtr windowHandle, int attribute, int value)
@@ -115,11 +123,4 @@ internal static class CustomWindowChrome
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetMonitorInfo(IntPtr monitorHandle, ref MonitorInfo monitorInfo);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ReleaseCapture();
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(IntPtr windowHandle, int message, IntPtr wParam, IntPtr lParam);
 }

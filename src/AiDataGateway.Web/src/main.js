@@ -34,8 +34,11 @@ import {
   ElTimeSelect
 } from 'element-plus'
 import 'element-plus/dist/index.css'
+import 'element-plus/theme-chalk/dark/css-vars.css'
 import './styles.css'
 import App from './App.vue'
+
+if (localStorage.getItem('gateway.uiTheme') === 'dark') document.documentElement.classList.add('dark')
 
 const app = createApp(App)
 

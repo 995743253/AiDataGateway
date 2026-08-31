@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
   </ItemGroup>
 
@@ -38,23 +39,18 @@
     <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
     <ApplicationIcon>Assets\gateway-app.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Assets\gateway-brand-large.png" LogicalName="AiDataGateway.Desktop.Assets.gateway-brand-large.png" />
-    <EmbeddedResource Include="Assets\gateway-app-icon.png" LogicalName="AiDataGateway.Desktop.Assets.gateway-app-icon.png" />
+    <Resource Include="Assets\gateway-app.ico" />
+    <Resource Include="Assets\gateway-app-icon.png" />
+    <Resource Include="Assets\gateway-brand-large.png" />
   </ItemGroup>
 
   <Target Name="CleanWebClientOutput" BeforeTargets="PrepareForBuild" Condition="Exists('..\AiDataGateway.Web\dist')">
     <RemoveDir Directories="$(OutDir)wwwroot" Condition="Exists('$(OutDir)wwwroot')" />
-  </Target>
-
-  <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
-    <ItemGroup>
-      <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
-    </ItemGroup>
   </Target>
 
 </Project>

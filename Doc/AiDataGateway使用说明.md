@@ -41,7 +41,7 @@ src\AiDataGateway.Desktop\bin\Debug\net10.0-windows10.0.17763.0\AiDataGateway.De
 
 程序启动后会同时启动：
 
-1. WinForms 桌面窗口；
+1. WPF 桌面窗口；
 2. 内嵌的 Vue 3 管理页面；
 3. 本机 Kestrel WebAPI，监听 `127.0.0.1:5127`。
 
@@ -64,7 +64,7 @@ src\AiDataGateway.Desktop\bin\Debug\net10.0-windows10.0.17763.0\AiDataGateway.De
 - 也可以通过系统托盘菜单中的“显示内存悬浮球”快速开关；
 - 下次启动时会恢复开关和上次位置；显示器布局变化时会自动把悬浮球调整回可见区域。
 
-此设置保存在网关数据目录的 `desktop.settings.json` 中，只作用于本机 WinForms 客户端。使用普通浏览器打开管理页面时只能看到功能说明，不能控制桌面悬浮球。
+此设置保存在网关数据目录的 `desktop.settings.json` 中，只作用于本机 WPF 客户端。使用普通浏览器打开管理页面时只能看到功能说明，不能控制桌面悬浮球。
 
 ## 4. 首次初始化
 

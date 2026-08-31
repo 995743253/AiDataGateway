@@ -1,6 +1,6 @@
 # AiDataGateway
 
-面向本地 AI 编程助手的 Windows 数据库访问管控工具。WinForms 负责桌面生命周期，进程内 Kestrel 提供 OAuth2/OIDC、WebAPI 和静态管理页面，WebView2 承载 Vue 3 + Element Plus。
+面向本地 AI 编程助手的 Windows 数据库访问管控工具。WPF 负责桌面生命周期，进程内 Kestrel 提供 OAuth2/OIDC、WebAPI 和静态管理页面，WebView2 承载 Vue 3 + Element Plus。
 
 ## 当前能力
 
@@ -25,7 +25,7 @@
 - 系统设置可配置新工单审批有效期；同时支持按天保留审批记录、审计日志和本地日志文件，默认保留 3 天。
 - Windows 客户端支持可开关的内存使用悬浮球，实时显示使用率和容量，可拖动、置顶并记住桌面位置。
 - SSE 服务端事件驱动管理表格自动刷新，无定时轮询。
-- WinForms 系统托盘、WebView2 内嵌管理页面。
+- WPF 无边框桌面壳、系统托盘、WebView2 内嵌管理页面；管理页面支持亮色/暗色主题切换。
 
 ## 项目结构
 
@@ -37,7 +37,7 @@ src/
 ├── AiDataGateway.Monitoring      # 无基础设施依赖的跨平台系统指标采集库
 ├── AiDataGateway.MonitorAgent    # 可单独打包的远端指标与本地日志采集程序
 ├── AiDataGateway.Api             # 本地 Kestrel、OAuth2 和 HTTP 端点
-├── AiDataGateway.Desktop         # WinForms/WebView2/托盘，仅负责宿主生命周期
+├── AiDataGateway.Desktop         # WPF/WebView2/托盘，仅负责宿主生命周期
 └── AiDataGateway.Web             # Vue 3 + Element Plus
 tests/
 └── AiDataGateway.Tests           # 领域、SQL 策略和完整认证链路测试
