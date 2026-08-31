@@ -275,7 +275,6 @@ public partial class MainWindow : Window
         };
         _memoryOverlay.OpenConsoleRequested += RestoreWindow;
         _memoryOverlay.DisableRequested += () => SetMemoryOverlayEnabled(false);
-        _memoryOverlay.RestoreSavedPosition();
         _memoryOverlay.Show();
     }
 
@@ -368,10 +367,15 @@ public partial class MainWindow : Window
     private void ExitApplication()
     {
         _allowExit = true;
+        // The tray menu runs its own message pump; dismissing it and deferring
+        // Shutdown by one dispatcher cycle keeps its popup hwnd from freezing
+        // on screen while the application tears down.
+        if (_trayIcon.ContextMenu is { } menu) menu.IsOpen = false;
         _trayIcon.Dispose();
         _memoryOverlay?.Close();
         Close();
-        System.Windows.Application.Current.Shutdown();
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => System.Windows.Application.Current.Shutdown()));
     }
 
     private void OnMinimizeClick(object sender, RoutedEventArgs eventArgs) => WindowState = WindowState.Minimized;

@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import {
   ElAlert,
+  ElConfigProvider,
   ElAvatar,
   ElButton,
   ElCard,
@@ -44,6 +45,7 @@ const app = createApp(App)
 
 const components = [
   ElAlert,
+  ElConfigProvider,
   ElAvatar,
   ElButton,
   ElCard,

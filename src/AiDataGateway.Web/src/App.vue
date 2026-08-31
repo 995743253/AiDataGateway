@@ -1,4 +1,5 @@
 <template>
+  <el-config-provider :locale="zhCn">
   <div>
     <div v-if="loading" class="auth-wrap"><div class="loading-spinner" aria-label="加载中" /></div>
 
@@ -602,11 +603,13 @@
       </el-dialog>
     </div>
   </div>
+  </el-config-provider>
 </template>
 
 <script>
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 axios.defaults.withCredentials = true
 

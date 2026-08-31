@@ -32,7 +32,14 @@ public partial class MemoryOverlayWindow : Window
     public MemoryOverlayWindow()
     {
         InitializeComponent();
-        SourceInitialized += (_, _) => ApplyToolWindowStyle();
+        SourceInitialized += (_, _) =>
+        {
+            ApplyToolWindowStyle();
+            // The device transform only exists once the handle is created, so
+            // restoring the saved position before Show() would clamp against
+            // raw physical pixels and park the ball off-screen.
+            RestoreSavedPosition();
+        };
         DrawRing(0);
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _refreshTimer.Tick += (_, _) => RefreshMemoryUsage();
@@ -46,12 +53,29 @@ public partial class MemoryOverlayWindow : Window
 
     public void RestoreSavedPosition()
     {
-        var workAreas = ScreenInterop.GetWorkAreas().ToList();
+        var workAreas = GetWorkAreasInDips();
         var saved = new Point(Left, Top);
         var home = workAreas.FirstOrDefault(area => ScreenInterop.Contains(area, saved, (int)Width, (int)Height));
         if (home.IsEmpty) home = workAreas.Count > 0 ? workAreas[0] : SystemParameters.WorkArea;
         Left = ScreenInterop.Clamp(saved.X < 0 ? home.Right - Width - 24 : saved.X, home.Left, home.Right - Width);
         Top = ScreenInterop.Clamp(saved.Y < 0 ? home.Bottom - Height - 24 : saved.Y, home.Top, home.Bottom - Height);
+    }
+
+    // Monitor rectangles come back in physical pixels; WPF positions windows in
+    // device-independent units, so every screen calculation goes through the
+    // per-window device transform (a mismatch used to park the ball off-screen).
+    private List<Rect> GetWorkAreasInDips()
+    {
+        var fromDevice = (PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource)
+            ?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        return ScreenInterop.GetWorkAreas()
+            .Select(area =>
+            {
+                var origin = fromDevice.Transform(new Point(area.X, area.Y));
+                var corner = fromDevice.Transform(new Point(area.Right, area.Bottom));
+                return new Rect(origin, corner);
+            })
+            .ToList();
     }
 
     private void ApplyToolWindowStyle()
@@ -111,7 +135,7 @@ public partial class MemoryOverlayWindow : Window
         }
 
         _dragging = true;
-        _dragStartPointer = PointToScreen(eventArgs.GetPosition(this));
+        _dragStartPointer = ScreenToDip(PointToScreen(eventArgs.GetPosition(this)));
         _dragStartLocation = new Point(Left, Top);
         CaptureMouse();
     }
@@ -119,12 +143,19 @@ public partial class MemoryOverlayWindow : Window
     private void OnDragMove(object sender, MouseEventArgs eventArgs)
     {
         if (!_dragging) return;
-        var pointer = PointToScreen(eventArgs.GetPosition(this));
+        var pointer = ScreenToDip(PointToScreen(eventArgs.GetPosition(this)));
         var proposed = _dragStartLocation + (pointer - _dragStartPointer);
-        var workArea = ScreenInterop.GetWorkAreas().FirstOrDefault(area => ScreenInterop.ContainsPoint(area, pointer));
+        var workArea = GetWorkAreasInDips().FirstOrDefault(area => ScreenInterop.ContainsPoint(area, pointer));
         if (workArea.IsEmpty) workArea = SystemParameters.WorkArea;
         Left = ScreenInterop.Clamp(proposed.X, workArea.Left, workArea.Right - Width);
         Top = ScreenInterop.Clamp(proposed.Y, workArea.Top, workArea.Bottom - Height);
+    }
+
+    private Point ScreenToDip(Point physical)
+    {
+        var fromDevice = (PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource)
+            ?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        return fromDevice.Transform(physical);
     }
 
     private void OnDragEnd(object sender, MouseButtonEventArgs eventArgs)
