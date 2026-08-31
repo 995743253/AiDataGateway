@@ -250,7 +250,6 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
             var level = GetString(fields, "level");
             var message = fields.ContainsKey("message") ? GetString(fields, "message") : raw;
             var exception = GetString(fields, "exception");
-            EnrichMessageProperties(fields, message);
             fields["_file"] = file;
             var incomplete = truncated && index == 0;
             results.Add(new StructuredLogEvent(EventId(raw), timestamp, level, message, exception, fields, raw,
@@ -291,57 +290,6 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
         result["message"] = message.Length == 0 ? null : message;
         result["exception"] = exception.Length == 0 ? null : exception;
         return result;
-    }
-
-    private static void EnrichMessageProperties(Dictionary<string, object?> fields, string? message)
-    {
-        if (string.IsNullOrWhiteSpace(message)) return;
-
-        var prefix = MessagePrefixRegex().Match(message);
-        if (prefix.Success)
-        {
-            fields.TryAdd("source", prefix.Groups["source"].Value);
-            if (prefix.Groups["version"].Success) fields.TryAdd("version", prefix.Groups["version"].Value);
-        }
-
-        foreach (Match pair in KeyValueRegex().Matches(message))
-        {
-            var key = pair.Groups["key"].Value;
-            var value = pair.Groups["value"].Value.Trim();
-            if (value.Length >= 2 && value[0] == value[^1] && value[0] is '\'' or '"') value = value[1..^1];
-            fields.TryAdd(key, value);
-            if (fields.Count >= 200) break;
-        }
-
-        for (var start = 0; start < message.Length && fields.Count < 200; start++)
-        {
-            if (message[start] is not ('{' or '[')) continue;
-            var end = FindJsonEnd(message, start);
-            if (end < 0) continue;
-            try
-            {
-                using var document = JsonDocument.Parse(message[start..(end + 1)]);
-                var labelMatch = JsonLabelRegex().Match(message[..start]);
-                if (labelMatch.Success) fields.TryAdd("payloadLabel", labelMatch.Groups["label"].Value.Trim());
-                if (document.RootElement.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var property in document.RootElement.EnumerateObject())
-                    {
-                        var key = fields.ContainsKey(property.Name) ? $"payload.{property.Name}" : property.Name;
-                        fields.TryAdd(key, JsonValue(property.Value));
-                    }
-                }
-                else
-                {
-                    fields.TryAdd("payload", JsonValue(document.RootElement));
-                }
-                start = end;
-            }
-            catch (JsonException)
-            {
-                // Bracketed logger names and incomplete payloads are valid message text, not structured JSON.
-            }
-        }
     }
 
     private static IReadOnlyList<string> SplitRecords(string text, string layout)
@@ -488,15 +436,6 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
 
     [GeneratedRegex(@"^\s*(?:\[)?\d{4}[-/]\d{2}[-/]\d{2}[ T]", RegexOptions.CultureInvariant)]
     private static partial Regex TimestampStartRegex();
-
-    [GeneratedRegex(@"^\s*\[(?<source>[^\]\r\n]+)\](?:\s*\[(?<version>[^\]\r\n]+)\])?", RegexOptions.CultureInvariant)]
-    private static partial Regex MessagePrefixRegex();
-
-    [GeneratedRegex(@"(?<![\p{L}\p{N}_])(?<key>[\p{L}_][\p{L}\p{N}_.-]{0,79})\s*=\s*(?<value>""(?:\\.|[^""])*""|'(?:\\.|[^'])*'|[^\s,;|]+)", RegexOptions.CultureInvariant)]
-    private static partial Regex KeyValueRegex();
-
-    [GeneratedRegex(@"(?<label>(?:[A-Z\p{Lo}][\p{L}\p{N}_.-]*)(?:\s+[A-Z\p{Lo}][\p{L}\p{N}_.-]*){0,5})\s*:\s*$", RegexOptions.CultureInvariant)]
-    private static partial Regex JsonLabelRegex();
 
     [GeneratedRegex(@"\A(?<timestamp>\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\s*\|\s*(?<level>Trace|Debug|Info|Information|Warn|Warning|Error|Fatal)(?:\[(?<threadid>[^\]\r\n]*)\])?(?<body>[\s\S]*)\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CommonNLogEnvelopeRegex();

@@ -76,12 +76,6 @@ public sealed class NLogParserTests
             Assert.Equal("DEBUG", item.Level);
             Assert.Equal("197", item.Properties["threadid"]);
             Assert.Contains("人员和仓库", item.Message);
-            Assert.Equal("ServicesSTD.Module_WIP", item.Properties["source"]);
-            Assert.Equal("2.1.0", item.Properties["version"]);
-            Assert.Equal("abc-123", item.Properties["requestId"]);
-            Assert.Equal(true, item.Properties["success"]);
-            Assert.Equal(2L, item.Properties["count"]);
-            Assert.Equal("Service Response Content", item.Properties["payloadLabel"]);
         }
         finally { Directory.Delete(directory, recursive: true); }
     }
@@ -97,10 +91,6 @@ public sealed class NLogParserTests
         Assert.NotNull(item.TimestampUtc);
         Assert.Equal("DEBUG", item.Level);
         Assert.Equal("197", item.Properties["threadid"]);
-        Assert.Equal("ServicesSTD.Module_WIP.warehouse_fail_eaiqueue_info_get", item.Properties["source"]);
-        Assert.Equal("2.1.0.00000000", item.Properties["version"]);
-        Assert.Equal("Service Request Content", item.Properties["payloadLabel"]);
-        Assert.Equal(0L, item.Properties["StockIn_Type"]);
         Assert.StartsWith("[ServicesSTD.Module_WIP.warehouse_fail_eaiqueue_info_get]", item.Message);
     }
 
@@ -113,7 +103,6 @@ public sealed class NLogParserTests
         var item = Assert.Single(LocalNLogSourceAdapter.ParseForTest(input, staleUiDefault));
 
         Assert.Equal("DEBUG", item.Level);
-        Assert.Equal("ServicesSTD.Module_WIP", item.Properties["source"]);
         Assert.Equal("[ServicesSTD.Module_WIP] a|b|c", item.Message);
     }
 

@@ -498,7 +498,7 @@ public sealed class GatewayHostTests
                 var streamResponseTask = client.SendAsync(streamRequest, HttpCompletionOption.ResponseHeadersRead, streamTimeout.Token);
                 await Task.Delay(500, streamTimeout.Token);
                 await File.AppendAllTextAsync(applicationLogPath,
-                    $"\n{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.ffff}|Info|Sample|realtime marker requestId=live-1|", streamTimeout.Token);
+                    $"\n{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.ffff}|Info|Sample|realtime marker|", streamTimeout.Token);
                 using var streamResponse = await streamResponseTask;
                 streamResponse.EnsureSuccessStatusCode();
                 await using var eventStream = await streamResponse.Content.ReadAsStreamAsync(streamTimeout.Token);
@@ -509,7 +509,6 @@ public sealed class GatewayHostTests
                 var realtimeEvent = JsonSerializer.Deserialize<JsonElement>(eventLine[6..]);
                 Assert.False(string.IsNullOrWhiteSpace(realtimeEvent.GetProperty("id").GetString()));
                 Assert.Contains("realtime marker", realtimeEvent.GetProperty("message").GetString());
-                Assert.Equal("live-1", realtimeEvent.GetProperty("properties").GetProperty("requestId").GetString());
             }
 
             var mcpProjectsResponse = await aiClient.PostAsJsonAsync("/mcp", new
