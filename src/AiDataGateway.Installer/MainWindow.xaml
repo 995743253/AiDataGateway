@@ -1,7 +1,7 @@
 <Window x:Class="AiDataGateway.Installer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="AiDataGateway 安装程序" Width="720" Height="570" ResizeMode="NoResize"
+        Title="AiDataGateway 安装程序" Width="720" Height="640" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen" Background="#F2F6FB" Icon="/Assets/gateway-app.ico"
         FontFamily="Segoe UI, Microsoft YaHei UI">
     <Grid>
@@ -19,7 +19,7 @@
         <Border Grid.Row="1" Margin="26,22" Background="White" CornerRadius="10" BorderBrush="#D6E1ED" BorderThickness="1" Padding="24">
             <StackPanel>
                 <TextBlock x:Name="ModeTitle" Text="选择安装位置" FontSize="18" FontWeight="SemiBold" Foreground="#18324F"/>
-                <TextBlock x:Name="ModeDescription" Text="程序文件与业务数据库可以分别保存。后续升级会自动沿用这些目录。" Foreground="#6B7A90" Margin="0,6,0,22"/>
+                <TextBlock x:Name="ModeDescription" Text="程序文件与业务数据库可以分别保存。后续升级会自动沿用这些目录。" Foreground="#6B7A90" Margin="0,6,0,14"/>
                 <TextBlock Text="程序安装目录" Foreground="#32445B" FontWeight="SemiBold"/>
                 <Grid Margin="0,7,0,17"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <TextBox x:Name="InstallPathBox"/><Button Grid.Column="1" Content="浏览…" Click="OnBrowseInstall"/>
@@ -29,7 +29,7 @@
                     <TextBox x:Name="DataPathBox"/><Button x:Name="BrowseDataButton" Grid.Column="1" Content="浏览…" Click="OnBrowseData"/>
                 </Grid>
                 <TextBlock x:Name="DataHint" Text="gateway.db、加密密钥和审计日志保存在此目录；卸载和更新均不会删除。" Foreground="#738198" FontSize="11.5" TextWrapping="Wrap"/>
-                <CheckBox x:Name="DesktopShortcutCheck" Content="创建桌面快捷方式" IsChecked="True" Margin="0,18,0,0"/>
+                <CheckBox x:Name="DesktopShortcutCheck" Content="创建桌面快捷方式" IsChecked="True" Margin="0,14,0,0"/>
                 <ProgressBar x:Name="InstallProgress" Height="7" Minimum="0" Maximum="100" Margin="0,20,0,0" Visibility="Collapsed"/>
                 <TextBlock x:Name="StatusText" Foreground="#1769AA" Margin="0,8,0,0"/>
             </StackPanel>
