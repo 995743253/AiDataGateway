@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <VersionPrefix Condition="'$(VersionPrefix)' == ''">0.7.0</VersionPrefix>
+    <Version Condition="'$(Version)' == ''">$(VersionPrefix)</Version>
+    <Authors>AiDataGateway</Authors>
+    <Product>AiDataGateway</Product>
+    <Copyright>Copyright © AiDataGateway</Copyright>
+  </PropertyGroup>
+</Project>

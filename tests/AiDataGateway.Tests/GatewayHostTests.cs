@@ -496,13 +496,15 @@ public sealed class GatewayHostTests
                        $"/api/logs/stream?logSourceId={logSourceId}&fromUtc={Uri.EscapeDataString(DateTimeOffset.UtcNow.ToString("O"))}"))
             {
                 var streamResponseTask = client.SendAsync(streamRequest, HttpCompletionOption.ResponseHeadersRead, streamTimeout.Token);
-                await Task.Delay(500, streamTimeout.Token);
-                await File.AppendAllTextAsync(applicationLogPath,
-                    $"\n{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.ffff}|Info|Sample|realtime marker|", streamTimeout.Token);
-                using var streamResponse = await streamResponseTask;
+                using var streamResponse = await streamResponseTask.WaitAsync(TimeSpan.FromSeconds(2), streamTimeout.Token);
                 streamResponse.EnsureSuccessStatusCode();
                 await using var eventStream = await streamResponse.Content.ReadAsStreamAsync(streamTimeout.Token);
                 using var eventReader = new StreamReader(eventStream);
+                Assert.Equal(": connected", await eventReader.ReadLineAsync(streamTimeout.Token));
+                Assert.Equal(string.Empty, await eventReader.ReadLineAsync(streamTimeout.Token));
+
+                await File.AppendAllTextAsync(applicationLogPath,
+                    $"\n{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.ffff}|Info|Sample|realtime marker|", streamTimeout.Token);
                 var eventLine = await eventReader.ReadLineAsync(streamTimeout.Token);
                 Assert.NotNull(eventLine);
                 Assert.StartsWith("data: ", eventLine);

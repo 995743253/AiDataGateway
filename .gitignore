@@ -8,6 +8,7 @@ artifacts/
 src/AiDataGateway.Web/dist/
 **/publish/
 WebView2Runtime/
+src/AiDataGateway.Installer/Payload/*.zip
 *.user
 *.suo
 .vs/

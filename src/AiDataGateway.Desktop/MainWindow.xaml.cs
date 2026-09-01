@@ -19,11 +19,13 @@ public partial class MainWindow : Window
 
     private readonly Uri _baseAddress;
     private readonly DesktopSettingsStore _desktopSettingsStore;
+    private readonly GitHubUpdateService _updateService = new();
     private DesktopSettings _desktopSettings;
     private TaskbarIcon _trayIcon = null!;
     private MenuItem _memoryOverlayMenuItem = null!;
     private MemoryOverlayWindow? _memoryOverlay;
     private bool _allowExit;
+    private bool _checkingForUpdate;
 
     public MainWindow(Uri baseAddress, string storagePath)
     {
@@ -68,6 +70,8 @@ public partial class MainWindow : Window
         {
             ApplyMemoryOverlaySetting();
             await InitializeWebViewAsync();
+            await Task.Delay(1500);
+            await CheckForUpdatesAsync(silentWhenCurrent: true);
         };
     }
 
@@ -80,6 +84,8 @@ public partial class MainWindow : Window
         reloadItem.Click += (_, _) => ReloadWebView();
         var browserItem = new MenuItem { Header = "使用浏览器打开" };
         browserItem.Click += (_, _) => OpenInBrowser();
+        var updateItem = new MenuItem { Header = "检查更新" };
+        updateItem.Click += async (_, _) => await CheckForUpdatesAsync(silentWhenCurrent: false);
         _memoryOverlayMenuItem = new MenuItem
         {
             Header = "显示内存悬浮球",
@@ -93,6 +99,7 @@ public partial class MainWindow : Window
         menu.Items.Add(openItem);
         menu.Items.Add(reloadItem);
         menu.Items.Add(browserItem);
+        menu.Items.Add(updateItem);
         menu.Items.Add(new Separator());
         menu.Items.Add(_memoryOverlayMenuItem);
         menu.Items.Add(new Separator());
@@ -188,6 +195,49 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             MessageBox.Show(exception.Message, "无法打开浏览器", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task CheckForUpdatesAsync(bool silentWhenCurrent)
+    {
+        if (_checkingForUpdate) return;
+        _checkingForUpdate = true;
+        try
+        {
+            SetStatus("正在检查更新…", Amber);
+            var update = await _updateService.CheckAsync();
+            if (update is null)
+            {
+                SetStatus("安全网关运行中", Green);
+                if (!silentWhenCurrent)
+                    MessageBox.Show($"当前版本 {GitHubUpdateService.CurrentVersionText} 已是最新版。", "检查更新", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"发现新版本 {update.VersionText}（当前 {GitHubUpdateService.CurrentVersionText}）。\n\n是否下载并自动更新？程序目录和数据库目录都会保持不变。",
+                "AiDataGateway 更新", MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (result != MessageBoxResult.Yes)
+            {
+                SetStatus($"发现新版本 {update.VersionText}", Amber);
+                return;
+            }
+
+            var progress = new Progress<int>(value => SetStatus($"正在下载更新… {value}%", Amber));
+            var installer = await _updateService.DownloadAsync(update, progress);
+            SetStatus("正在启动更新程序…", Amber);
+            GitHubUpdateService.StartInstaller(installer);
+            ExitApplication();
+        }
+        catch (Exception exception)
+        {
+            SetStatus(silentWhenCurrent ? "安全网关运行中" : "检查更新失败", silentWhenCurrent ? Green : Red);
+            if (!silentWhenCurrent)
+                MessageBox.Show(exception.Message, "检查更新失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _checkingForUpdate = false;
         }
     }
 
@@ -390,4 +440,6 @@ public partial class MainWindow : Window
     private void OnOpenInBrowserClick(object sender, RoutedEventArgs eventArgs) => OpenInBrowser();
 
     private void OnHideToTrayClick(object sender, RoutedEventArgs eventArgs) => HideToTray(showTip: true);
+
+    private async void OnCheckUpdateClick(object sender, RoutedEventArgs eventArgs) => await CheckForUpdatesAsync(silentWhenCurrent: false);
 }

@@ -199,14 +199,14 @@
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewLogs && isPageOpen('realtimelogs')" label="实时日志" name="realtimelogs">
-            <div class="toolbar realtime-log-toolbar"><div><h3>实时日志控制台</h3><p>独立查看新增日志，不影响历史日志查询；页面最多保留最近 500 条。</p></div><div class="live-log-actions"><el-tag :type="realtimeLogConnected ? 'success' : 'info'" effect="dark"><span class="live-dot" />{{ realtimeLogConnected ? '实时接收中' : '未连接' }}</el-tag></div></div>
+            <div class="toolbar realtime-log-toolbar"><div><h3>实时日志控制台</h3><p>独立查看新增日志，不影响历史日志查询；页面最多保留最近 500 条。</p></div><div class="live-log-actions"><el-tag :type="realtimeLogConnected ? 'success' : realtimeLogConnecting ? 'warning' : 'info'" effect="dark"><span class="live-dot" />{{ realtimeLogConnected ? '实时接收中' : realtimeLogConnecting ? '连接中' : '未连接' }}</el-tag></div></div>
             <div class="app-log-filter-panel realtime-filter-panel">
               <div class="app-log-filter-row">
                 <el-select v-model="realtimeLogSourceId" class="log-source-select" filterable placeholder="选择日志源" @change="stopRealtimeLogStream"><el-option v-for="item in logSources.filter(x => x.enabled)" :key="item.id" :label="`[${item.type === 2 ? 'Seq API' : item.type === 3 ? '远程 Agent' : '本地文件'}] ${item.name}（${item.key}）`" :value="item.id" /></el-select>
                 <el-input v-model="realtimeLogSearchText" class="log-search" clearable placeholder="只看包含此关键词的新日志（可选）" />
                 <el-select v-model="realtimeLogLevel" class="status-filter" clearable placeholder="全部级别"><el-option v-for="level in logLevels" :key="level" :label="level" :value="level" /></el-select>
                 <template v-if="selectedRealtimeLogSource?.type === 2"><el-input v-model="realtimeLogPropertyName" class="log-property" clearable placeholder="Seq 属性名（可选）" /><el-input v-model="realtimeLogPropertyValue" class="log-property" clearable placeholder="属性值（可选）" /></template>
-                <div class="filter-buttons"><el-button v-if="!realtimeLogConnected" type="success" @click="startRealtimeLogStream">开始接收</el-button><el-button v-else type="danger" @click="stopRealtimeLogStream">停止接收</el-button><el-button @click="clearRealtimeLogs">清空屏幕</el-button></div>
+                <div class="filter-buttons"><el-button v-if="!realtimeLogConnected && !realtimeLogConnecting" type="success" @click="startRealtimeLogStream">开始接收</el-button><el-button v-else type="danger" @click="stopRealtimeLogStream">{{ realtimeLogConnecting ? '取消连接' : '停止接收' }}</el-button><el-button @click="clearRealtimeLogs">清空屏幕</el-button></div>
               </div>
             </div>
             <el-alert v-if="realtimeLogError" :title="realtimeLogError" type="warning" show-icon :closable="false" class="log-warning" />
@@ -216,7 +216,7 @@
               <el-table-column prop="message" label="消息" min-width="420" show-overflow-tooltip />
               <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
-            <el-empty v-if="!realtimeLogs.length" :description="realtimeLogConnected ? '正在等待新日志…' : '请选择日志源并点击“开始接收”'" />
+            <el-empty v-if="!realtimeLogs.length" :description="realtimeLogConnected ? '连接正常，正在等待新日志…' : realtimeLogConnecting ? '正在建立实时连接…' : '请选择日志源并点击“开始接收”'" />
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewMetrics && isPageOpen('monitoring')" label="服务器监控" name="monitoring">
@@ -634,7 +634,7 @@ export default {
     monitorTargetDialog: false, editingMonitorTarget: null, monitorTargetForm: {}, monitorCredentialDialog: false, monitorCredential: null,
     selectedMonitorTargetId: '', monitorLoading: false, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
     applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
-    realtimeLogs: [], realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogError: null,
+    realtimeLogs: [], realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
     applicationLogDialog: false, selectedApplicationLog: null,
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
@@ -1149,9 +1149,12 @@ export default {
     },
     async resetApplicationLogs () { this.applicationLogQuery = ''; this.applicationLogSearchText = ''; this.applicationLogPropertyName = ''; this.applicationLogPropertyValue = ''; this.applicationLogLevel = ''; this.applicationLogRange = [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()]; this.applicationLogPage = 1; this.applicationLogs = []; this.applicationLogTotal = 0; this.applicationLogWarning = null },
     async startRealtimeLogStream () {
-      if (!this.logSources.length) await this.loadLogSources()
-      if (!this.realtimeLogSourceId) { ElMessage.warning('请先选择日志源'); return }
-      this.stopRealtimeLogStream(); this.realtimeLogError = null
+      if (this.realtimeLogEventSource || this.realtimeLogConnecting) return
+      const attempt = ++this.realtimeLogAttempt
+      this.realtimeLogConnecting = true; this.realtimeLogConnected = false; this.realtimeLogError = null
+      try { if (!this.logSources.length) await this.loadLogSources() } catch (e) { if (attempt === this.realtimeLogAttempt) { this.realtimeLogConnecting = false; this.error(e) }; return }
+      if (attempt !== this.realtimeLogAttempt) return
+      if (!this.realtimeLogSourceId) { this.realtimeLogConnecting = false; ElMessage.warning('请先选择日志源'); return }
       const params = new URLSearchParams({ logSourceId: this.realtimeLogSourceId, fromUtc: new Date().toISOString() })
       if (this.realtimeLogSearchText.trim()) params.set('searchText', this.realtimeLogSearchText.trim())
       if (this.realtimeLogLevel) params.set('level', this.realtimeLogLevel)
@@ -1159,7 +1162,7 @@ export default {
       if (this.realtimeLogPropertyValue.trim()) params.set('propertyValue', this.realtimeLogPropertyValue.trim())
       const stream = new EventSource(`/api/logs/stream?${params.toString()}`, { withCredentials: true })
       this.realtimeLogEventSource = stream
-      stream.onopen = () => { if (this.realtimeLogEventSource === stream) this.realtimeLogConnected = true }
+      stream.onopen = () => { if (this.realtimeLogEventSource === stream) { this.realtimeLogConnecting = false; this.realtimeLogConnected = true } }
       stream.onmessage = event => {
         const item = JSON.parse(event.data)
         if (!item.id || this.realtimeLogs.some(value => value.id === item.id)) return
@@ -1168,7 +1171,7 @@ export default {
       }
       stream.onerror = () => { if (this.realtimeLogEventSource === stream) { this.stopRealtimeLogStream(); this.realtimeLogError = '实时日志连接已断开，请检查日志源连接和权限后重新开始。' } }
     },
-    stopRealtimeLogStream () { this.realtimeLogEventSource?.close(); this.realtimeLogEventSource = null; this.realtimeLogConnected = false },
+    stopRealtimeLogStream () { this.realtimeLogAttempt++; this.realtimeLogEventSource?.close(); this.realtimeLogEventSource = null; this.realtimeLogConnected = false; this.realtimeLogConnecting = false },
     clearRealtimeLogs () { this.realtimeLogs = []; this.realtimeLogError = null },
     async applicationLogSizeChanged () { this.applicationLogPage = 1; if (this.applicationLogs.length) await this.loadApplicationLogs() },
     async changeApplicationLogPage (page) { if (page < 1 || page === this.applicationLogPage) return; this.applicationLogPage = page; await this.loadApplicationLogs() },

@@ -74,12 +74,40 @@ internal static class ProjectLogEndpoints
 
         context.Response.Headers.CacheControl = "no-cache";
         context.Response.Headers.Connection = "keep-alive";
+        context.Response.Headers["X-Accel-Buffering"] = "no";
         context.Response.ContentType = "text/event-stream; charset=utf-8";
-        await foreach (var item in service.StreamAsync(new LogQueryRequest(logSourceId, query, level, fromUtc, null,
-                           searchText, propertyName, propertyValue, 1, 200), GatewayPrincipal.Actor(context.User), cancellationToken))
+        await context.Response.StartAsync(cancellationToken);
+        await context.Response.WriteAsync(": connected\n\n", cancellationToken);
+        await context.Response.Body.FlushAsync(cancellationToken);
+
+        var stream = service.StreamAsync(new LogQueryRequest(logSourceId, query, level, fromUtc, null,
+            searchText, propertyName, propertyValue, 1, 200), GatewayPrincipal.Actor(context.User), cancellationToken);
+        await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);
+        var moveNext = enumerator.MoveNextAsync().AsTask();
+        var heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
+        try
         {
-            await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(item, WebJson)}\n\n", cancellationToken);
-            await context.Response.Body.FlushAsync(cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var completed = await Task.WhenAny(moveNext, heartbeat);
+                if (completed == heartbeat)
+                {
+                    await heartbeat;
+                    await context.Response.WriteAsync(": heartbeat\n\n", cancellationToken);
+                    await context.Response.Body.FlushAsync(cancellationToken);
+                    heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
+                    continue;
+                }
+
+                if (!await moveNext) break;
+                await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(enumerator.Current, WebJson)}\n\n", cancellationToken);
+                await context.Response.Body.FlushAsync(cancellationToken);
+                moveNext = enumerator.MoveNextAsync().AsTask();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The browser closed the EventSource connection.
         }
     }
 

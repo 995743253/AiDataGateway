@@ -79,6 +79,8 @@ dotnet run --project src/AiDataGateway.Desktop/AiDataGateway.Desktop.csproj
 
 数据默认保存到 `%LocalAppData%\AiDataGateway`。如需便携运行，可将发布目录中的 `gateway.host.example.json` 复制为 `gateway.host.json`，并将 `storagePath` 设置为 `data`（程序目录下的 `data` 子目录）或 `.`（程序目录本身）。环境变量 `AI_GATEWAY_STORAGE_PATH` 的优先级高于配置文件。详细迁移步骤见 [运行库与数据保存说明](Doc/运行库与数据保存说明.md)。
 
+普通用户推荐使用 GitHub Release 中的 Windows Setup。首次安装可以分别选择程序目录和数据库目录；后续安装器与应用内更新会自动识别原目录，并保留 `gateway.db`、`keys` 和本地日志。发布、更新和卸载行为见 [安装与自动更新说明](Doc/安装与自动更新说明.md)。
+
 关闭主窗口时程序最小化到系统托盘；必须从托盘选择“退出”才会停止本地 API。
 
 ## AI 获取 Token
