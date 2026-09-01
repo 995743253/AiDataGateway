@@ -1,3 +1,4 @@
+using System.Globalization;
 using AiDataGateway.Infrastructure.Logs;
 using AiDataGateway.Application.Abstractions;
 using AiDataGateway.Domain.Logs;
@@ -59,6 +60,10 @@ public sealed class NLogParserTests
     public async Task Local_source_auto_detects_gb18030_and_parses_real_layout()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        // The encoding fallback prefers GB18030 only on zh machines; pin the
+        // culture so the assertion does not depend on the runner's locale.
+        var originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("zh-CN");
         var directory = Path.Combine(Path.GetTempPath(), $"AiDataGateway-NLog-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try
@@ -77,7 +82,11 @@ public sealed class NLogParserTests
             Assert.Equal("197", item.Properties["threadid"]);
             Assert.Contains("人员和仓库", item.Message);
         }
-        finally { Directory.Delete(directory, recursive: true); }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
