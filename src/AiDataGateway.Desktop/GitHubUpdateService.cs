@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace AiDataGateway.Desktop;
 
@@ -13,13 +14,34 @@ internal sealed record GatewayUpdate(Version Version, string VersionText, string
 
 internal sealed class GitHubUpdateService
 {
-    private const string LatestReleaseUrl = "https://api.github.com/repos/995743253/AiDataGateway/releases/latest";
+    private const string Owner = "995743253";
+    private const string Repository = "AiDataGateway";
+    private const string LatestReleaseUrl = $"https://api.github.com/repos/{Owner}/{Repository}/releases/latest";
+    private const string ReleasesFeedUrl = $"https://github.com/{Owner}/{Repository}/releases.atom";
+    private const string DownloadBaseUrl = $"https://github.com/{Owner}/{Repository}/releases/download/";
+    private const string ReleasePageUrl = $"https://github.com/{Owner}/{Repository}/releases/tag/";
+    private static readonly Regex FeedTagRegex = new("releases/tag/(?<tag>v[0-9][A-Za-z0-9.\\-]*)", RegexOptions.Compiled);
     private static readonly HttpClient Client = CreateClient();
 
     public static string CurrentVersionText => (Assembly.GetExecutingAssembly()
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0").Split('+')[0];
 
     public async Task<GatewayUpdate?> CheckAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await CheckViaApiAsync(cancellationToken);
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests)
+        {
+            // api.github.com quotas unauthenticated clients at 60 requests per
+            // hour per IP — a quota shared by everyone behind carrier NAT.
+            // The releases feed on plain github.com has no such quota.
+            return await CheckViaFeedAsync(cancellationToken);
+        }
+    }
+
+    private async Task<GatewayUpdate?> CheckViaApiAsync(CancellationToken cancellationToken)
     {
         using var response = await Client.GetAsync(LatestReleaseUrl, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
@@ -31,8 +53,7 @@ internal sealed class GitHubUpdateService
         var versionText = release.TagName.Trim().TrimStart('v', 'V');
         if (!Version.TryParse(versionText.Split('-', 2)[0], out var remoteVersion))
             throw new InvalidDataException($"无法识别发布版本：{release.TagName}");
-        var current = Version.TryParse(CurrentVersionText.Split('-', 2)[0], out var parsed) ? parsed : new Version(0, 0);
-        if (remoteVersion <= current) return null;
+        if (!IsNewerVersion(remoteVersion)) return null;
 
         var installer = release.Assets.FirstOrDefault(asset =>
             asset.Name.StartsWith("AiDataGateway-Setup-", StringComparison.OrdinalIgnoreCase) &&
@@ -48,6 +69,33 @@ internal sealed class GitHubUpdateService
         }
 
         return new GatewayUpdate(remoteVersion, versionText, installer.Name, new Uri(installer.BrowserDownloadUrl), sha256, new Uri(release.HtmlUrl));
+    }
+
+    private async Task<GatewayUpdate?> CheckViaFeedAsync(CancellationToken cancellationToken)
+    {
+        var feed = await Client.GetStringAsync(ReleasesFeedUrl, cancellationToken);
+        var tag = FeedTagRegex.Match(feed) is { Success: true } match ? match.Groups["tag"].Value : null;
+        if (tag is null) return null;
+
+        var versionText = tag.TrimStart('v', 'V');
+        if (!Version.TryParse(versionText.Split('-', 2)[0], out var remoteVersion) || !IsNewerVersion(remoteVersion))
+        {
+            return null;
+        }
+
+        // Release download URLs are deterministic from the tag, and the
+        // checksum asset ships alongside every installer the release script uploads.
+        var assetName = $"AiDataGateway-Setup-v{versionText}-win-x64.exe";
+        var downloadBase = $"{DownloadBaseUrl}{tag}/";
+        var sha256 = ParseChecksum(await Client.GetStringAsync(downloadBase + assetName + ".sha256", cancellationToken));
+        return new GatewayUpdate(remoteVersion, versionText, assetName,
+            new Uri(downloadBase + assetName), sha256, new Uri(ReleasePageUrl + tag));
+    }
+
+    private static bool IsNewerVersion(Version remoteVersion)
+    {
+        var current = Version.TryParse(CurrentVersionText.Split('-', 2)[0], out var parsed) ? parsed : new Version(0, 0);
+        return remoteVersion > current;
     }
 
     public async Task<string> DownloadAsync(GatewayUpdate update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
