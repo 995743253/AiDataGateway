@@ -18,6 +18,9 @@ public partial class MainWindow : Window
     private static readonly Color Red = Color.FromRgb(0xE1, 0x4A, 0x55);
 
     private readonly Uri _baseAddress;
+    private readonly string _storagePath;
+    private readonly bool _storagePathManagedByEnvironment;
+    private readonly Func<string, Task<string?>> _migrateStorageAsync;
     private readonly DesktopSettingsStore _desktopSettingsStore;
     private readonly GitHubUpdateService _updateService = new();
     private DesktopSettings _desktopSettings;
@@ -27,10 +30,17 @@ public partial class MainWindow : Window
     private bool _allowExit;
     private bool _checkingForUpdate;
 
-    public MainWindow(Uri baseAddress, string storagePath)
+    public MainWindow(
+        Uri baseAddress,
+        string storagePath,
+        bool storagePathManagedByEnvironment,
+        Func<string, Task<string?>> migrateStorageAsync)
     {
         InitializeComponent();
         _baseAddress = baseAddress;
+        _storagePath = storagePath;
+        _storagePathManagedByEnvironment = storagePathManagedByEnvironment;
+        _migrateStorageAsync = migrateStorageAsync;
         _desktopSettingsStore = new DesktopSettingsStore(storagePath);
         _desktopSettings = _desktopSettingsStore.Load();
 
@@ -257,6 +267,12 @@ public partial class MainWindow : Window
                 case "desktop.memoryOverlay.set" when message.RootElement.TryGetProperty("enabled", out var enabledProperty):
                     SetMemoryOverlayEnabled(enabledProperty.GetBoolean());
                     break;
+                case "desktop.storage.choose":
+                    ChooseStorageDirectory();
+                    break;
+                case "desktop.storage.migrate" when message.RootElement.TryGetProperty("targetPath", out var targetPathProperty):
+                    _ = RequestStorageMigrationAsync(targetPathProperty.GetString());
+                    break;
             }
         }
         catch (JsonException)
@@ -283,9 +299,42 @@ public partial class MainWindow : Window
         {
             type = "desktop.state",
             available = true,
-            memoryOverlayEnabled = _desktopSettings.MemoryOverlayEnabled
+            memoryOverlayEnabled = _desktopSettings.MemoryOverlayEnabled,
+            storagePath = _storagePath,
+            storageMigrationAvailable = !_storagePathManagedByEnvironment,
+            storagePathManagedByEnvironment = _storagePathManagedByEnvironment
         }));
     }
+
+    private void ChooseStorageDirectory()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "选择新的 AiDataGateway 数据库目录",
+            InitialDirectory = Directory.Exists(_storagePath) ? Path.GetDirectoryName(_storagePath) : null,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        PostDesktopMessage(new { type = "desktop.storage.selection", path = dialog.FolderName });
+    }
+
+    private async Task RequestStorageMigrationAsync(string? targetPath)
+    {
+        if (string.IsNullOrWhiteSpace(targetPath))
+        {
+            PostDesktopMessage(new { type = "desktop.storage.migrationResult", success = false, message = "请选择新的数据库目录。" });
+            return;
+        }
+
+        SetStatus("正在迁移数据库并准备重启…", Amber);
+        var error = await _migrateStorageAsync(targetPath);
+        if (error is null) return;
+        SetStatus("数据库迁移未执行", Red);
+        PostDesktopMessage(new { type = "desktop.storage.migrationResult", success = false, message = error });
+    }
+
+    private void PostDesktopMessage(object message) =>
+        WebView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(message));
 
     private void SetMemoryOverlayEnabled(bool enabled)
     {

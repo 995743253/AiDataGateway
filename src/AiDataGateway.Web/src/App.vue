@@ -122,7 +122,7 @@
 
           <el-tab-pane v-if="canOperate && isPageOpen('projects')" label="项目管理" name="projects">
             <div class="toolbar"><div><h3>项目资源聚合</h3><p>通过唯一项目编号聚合数据库、日志源和服务器监控节点，供页面及 AI 统一解析。</p></div><el-button type="primary" @click="openProject()">新增项目</el-button></div>
-            <el-table :data="projects" stripe border>
+            <el-table :data="pagedProjects" stripe border>
               <el-table-column prop="code" label="项目编号" min-width="140" />
               <el-table-column prop="name" label="项目名称" min-width="160" />
               <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
@@ -132,11 +132,12 @@
               <el-table-column label="状态" width="90"><template #default="s"><el-tag :type="s.row.enabled ? 'success' : 'info'">{{ s.row.enabled ? '启用' : '禁用' }}</el-tag></template></el-table-column>
               <el-table-column label="操作" width="170"><template #default="s"><el-button size="small" @click="openProject(s.row)">编辑</el-button><el-button size="small" type="danger" @click="deleteProject(s.row)">删除</el-button></template></el-table-column>
             </el-table>
+            <el-pagination class="pagination-panel element-pagination" v-model:current-page="projectPage" v-model:page-size="projectPageSize" :page-sizes="pageSizeOptions" :total="projects.length" layout="total, sizes, prev, pager, next, jumper" background />
           </el-tab-pane>
 
           <el-tab-pane v-if="canOperate && isPageOpen('datasources')" label="数据源" name="datasources">
             <div class="toolbar"><div><h3>多数据库连接</h3><p>管理 AI 可以访问的数据库及审批模式。</p></div><el-button type="primary" @click="openDataSource()">新增数据源</el-button></div>
-            <el-table :data="dataSources" stripe>
+            <el-table :data="pagedDataSources" stripe>
               <el-table-column prop="name" label="名称" min-width="150" />
               <el-table-column prop="key" label="标识" min-width="140" />
               <el-table-column prop="provider" label="类型" width="110"><template #default="s">{{ providerName(s.row.provider) }}</template></el-table-column>
@@ -146,11 +147,12 @@
               <el-table-column label="表黑名单" width="110"><template #default="s"><el-tag v-if="s.row.blockedTables?.length" type="danger" effect="plain">{{ s.row.blockedTables.length }} 张表</el-tag><span v-else>—</span></template></el-table-column>
               <el-table-column label="操作" width="290"><template #default="s"><el-button size="small" @click="testDataSource(s.row)">测试</el-button><el-button size="small" @click="openDataSource(s.row)">编辑</el-button><el-button size="small" type="primary" plain @click="openDataSourceApprovals(s.row)">审批记录</el-button><el-button size="small" type="danger" @click="deleteDataSource(s.row)">删除</el-button></template></el-table-column>
             </el-table>
+            <el-pagination class="pagination-panel element-pagination" v-model:current-page="dataSourcePage" v-model:page-size="dataSourcePageSize" :page-sizes="pageSizeOptions" :total="dataSources.length" layout="total, sizes, prev, pager, next, jumper" background />
           </el-tab-pane>
 
           <el-tab-pane v-if="canOperate && isPageOpen('logsources')" label="日志源" name="logsources">
             <div class="toolbar"><div><h3>日志采集源</h3><p>支持网关本机 NLog、Seq API，以及安装在远端服务器上的采集 Agent。</p></div><el-button type="primary" @click="openLogSource()">新增日志源</el-button></div>
-            <el-table :data="logSources" stripe border>
+            <el-table :data="pagedLogSources" stripe border>
               <el-table-column prop="name" label="名称" min-width="160" />
               <el-table-column prop="key" label="日志标识" min-width="140" />
               <el-table-column label="类型" width="120"><template #default="s"><el-tag :type="s.row.type === 2 ? 'warning' : 'primary'">{{ logSourceTypeName(s.row.type) }}</el-tag></template></el-table-column>
@@ -159,6 +161,7 @@
               <el-table-column label="状态" width="90"><template #default="s"><el-tag :type="s.row.enabled ? 'success' : 'info'">{{ s.row.enabled ? '启用' : '禁用' }}</el-tag></template></el-table-column>
               <el-table-column label="操作" width="290"><template #default="s"><el-button size="small" @click="testLogSource(s.row)">测试</el-button><el-button size="small" @click="openLogSource(s.row)">编辑</el-button><el-button size="small" type="primary" plain @click="openLogSourceLogs(s.row)">应用日志</el-button><el-button size="small" type="danger" @click="deleteLogSource(s.row)">删除</el-button></template></el-table-column>
             </el-table>
+            <el-pagination class="pagination-panel element-pagination" v-model:current-page="logSourcePage" v-model:page-size="logSourcePageSize" :page-sizes="pageSizeOptions" :total="logSources.length" layout="total, sizes, prev, pager, next, jumper" background />
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewLogs && isPageOpen('applicationlogs')" label="应用日志" name="applicationlogs">
@@ -195,7 +198,7 @@
               <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="!applicationLogsLoading && applicationLogs.length === 0" description="请选择日志源并查询" />
-            <div class="pagination-panel"><span class="pagination-summary">当前第 {{ applicationLogPage }} 页，共返回 {{ applicationLogs.length }} 条<span v-if="applicationLogTotal">，查询窗口 {{ applicationLogTotal }} 条</span></span><div class="pagination-controls"><el-select v-model="applicationLogPageSize" class="page-size-select" @change="applicationLogSizeChanged"><el-option v-for="size in [20, 50, 100, 200]" :key="size" :label="`${size} 条`" :value="size" /></el-select><el-button :disabled="applicationLogPage <= 1" @click="changeApplicationLogPage(applicationLogPage - 1)">上一页</el-button><strong class="page-indicator">第 {{ applicationLogPage }} 页</strong><el-button type="primary" plain :disabled="!applicationLogHasNext" @click="changeApplicationLogPage(applicationLogPage + 1)">下一页</el-button></div></div>
+            <el-pagination class="pagination-panel element-pagination" v-model:current-page="applicationLogPage" v-model:page-size="applicationLogPageSize" :page-sizes="[20, 50, 100, 200]" :total="applicationLogPaginationTotal" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadApplicationLogs" @size-change="applicationLogSizeChanged" />
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewLogs && isPageOpen('realtimelogs')" label="实时日志" name="realtimelogs">
@@ -210,13 +213,14 @@
               </div>
             </div>
             <el-alert v-if="realtimeLogError" :title="realtimeLogError" type="warning" show-icon :closable="false" class="log-warning" />
-            <el-table :data="realtimeLogs" stripe border max-height="calc(100vh - 300px)" class="paged-table realtime-log-table" @row-dblclick="openApplicationLog">
+            <el-table :data="pagedRealtimeLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table realtime-log-table" @row-dblclick="openApplicationLog">
               <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
               <el-table-column prop="message" label="消息" min-width="420" show-overflow-tooltip />
               <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="!realtimeLogs.length" :description="realtimeLogConnected ? '连接正常，正在等待新日志…' : realtimeLogConnecting ? '正在建立实时连接…' : '请选择日志源并点击“开始接收”'" />
+            <el-pagination v-if="realtimeLogs.length" class="pagination-panel element-pagination" v-model:current-page="realtimeLogPage" v-model:page-size="realtimeLogPageSize" :page-sizes="[20, 50, 100]" :total="realtimeLogs.length" layout="total, sizes, prev, pager, next" background />
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewMetrics && isPageOpen('monitoring')" label="服务器监控" name="monitoring">
@@ -227,12 +231,13 @@
             <div class="monitor-layout">
               <el-card class="monitor-target-panel" shadow="never">
                 <template #header><div class="panel-heading"><strong>监控节点</strong><el-tag effect="plain">{{ onlineMonitorCount }} 在线</el-tag></div></template>
-                <button v-for="target in monitorTargets" :key="target.id" type="button" class="monitor-target-item" :class="{ active: selectedMonitorTargetId === target.id }" @click="selectMonitorTarget(target)">
+                <button v-for="target in pagedMonitorTargets" :key="target.id" type="button" class="monitor-target-item" :class="{ active: selectedMonitorTargetId === target.id }" @click="selectMonitorTarget(target)">
                   <span class="target-status" :class="{ online: target.online }" />
                   <span class="target-copy"><strong>{{ target.name }}</strong><small>{{ target.hostName || target.key }} · {{ monitorTargetTypeName(target.type) }}</small></span>
                   <span class="target-cpu">{{ target.latest ? `${target.latest.cpuPercent.toFixed(1)}%` : '—' }}</span>
                 </button>
                 <el-empty v-if="monitorTargets.length === 0" description="暂无监控节点" :image-size="72" />
+                <el-pagination v-if="monitorTargets.length > monitorTargetPageSize" class="monitor-target-pagination" v-model:current-page="monitorTargetPage" :page-size="monitorTargetPageSize" :total="monitorTargets.length" layout="prev, pager, next" small background />
               </el-card>
 
               <div class="monitor-detail">
@@ -321,6 +326,7 @@
                     <el-table-column label="网络累计接收 / 发送" min-width="220"><template #default="s">{{ formatBytes(s.row.networkReceivedBytes) }} / {{ formatBytes(s.row.networkSentBytes) }}</template></el-table-column>
                     <el-table-column label="系统运行时间" min-width="140"><template #default="s">{{ formatDuration(s.row.systemUptimeSeconds) }}</template></el-table-column>
                   </el-table>
+                  <el-pagination class="pagination-panel element-pagination" v-model:current-page="metricSamplePage" v-model:page-size="metricSamplePageSize" :page-sizes="pageSizeOptions" :total="metricSampleTotal" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadMetricSamples" @size-change="metricSampleSizeChanged" />
                 </template>
                 <el-empty v-else description="请选择监控节点" />
               </div>
@@ -347,16 +353,7 @@
               <el-table-column label="操作" width="110"><template #default="s"><el-button size="small" type="primary" plain @click="openApproval(s.row)">查看详情</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="approvals.length === 0" description="暂无审批记录" />
-            <div class="pagination-panel">
-              <span class="pagination-summary">第 {{ approvalTotal ? (approvalPage - 1) * approvalPageSize + 1 : 0 }}–{{ Math.min(approvalPage * approvalPageSize, approvalTotal) }} 条，共 {{ approvalTotal }} 条</span>
-              <div class="pagination-controls">
-                <span class="page-size-label">每页</span>
-                <el-select v-model="approvalPageSize" class="page-size-select" @change="approvalSizeChanged"><el-option v-for="size in [10, 20, 50, 100]" :key="size" :label="`${size} 条`" :value="size" /></el-select>
-                <el-button :disabled="approvalPage <= 1" @click="changeApprovalPage(approvalPage - 1)">上一页</el-button>
-                <strong class="page-indicator">第 {{ approvalPage }} / {{ approvalPageCount }} 页</strong>
-                <el-button type="primary" plain :disabled="approvalPage >= approvalPageCount" @click="changeApprovalPage(approvalPage + 1)">下一页</el-button>
-              </div>
-            </div>
+            <el-pagination class="pagination-panel element-pagination" v-model:current-page="approvalPage" v-model:page-size="approvalPageSize" :page-sizes="pageSizeOptions" :total="approvalTotal" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadApprovals" @size-change="approvalSizeChanged" />
           </el-tab-pane>
 
           <el-tab-pane v-if="canViewLogs && isPageOpen('logs')" label="网关审计" name="logs">
@@ -374,16 +371,7 @@
               <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="auditLogs.length === 0" description="暂无运行日志" />
-            <div class="pagination-panel">
-              <span class="pagination-summary">第 {{ auditLogTotal ? (auditLogPage - 1) * auditLogPageSize + 1 : 0 }}–{{ Math.min(auditLogPage * auditLogPageSize, auditLogTotal) }} 条，共 {{ auditLogTotal }} 条</span>
-              <div class="pagination-controls">
-                <span class="page-size-label">每页</span>
-                <el-select v-model="auditLogPageSize" class="page-size-select" @change="auditLogSizeChanged"><el-option v-for="size in [10, 20, 50, 100]" :key="size" :label="`${size} 条`" :value="size" /></el-select>
-                <el-button :disabled="auditLogPage <= 1" @click="changeAuditLogPage(auditLogPage - 1)">上一页</el-button>
-                <strong class="page-indicator">第 {{ auditLogPage }} / {{ auditLogPageCount }} 页</strong>
-                <el-button type="primary" plain :disabled="auditLogPage >= auditLogPageCount" @click="changeAuditLogPage(auditLogPage + 1)">下一页</el-button>
-              </div>
-            </div>
+            <el-pagination class="pagination-panel element-pagination" v-model:current-page="auditLogPage" v-model:page-size="auditLogPageSize" :page-sizes="pageSizeOptions" :total="auditLogTotal" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadAuditLogs" @size-change="auditLogSizeChanged" />
           </el-tab-pane>
           <el-tab-pane v-if="isAdmin && isPageOpen('settings')" label="系统设置" name="settings">
           <section class="secondary-page">
@@ -397,6 +385,19 @@
               </el-form-item>
               <el-alert v-if="!desktopSettings.available" title="当前页面不在 AiDataGateway Windows 客户端中，桌面悬浮球不可用。" type="info" :closable="false" show-icon />
               <el-alert v-else :title="desktopSettings.memoryOverlayEnabled ? '内存悬浮球已显示在桌面。' : '内存悬浮球当前已关闭。'" :type="desktopSettings.memoryOverlayEnabled ? 'success' : 'info'" :closable="false" show-icon />
+            </el-form>
+          </el-card>
+          <el-card class="settings-card storage-migration-card" shadow="never">
+            <template #header><div><strong>软件数据库目录</strong><p class="settings-subtitle">迁移内置 SQLite 数据库、加密密钥和业务日志。迁移时会短暂关闭本地服务并自动重启软件。</p></div></template>
+            <el-form label-width="150px" class="settings-form">
+              <el-form-item label="当前目录"><el-input :model-value="desktopSettings.storagePath || '仅 Windows 客户端可查看'" readonly /></el-form-item>
+              <el-form-item label="迁移到">
+                <div class="storage-path-picker"><el-input v-model="storageMigrationTarget" placeholder="请选择新的数据库目录" readonly /><el-button :disabled="!desktopSettings.storageMigrationAvailable || storageMigrationBusy" @click="chooseStorageDirectory">选择目录</el-button></div>
+                <span class="inline-help">请选择或新建一个空目录。成功后原目录会保留为备份，不会自动删除。</span>
+              </el-form-item>
+              <el-alert v-if="desktopSettings.storagePathManagedByEnvironment" title="当前路径由 AI_GATEWAY_STORAGE_PATH 环境变量管理，不能在软件内迁移。" type="warning" :closable="false" show-icon />
+              <el-alert v-else-if="!desktopSettings.available" title="数据库迁移仅能从 AiDataGateway Windows 客户端执行。" type="info" :closable="false" show-icon />
+              <div class="settings-actions"><el-button type="primary" :loading="storageMigrationBusy" :disabled="!desktopSettings.storageMigrationAvailable || !storageMigrationTarget" @click="migrateStorage">迁移并重启</el-button></div>
             </el-form>
           </el-card>
           <el-card class="settings-card" shadow="never">
@@ -421,23 +422,25 @@
           <el-tab-pane v-if="isAdmin && isPageOpen('users')" label="用户管理" name="users">
           <section class="secondary-page">
           <div class="toolbar"><div><h2>用户管理</h2><p>管理本地后台账号、状态和角色；有历史记录的用户应禁用而不是删除。</p></div><el-button type="primary" @click="openUserDialog()">新增用户</el-button></div>
-          <el-table :data="users" stripe>
+          <el-table :data="pagedUsers" stripe>
             <el-table-column prop="userName" label="用户名" /><el-table-column prop="displayName" label="显示名称" /><el-table-column prop="email" label="邮箱" min-width="200" />
             <el-table-column label="角色" min-width="180"><template #default="s">{{ s.row.roles.join(', ') }}</template></el-table-column>
             <el-table-column label="状态" width="100"><template #default="s"><el-tag :type="s.row.isEnabled?'success':'danger'">{{ s.row.isEnabled?'启用':'禁用' }}</el-tag></template></el-table-column>
             <el-table-column label="操作" width="170"><template #default="s"><el-button size="small" @click="openUserDialog(s.row)">编辑</el-button><el-button size="small" type="danger" :disabled="s.row.id === user.id" @click="deleteUser(s.row)">删除</el-button></template></el-table-column>
           </el-table>
+          <el-pagination class="pagination-panel element-pagination" v-model:current-page="userPage" v-model:page-size="userPageSize" :page-sizes="pageSizeOptions" :total="users.length" layout="total, sizes, prev, pager, next, jumper" background />
           </section>
           </el-tab-pane>
 
           <el-tab-pane v-if="isAdmin && isPageOpen('clients')" label="OAuth2 客户端" name="clients">
           <section class="secondary-page">
           <div class="toolbar"><div><h2>OAuth2 客户端</h2><p>客户端名称和权限可随时调整；修改权限后已签发 Token 会立即撤销。</p></div><el-button type="primary" @click="openClientDialog()">创建客户端</el-button></div>
-          <el-table :data="clients" stripe>
+          <el-table :data="pagedClients" stripe>
             <el-table-column prop="displayName" label="名称" min-width="180" /><el-table-column prop="clientId" label="Client ID" min-width="300" />
             <el-table-column label="权限" min-width="360"><template #default="s"><div class="permission-list"><el-tag v-for="scope in s.row.scopes" :key="scope" effect="plain">{{ oauthScopeName(scope) }}</el-tag><span v-if="!s.row.scopes?.length">无业务权限</span></div></template></el-table-column>
             <el-table-column label="操作" width="180"><template #default="s"><el-button size="small" @click="openClientDialog(s.row)">编辑权限</el-button><el-button size="small" type="danger" @click="deleteClient(s.row)">吊销删除</el-button></template></el-table-column>
           </el-table>
+          <el-pagination class="pagination-panel element-pagination" v-model:current-page="clientPage" v-model:page-size="clientPageSize" :page-sizes="pageSizeOptions" :total="clients.length" layout="total, sizes, prev, pager, next, jumper" background />
           </section>
           </el-tab-pane>
         </el-tabs>
@@ -542,7 +545,7 @@
             <el-descriptions-item v-if="selectedApplicationLog.exception" label="异常" :span="2"><pre class="inline-exception">{{ selectedApplicationLog.exception }}</pre></el-descriptions-item>
           </el-descriptions>
           <div class="detail-section"><h4>消息</h4><pre class="log-detail">{{ selectedApplicationLog.message || '—' }}</pre></div>
-          <div class="detail-section"><h4>结构化属性</h4><el-table :data="applicationLogProperties" stripe border max-height="340"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><pre class="property-value">{{ formatCell(s.row.value) }}</pre></template></el-table-column></el-table></div>
+          <div class="detail-section"><h4>结构化属性</h4><el-table :data="pagedApplicationLogProperties" stripe border max-height="340"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><pre class="property-value">{{ formatCell(s.row.value) }}</pre></template></el-table-column></el-table><el-pagination v-if="applicationLogProperties.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="applicationLogPropertyPage" :page-size="detailPageSize" :total="applicationLogProperties.length" layout="total, prev, pager, next" background /></div>
           <div class="detail-section"><h4>原始记录</h4><pre class="log-detail">{{ selectedApplicationLog.rawText }}</pre></div>
         </div>
         <template #footer><el-button @click="applicationLogDialog=false">关闭</el-button></template>
@@ -578,10 +581,11 @@
           <div v-if="selectedLogDetail.sql" class="detail-section"><h4>入参 SQL</h4><pre class="sql-block">{{ selectedLogDetail.sql }}</pre></div>
           <div v-if="Array.isArray(selectedLogDetail.rows)" class="detail-section">
             <h4>查询结果（{{ selectedLogDetail.rows.length }} 行）</h4>
-            <el-table :data="selectedLogDetail.rows" stripe border max-height="420" class="query-result-table">
+            <el-table :data="pagedSelectedLogRows" stripe border max-height="420" class="query-result-table">
               <el-table-column v-for="column in selectedLogColumns" :key="column" :label="column" min-width="150" show-overflow-tooltip><template #default="s">{{ formatCell(s.row[column]) }}</template></el-table-column>
             </el-table>
             <el-empty v-if="selectedLogDetail.rows.length === 0" description="查询结果为空" />
+            <el-pagination v-if="selectedLogDetail.rows.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="selectedLogRowPage" :page-size="detailPageSize" :total="selectedLogDetail.rows.length" layout="total, prev, pager, next" background />
           </div>
           <div v-if="selectedLogDetail.raw" class="detail-section"><h4>历史日志详情</h4><pre class="log-detail">{{ selectedLogDetail.raw }}</pre></div>
         </div>
@@ -626,21 +630,23 @@ export default {
     },
     loginForm: { userName: 'admin', password: '', rememberMe: true },
     dataSources: [], projects: [], logSources: [], monitorTargets: [], metricSamples: [], metricTrendSamples: [], metricCatalog: [], metricCatalogDefaultKeys: [], metricCatalogRequiredKeys: [], approvals: [], auditLogs: [], applicationLogs: [], users: [], clients: [], roles: [],
+    pageSizeOptions: [10, 20, 50, 100], projectPage: 1, projectPageSize: 20, dataSourcePage: 1, dataSourcePageSize: 20, logSourcePage: 1, logSourcePageSize: 20, userPage: 1, userPageSize: 20, clientPage: 1, clientPageSize: 20,
+    monitorTargetPage: 1, monitorTargetPageSize: 8,
     approvalFilter: 'all', approvalKeyword: '', approvalDataSourceFilter: null, approvalPage: 1, approvalPageSize: 20, approvalTotal: 0, approvalAllTotal: 0, pendingApprovalTotal: 0,
     logKeyword: '', logOutcome: '', auditLogPage: 1, auditLogPageSize: 20, auditLogTotal: 0, auditLogAllTotal: 0,
     dataSourceDialog: false, editingDataSource: null, dataSourceForm: {},
     projectDialog: false, editingProject: null, projectForm: {},
     logSourceDialog: false, editingLogSource: null, logSourceForm: {},
     monitorTargetDialog: false, editingMonitorTarget: null, monitorTargetForm: {}, monitorCredentialDialog: false, monitorCredential: null,
-    selectedMonitorTargetId: '', monitorLoading: false, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
+    selectedMonitorTargetId: '', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
     applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
-    realtimeLogs: [], realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
-    applicationLogDialog: false, selectedApplicationLog: null,
-    approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null,
+    realtimeLogs: [], realtimeLogPage: 1, realtimeLogPageSize: 50, realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
+    applicationLogDialog: false, selectedApplicationLog: null, applicationLogPropertyPage: 1,
+    approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null, selectedLogRowPage: 1, detailPageSize: 20,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
     clientDialog: false, editingClient: null, clientForm: { displayName: '', scopes: [] },
     maintenanceSettings: { cleanupEnabled: true, retentionDays: 3, cleanupTimeLocal: '03:00', approvalExpirationMinutes: 15, lastCleanupAtUtc: null, lastCleanupSummary: null },
-    desktopSettings: { available: false, memoryOverlayEnabled: false }, desktopMessageHandler: null,
+    desktopSettings: { available: false, memoryOverlayEnabled: false, storagePath: '', storageMigrationAvailable: false, storagePathManagedByEnvironment: false }, desktopMessageHandler: null, storageMigrationTarget: '', storageMigrationBusy: false,
     providers: [{ value: 1, label: 'SQL Server', port: 1433 }, { value: 2, label: 'MySQL', port: 3306 }, { value: 3, label: 'PostgreSQL', port: 5432 }, { value: 4, label: 'SQLite', port: 1 }, { value: 5, label: 'Oracle', port: 1521 }, { value: 6, label: 'MariaDB', port: 3306 }, { value: 7, label: '达梦 DM8', port: 5236 }, { value: 8, label: 'Firebird', port: 3050 }],
     accessModes: [{ value: 0, label: '禁用' }, { value: 1, label: '只读' }, { value: 2, label: '写入需审批' }, { value: 3, label: '开发模式' }],
     logLevels: ['Trace', 'Debug', 'Information', 'Info', 'Warning', 'Warn', 'Error', 'Fatal'],
@@ -655,6 +661,13 @@ export default {
     canViewMetrics () { return this.canViewLogs || this.user?.roles?.includes('Viewer') },
     approvalPageCount () { return Math.max(1, Math.ceil(this.approvalTotal / this.approvalPageSize)) },
     auditLogPageCount () { return Math.max(1, Math.ceil(this.auditLogTotal / this.auditLogPageSize)) },
+    pagedProjects () { return this.paginate(this.projects, this.projectPage, this.projectPageSize) },
+    pagedDataSources () { return this.paginate(this.dataSources, this.dataSourcePage, this.dataSourcePageSize) },
+    pagedLogSources () { return this.paginate(this.logSources, this.logSourcePage, this.logSourcePageSize) },
+    pagedUsers () { return this.paginate(this.users, this.userPage, this.userPageSize) },
+    pagedClients () { return this.paginate(this.clients, this.clientPage, this.clientPageSize) },
+    pagedRealtimeLogs () { return this.paginate(this.realtimeLogs, this.realtimeLogPage, this.realtimeLogPageSize) },
+    pagedMonitorTargets () { return this.paginate(this.monitorTargets, this.monitorTargetPage, this.monitorTargetPageSize) },
     selectedApplicationLogSource () { return this.logSources.find(item => item.id === this.applicationLogSourceId) },
     selectedRealtimeLogSource () { return this.logSources.find(item => item.id === this.realtimeLogSourceId) },
     selectedMonitorTarget () { return this.monitorTargets.find(item => item.id === this.selectedMonitorTargetId) },
@@ -763,13 +776,16 @@ export default {
       return `时间范围内 ${this.metricTrendSourceCount} 条原始记录，显示 ${this.metricTrendSamples.length} 个趋势点，虚线标注最高值和最低值`
     },
     applicationLogHasNext () { return this.applicationLogPartial || this.applicationLogs.length >= this.applicationLogPageSize },
+    applicationLogPaginationTotal () { return this.applicationLogPartial ? Math.max(this.applicationLogTotal, this.applicationLogPage * this.applicationLogPageSize + 1) : this.applicationLogTotal },
     applicationLogProperties () { return Object.entries(this.selectedApplicationLog?.properties || {}).map(([key, value]) => ({ key, value })) },
+    pagedApplicationLogProperties () { return this.paginate(this.applicationLogProperties, this.applicationLogPropertyPage, this.detailPageSize) },
     userInitials () { return (this.user?.displayName || this.user?.userName || 'U').trim().slice(0, 2).toUpperCase() },
     selectedLogDetail () { return this.parseLogDetail(this.selectedLog?.detail) },
     selectedLogColumns () {
       if (Array.isArray(this.selectedLogDetail.columns) && this.selectedLogDetail.columns.length) return this.selectedLogDetail.columns
       return Object.keys(this.selectedLogDetail.rows?.[0] || {})
-    }
+    },
+    pagedSelectedLogRows () { return this.paginate(this.selectedLogDetail.rows || [], this.selectedLogRowPage, this.detailPageSize) }
   },
   async created () { this.applyUiTheme(); this.initializeDesktopBridge(); await this.bootstrap() },
   beforeUnmount () { this.disconnectEvents(); this.stopRealtimeLogStream(); this.disposeDesktopBridge() },
@@ -786,12 +802,40 @@ export default {
       this.desktopMessageHandler = null
     },
     handleDesktopMessage (event) {
-      if (event.data?.type !== 'desktop.state') return
-      this.desktopSettings = { available: event.data.available === true, memoryOverlayEnabled: event.data.memoryOverlayEnabled === true }
+      if (event.data?.type === 'desktop.state') {
+        this.desktopSettings = {
+          available: event.data.available === true,
+          memoryOverlayEnabled: event.data.memoryOverlayEnabled === true,
+          storagePath: event.data.storagePath || '',
+          storageMigrationAvailable: event.data.storageMigrationAvailable === true,
+          storagePathManagedByEnvironment: event.data.storagePathManagedByEnvironment === true
+        }
+      } else if (event.data?.type === 'desktop.storage.selection') {
+        this.storageMigrationTarget = event.data.path || ''
+      } else if (event.data?.type === 'desktop.storage.migrationResult') {
+        this.storageMigrationBusy = false
+        if (event.data.success !== true) ElMessage.error(event.data.message || '数据库迁移失败')
+      }
     },
     setMemoryOverlayEnabled (enabled) {
       if (!this.desktopSettings.available || !window.chrome?.webview) return
       window.chrome.webview.postMessage({ type: 'desktop.memoryOverlay.set', enabled: enabled === true })
+    },
+    chooseStorageDirectory () {
+      if (!this.desktopSettings.storageMigrationAvailable || !window.chrome?.webview) return
+      window.chrome.webview.postMessage({ type: 'desktop.storage.choose' })
+    },
+    async migrateStorage () {
+      if (!this.desktopSettings.storageMigrationAvailable || !this.storageMigrationTarget || !window.chrome?.webview) return
+      try {
+        await ElMessageBox.confirm('迁移时本地服务会短暂停止，完成后软件自动重启。原目录将保留为备份，是否继续？', '迁移软件数据库', { type: 'warning', confirmButtonText: '迁移并重启' })
+      } catch (e) { if (!this.isCanceled(e)) this.error(e); return }
+      this.storageMigrationBusy = true
+      window.chrome.webview.postMessage({ type: 'desktop.storage.migrate', targetPath: this.storageMigrationTarget })
+    },
+    paginate (items, page, pageSize) {
+      const start = (Math.max(1, page) - 1) * pageSize
+      return (items || []).slice(start, start + pageSize)
     },
     async bootstrap () {
       try {
@@ -866,10 +910,11 @@ export default {
       if (this.activeTab === 'users') await this.loadUsers()
       if (this.activeTab === 'clients') await this.loadClients()
     },
-    async loadDataSources () { this.dataSources = (await axios.get('/api/admin/datasources')).data },
-    async loadProjects () { this.projects = (await axios.get('/api/admin/projects')).data },
+    async loadDataSources () { this.dataSources = (await axios.get('/api/admin/datasources')).data; this.dataSourcePage = this.clampPage(this.dataSourcePage, this.dataSources.length, this.dataSourcePageSize) },
+    async loadProjects () { this.projects = (await axios.get('/api/admin/projects')).data; this.projectPage = this.clampPage(this.projectPage, this.projects.length, this.projectPageSize) },
     async loadLogSources () {
       this.logSources = (await axios.get(this.canOperate ? '/api/admin/log-sources' : '/api/log-sources')).data
+      this.logSourcePage = this.clampPage(this.logSourcePage, this.logSources.length, this.logSourcePageSize)
       const enabled = this.logSources.filter(item => item.enabled)
       if (!enabled.some(item => item.id === this.applicationLogSourceId)) this.applicationLogSourceId = enabled[0]?.id || ''
       if (!enabled.some(item => item.id === this.realtimeLogSourceId)) this.realtimeLogSourceId = enabled.find(item => item.type === 2)?.id || enabled[0]?.id || ''
@@ -877,6 +922,7 @@ export default {
     async loadMonitorTargets () {
       if (!this.metricCatalog.length) await this.loadMetricCatalog()
       this.monitorTargets = (await axios.get('/api/monitoring/targets')).data
+      this.monitorTargetPage = this.clampPage(this.monitorTargetPage, this.monitorTargets.length, this.monitorTargetPageSize)
       if (!this.monitorTargets.some(item => item.id === this.selectedMonitorTargetId)) this.selectedMonitorTargetId = this.monitorTargets[0]?.id || ''
       this.ensureTrendMetric()
     },
@@ -947,8 +993,8 @@ export default {
       await this.goTo('approvals')
     },
     async openLogPage () { if (!this.canViewLogs) return; this.logKeyword = ''; this.logOutcome = ''; this.auditLogPage = 1; await this.goTo('logs') },
-    async loadUsers () { const [users, roles] = await Promise.all([axios.get('/api/admin/users'), axios.get('/api/admin/roles')]); this.users = users.data; this.roles = roles.data },
-    async loadClients () { this.clients = (await axios.get('/api/admin/oauth-clients')).data },
+    async loadUsers () { const [users, roles] = await Promise.all([axios.get('/api/admin/users'), axios.get('/api/admin/roles')]); this.users = users.data; this.roles = roles.data; this.userPage = this.clampPage(this.userPage, this.users.length, this.userPageSize) },
+    async loadClients () { this.clients = (await axios.get('/api/admin/oauth-clients')).data; this.clientPage = this.clampPage(this.clientPage, this.clients.length, this.clientPageSize) },
     async loadMaintenanceSettings () { this.maintenanceSettings = (await axios.get('/api/settings/maintenance')).data },
     connectEvents () {
       this.disconnectEvents()
@@ -1030,20 +1076,28 @@ export default {
     },
     async testLogSource (row) { try { const response = await axios.post(`/api/admin/log-sources/${row.id}/test`); ElMessage({ type: response.data.success ? 'success' : 'error', message: response.data.message, duration: 6000 }) } catch (e) { this.error(e) } },
     async deleteLogSource (row) { try { await ElMessageBox.confirm(`确定删除日志源 ${row.name}？不会删除本地日志文件或 Seq 数据。`, '删除日志源', { type: 'warning' }); await axios.delete(`/api/admin/log-sources/${row.id}`); await this.loadResourceCatalog(); ElMessage.success('日志源已删除') } catch (e) { if (!this.isCanceled(e)) this.error(e) } },
-    async selectMonitorTarget (target) { this.selectedMonitorTargetId = target.id; this.metricTrendMode = 'recent'; this.metricHoverPoint = null; this.ensureTrendMetric(); await this.loadMetricSamples() },
+    async selectMonitorTarget (target) { this.selectedMonitorTargetId = target.id; this.metricSamplePage = 1; this.metricTrendMode = 'recent'; this.metricHoverPoint = null; this.ensureTrendMetric(); await this.loadMetricSamples() },
     async loadMetricSamples () {
-      if (!this.selectedMonitorTargetId) { this.metricSamples = []; return }
+      if (!this.selectedMonitorTargetId) { this.metricSamples = []; this.metricSampleTotal = 0; return }
       this.metricHoverPoint = null
       this.monitorLoading = true
       try {
-        this.metricSamples = (await axios.get(`/api/monitoring/targets/${this.selectedMonitorTargetId}/samples`, { params: { page: 1, pageSize: 120 } })).data.items
-        if (this.metricTrendMode === 'recent') { this.metricTrendSamples = this.metricSamples; this.metricTrendSourceCount = this.metricSamples.length }
+        const requests = [axios.get(`/api/monitoring/targets/${this.selectedMonitorTargetId}/samples`, { params: { page: this.metricSamplePage, pageSize: this.metricSamplePageSize } })]
+        if (this.metricTrendMode === 'recent') requests.push(axios.get(`/api/monitoring/targets/${this.selectedMonitorTargetId}/samples`, { params: { page: 1, pageSize: 120 } }))
+        const responses = await Promise.all(requests)
+        this.metricSamples = responses[0].data.items
+        this.metricSampleTotal = responses[0].data.total
+        if (this.metricTrendMode === 'recent') {
+          this.metricTrendSamples = responses[1].data.items
+          this.metricTrendSourceCount = responses[1].data.total
+        }
       } catch (e) { this.error(e) } finally { this.monitorLoading = false }
     },
+    async metricSampleSizeChanged () { this.metricSamplePage = 1; await this.loadMetricSamples() },
     async setMetricTrendMode (mode) {
       this.metricTrendMode = mode
       this.metricHoverPoint = null
-      if (mode === 'recent') { this.metricTrendSamples = this.metricSamples; this.metricTrendSourceCount = this.metricSamples.length } else await this.loadHistoricalTrend()
+      if (mode === 'recent') await this.loadMetricSamples(); else await this.loadHistoricalTrend()
     },
     async loadHistoricalTrend () {
       if (!this.selectedMonitorTargetId || !Array.isArray(this.metricHistoryRange) || this.metricHistoryRange.length !== 2) return
@@ -1168,14 +1222,15 @@ export default {
         if (!item.id || this.realtimeLogs.some(value => value.id === item.id)) return
         this.realtimeLogs.unshift(item)
         if (this.realtimeLogs.length > 500) this.realtimeLogs.length = 500
+        this.realtimeLogPage = 1
       }
       stream.onerror = () => { if (this.realtimeLogEventSource === stream) { this.stopRealtimeLogStream(); this.realtimeLogError = '实时日志连接已断开，请检查日志源连接和权限后重新开始。' } }
     },
     stopRealtimeLogStream () { this.realtimeLogAttempt++; this.realtimeLogEventSource?.close(); this.realtimeLogEventSource = null; this.realtimeLogConnected = false; this.realtimeLogConnecting = false },
-    clearRealtimeLogs () { this.realtimeLogs = []; this.realtimeLogError = null },
+    clearRealtimeLogs () { this.realtimeLogs = []; this.realtimeLogPage = 1; this.realtimeLogError = null },
     async applicationLogSizeChanged () { this.applicationLogPage = 1; if (this.applicationLogs.length) await this.loadApplicationLogs() },
     async changeApplicationLogPage (page) { if (page < 1 || page === this.applicationLogPage) return; this.applicationLogPage = page; await this.loadApplicationLogs() },
-    openApplicationLog (row) { this.selectedApplicationLog = row; this.applicationLogDialog = true },
+    openApplicationLog (row) { this.selectedApplicationLog = row; this.applicationLogPropertyPage = 1; this.applicationLogDialog = true },
     logSourceTypeName (type) { return ({ 1: '本地 NLog', 2: 'Seq', 3: '远程 Agent' })[type] || type },
     logLevelType (level) { const value = String(level || '').toLowerCase(); if (value === 'fatal' || value === 'error') return 'danger'; if (value === 'warn' || value === 'warning') return 'warning'; if (value === 'debug' || value === 'trace') return 'info'; return 'success' },
     async openApproval (row) { try { this.selectedApproval = (await axios.get(`/api/approvals/${row.id}`)).data; this.reviewComment = ''; this.approvalDialog = true } catch (e) { this.error(e) } },
@@ -1184,7 +1239,7 @@ export default {
       this.saving = true
       try { await axios.post(`/api/approvals/${this.selectedApproval.id}/review`, { approved, comment: this.reviewComment }); this.approvalDialog = false; await this.loadApprovals(); ElMessage.success(approved ? '已批准并执行' : '已拒绝') } catch (e) { this.error(e) } finally { this.saving = false }
     },
-    openLog (row) { this.selectedLog = row; this.logDialog = true },
+    openLog (row) { this.selectedLog = row; this.selectedLogRowPage = 1; this.logDialog = true },
     parseLogDetail (detail) {
       if (!detail) return {}
       try {
@@ -1239,12 +1294,13 @@ export default {
       try { this.maintenanceSettings = (await axios.put('/api/settings/maintenance', { cleanupEnabled: this.maintenanceSettings.cleanupEnabled, retentionDays: this.maintenanceSettings.retentionDays, cleanupTimeLocal: this.maintenanceSettings.cleanupTimeLocal, approvalExpirationMinutes: this.maintenanceSettings.approvalExpirationMinutes })).data; ElMessage.success('系统设置已保存') } catch (e) { this.error(e) } finally { this.saving = false }
     },
     async cleanupNow () {
-      try { await ElMessageBox.confirm(`将删除 ${this.maintenanceSettings.retentionDays} 天以前的运行日志、审批记录和日志文件，是否继续？`, '立即清理', { type: 'warning' }) } catch (e) { if (!this.isCanceled(e)) this.error(e); return }
+      try { await ElMessageBox.confirm(`将删除 ${this.maintenanceSettings.retentionDays} 天以前的运行日志、审批记录、服务器指标和日志文件，是否继续？`, '立即清理', { type: 'warning' }) } catch (e) { if (!this.isCanceled(e)) this.error(e); return }
       this.saving = true
-      try { const result = (await axios.post('/api/settings/maintenance/cleanup-now')).data; await this.loadMaintenanceSettings(); ElMessage.success(`清理完成：日志 ${result.auditLogsDeleted} 条，审批 ${result.approvalRecordsDeleted} 条，文件 ${result.logFilesDeleted} 个`) } catch (e) { this.error(e) } finally { this.saving = false }
+      try { const result = (await axios.post('/api/settings/maintenance/cleanup-now')).data; await this.loadMaintenanceSettings(); ElMessage.success(`清理完成：日志 ${result.auditLogsDeleted} 条，审批 ${result.approvalRecordsDeleted} 条，指标 ${result.metricSamplesDeleted} 条，文件 ${result.logFilesDeleted} 个`) } catch (e) { this.error(e) } finally { this.saving = false }
     },
     formatDate (value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—' },
     shortId (value) { return value ? String(value).slice(0, 8) : '—' },
+    clampPage (page, total, pageSize) { return Math.min(Math.max(1, page), Math.max(1, Math.ceil(total / pageSize))) },
     approvalStatusName (status) { return ({ Pending: '待审批', Approved: '已批准', Rejected: '已拒绝', Executing: '执行中', Succeeded: '执行成功', Failed: '执行失败', Expired: '已过期' })[status] || status },
     approvalStatusType (status) { return ({ Pending: 'warning', Succeeded: 'success', Approved: 'primary', Rejected: 'danger', Failed: 'danger', Expired: 'info' })[status] || 'info' },
     riskType (risk) { return ({ Low: 'success', Medium: 'warning', High: 'danger', Critical: 'danger' })[risk] || 'info' },

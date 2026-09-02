@@ -163,6 +163,8 @@ button { font: inherit; }
 .secondary-page { padding-top: 2px; }
 .settings-card { max-width: 920px; }
 .settings-card + .settings-card { margin-top: 16px; }
+.storage-path-picker { display: flex; width: 100%; gap: 10px; }
+.storage-path-picker .el-input { flex: 1; }
 .desktop-feature-card { border-color: #d7e8f4; }
 .desktop-feature-card .el-card__header { background: linear-gradient(100deg, rgba(23, 105, 170, .08), rgba(31, 178, 120, .06)); }
 .settings-subtitle { margin: 8px 0 0; color: #778399; font-size: 13px; line-height: 1.6; }
@@ -342,6 +344,9 @@ button { font: inherit; }
 .query-result-table .cell { font-family: Consolas, "Courier New", monospace; }
 .paged-table { width: 100%; }
 .pagination-panel { position: sticky; bottom: 0; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px 16px; background: #fff; border: 1px solid #dcdfe6; border-top: 0; border-radius: 0 0 8px 8px; box-shadow: 0 -4px 12px rgba(23, 43, 77, .05); }
+.element-pagination { justify-content: flex-end; width: 100%; box-sizing: border-box; }
+.compact-pagination { position: static; min-height: 52px; margin-top: 0; }
+.monitor-target-pagination { justify-content: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--brand-border); }
 .pagination-summary { color: #606266; font-size: 13px; white-space: nowrap; }
 .pagination-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-left: auto; }
 .page-size-label { color: #606266; font-size: 13px; }
@@ -472,11 +477,17 @@ html.dark .el-table { --el-table-tr-bg-color: var(--brand-bg-panel); }
 .el-input__wrapper, .el-select__wrapper, .el-textarea__inner { border-radius: 7px; }
 .el-tag { border-radius: 6px; }
 .el-pagination .el-pager li { border-radius: 6px; }
-::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, .35); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-thumb:hover { background-color: rgba(100, 116, 139, .55); }
-html.dark ::-webkit-scrollbar-thumb { background-color: rgba(120, 145, 180, .4); }
+* { scrollbar-width: thin; scrollbar-color: rgba(53, 104, 143, .48) rgba(229, 237, 244, .5); }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: rgba(229, 237, 244, .48); border-radius: 999px; }
+::-webkit-scrollbar-thumb { min-height: 42px; background: linear-gradient(180deg, rgba(48, 128, 177, .62), rgba(47, 96, 139, .55)); border: 3px solid transparent; border-radius: 999px; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(28, 122, 180, .82), rgba(35, 82, 126, .76)); border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+.el-scrollbar__bar { right: 3px; bottom: 3px; }
+.el-scrollbar__thumb { background: linear-gradient(180deg, rgba(48, 128, 177, .72), rgba(47, 96, 139, .64)); opacity: .72; }
+html.dark * { scrollbar-color: rgba(100, 170, 218, .58) rgba(24, 38, 54, .55); }
+html.dark ::-webkit-scrollbar-track { background: rgba(24, 38, 54, .55); }
+html.dark ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(86, 165, 215, .68), rgba(61, 119, 169, .62)); border-color: transparent; background-clip: padding-box; }
 .auth-card { border-radius: 14px; }
 .metric > span { color: var(--brand-text-muted); font-size: 13px; }
 .toolbar h2, .toolbar h3 { letter-spacing: .2px; }

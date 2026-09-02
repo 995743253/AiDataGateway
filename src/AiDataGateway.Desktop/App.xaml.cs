@@ -1,5 +1,6 @@
 using System.Threading;
 using System.IO;
+using System.Diagnostics;
 using System.Windows;
 using AiDataGateway.Api;
 
@@ -9,6 +10,8 @@ public partial class App : System.Windows.Application
 {
     private Mutex? _singleInstance;
     private GatewayWebHost? _webHost;
+    private DesktopHostConfiguration? _hostConfiguration;
+    private bool _migrationInProgress;
 
     protected override void OnStartup(StartupEventArgs eventArgs)
     {
@@ -42,9 +45,67 @@ public partial class App : System.Windows.Application
         }
 
         _webHost = webHost;
-        var window = new MainWindow(webHost.BaseAddress, hostConfiguration.StoragePath);
+        _hostConfiguration = hostConfiguration;
+        var window = new MainWindow(
+            webHost.BaseAddress,
+            hostConfiguration.StoragePath,
+            hostConfiguration.StoragePathManagedByEnvironment,
+            MigrateStorageAsync);
         MainWindow = window;
         window.Show();
+    }
+
+    private async Task<string?> MigrateStorageAsync(string targetPath)
+    {
+        if (_migrationInProgress) return "数据库迁移正在进行，请勿重复提交。";
+        if (_hostConfiguration is null || _webHost is null) return "本地服务尚未准备好。";
+
+        var validationError = StorageMigrationService.Validate(
+            _hostConfiguration.StoragePath,
+            targetPath,
+            _hostConfiguration.StoragePathManagedByEnvironment);
+        if (validationError is not null) return validationError;
+
+        _migrationInProgress = true;
+        try
+        {
+            // SQLite and the DPAPI key ring must be closed before a consistent copy is made.
+            await _webHost.DisposeAsync();
+            _webHost = null;
+            StorageMigrationService.CopyAndSwitch(_hostConfiguration.StoragePath, targetPath, _hostConfiguration);
+            RestartApplication();
+            return null;
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                $"数据库迁移失败，原目录没有删除。程序将使用原配置重新启动。\n\n{exception.Message}",
+                "数据库迁移失败",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            RestartApplication();
+            return exception.Message;
+        }
+    }
+
+    private void RestartApplication()
+    {
+        var executablePath = Environment.ProcessPath;
+        try
+        {
+            _singleInstance?.ReleaseMutex();
+            _singleInstance?.Dispose();
+            _singleInstance = null;
+        }
+        catch (ApplicationException)
+        {
+            // The mutex may already have been released while the process is exiting.
+        }
+        if (!string.IsNullOrWhiteSpace(executablePath))
+        {
+            Process.Start(new ProcessStartInfo(executablePath) { UseShellExecute = true });
+        }
+        Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs eventArgs)

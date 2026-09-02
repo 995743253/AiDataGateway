@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version without the v prefix, for example 0.7.0
+        description: Version without the v prefix, for example 0.8.0
         required: true
-        default: 0.7.0
+        default: 0.8.0
   push:
     tags:
       - "v*"

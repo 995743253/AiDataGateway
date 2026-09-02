@@ -3,7 +3,7 @@ using System.IO;
 
 namespace AiDataGateway.Desktop;
 
-internal sealed record DesktopHostConfiguration(string StoragePath, string ListenAddress)
+internal sealed record DesktopHostConfiguration(string StoragePath, string ListenAddress, bool StoragePathManagedByEnvironment)
 {
     private const string ConfigurationFileName = "gateway.host.json";
 
@@ -25,7 +25,24 @@ internal sealed record DesktopHostConfiguration(string StoragePath, string Liste
             fileSettings?.ListenAddress,
             "127.0.0.1")!;
 
-        return new DesktopHostConfiguration(Path.GetFullPath(storagePath), listenAddress.Trim());
+        return new DesktopHostConfiguration(
+            Path.GetFullPath(storagePath),
+            listenAddress.Trim(),
+            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AI_GATEWAY_STORAGE_PATH")));
+    }
+
+    public static void SaveStoragePath(string applicationDirectory, string storagePath, string listenAddress)
+    {
+        var configurationPath = Path.Combine(Path.GetFullPath(applicationDirectory), ConfigurationFileName);
+        var temporaryPath = configurationPath + ".tmp";
+        var json = JsonSerializer.Serialize(new GatewayHostFileSettings
+        {
+            StoragePath = Path.GetFullPath(storagePath),
+            ListenAddress = listenAddress
+        }, new JsonSerializerOptions { WriteIndented = true });
+
+        File.WriteAllText(temporaryPath, json);
+        File.Move(temporaryPath, configurationPath, overwrite: true);
     }
 
     private static GatewayHostFileSettings? LoadFileSettings(string path)

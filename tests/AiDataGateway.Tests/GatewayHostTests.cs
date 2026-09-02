@@ -160,12 +160,35 @@ public sealed class GatewayHostTests
                 insertOldAudit.Parameters.AddWithValue("$id", Guid.NewGuid());
                 insertOldAudit.Parameters.AddWithValue("$created", DateTimeOffset.UtcNow.AddDays(-10));
                 await insertOldAudit.ExecuteNonQueryAsync();
+
+                await using var insertMetricSamples = gatewayConnection.CreateCommand();
+                insertMetricSamples.CommandText =
+                    """
+                    INSERT INTO GatewayServerMetricSamples
+                    (MonitorTargetId, CollectedAtUtc, CpuPercent, MemoryUsedBytes, MemoryTotalBytes, DiskUsedBytes, DiskTotalBytes, NetworkReceivedBytes, NetworkSentBytes, ProcessWorkingSetBytes, SystemUptimeSeconds, ExtendedMetricsJson)
+                    SELECT Id, $old, 10, 100, 1000, 200, 2000, 300, 400, 500, 600, '{}' FROM GatewayMonitorTargets WHERE Key = 'local';
+                    INSERT INTO GatewayServerMetricSamples
+                    (MonitorTargetId, CollectedAtUtc, CpuPercent, MemoryUsedBytes, MemoryTotalBytes, DiskUsedBytes, DiskTotalBytes, NetworkReceivedBytes, NetworkSentBytes, ProcessWorkingSetBytes, SystemUptimeSeconds, ExtendedMetricsJson)
+                    SELECT Id, $recent, 20, 100, 1000, 200, 2000, 300, 400, 500, 600, '{}' FROM GatewayMonitorTargets WHERE Key = 'local';
+                    """;
+                insertMetricSamples.Parameters.AddWithValue("$old", DateTimeOffset.UtcNow.AddDays(-10));
+                insertMetricSamples.Parameters.AddWithValue("$recent", DateTimeOffset.UtcNow);
+                Assert.Equal(2, await insertMetricSamples.ExecuteNonQueryAsync());
             }
 
             var cleanupResponse = await client.PostAsync("/api/settings/maintenance/cleanup-now", null);
             var cleanupResult = await cleanupResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(cleanupResponse.IsSuccessStatusCode, cleanupResult.ToString());
             Assert.Equal(1, cleanupResult.GetProperty("auditLogsDeleted").GetInt32());
+            Assert.Equal(1, cleanupResult.GetProperty("metricSamplesDeleted").GetInt32());
+
+            await using (var gatewayConnection = new SqliteConnection($"Data Source={Path.Combine(tempPath, "gateway.db")}"))
+            {
+                await gatewayConnection.OpenAsync();
+                await using var remainingMetrics = gatewayConnection.CreateCommand();
+                remainingMetrics.CommandText = "SELECT COUNT(*) FROM GatewayServerMetricSamples WHERE CpuPercent = 20";
+                Assert.Equal(1L, (long)(await remainingMetrics.ExecuteScalarAsync())!);
+            }
 
             var updateMaintenanceResponse = await client.PutAsJsonAsync("/api/settings/maintenance", new
             {
