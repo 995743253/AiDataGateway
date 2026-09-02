@@ -325,16 +325,15 @@ button { font: inherit; }
   flex-direction: column;
   min-width: 640px;
   min-height: 430px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 32px);
   height: min(78vh, 760px);
   overflow: hidden;
   resize: both;
 }
+.detail-window.is-fullscreen { resize: none; }
 .detail-window .el-dialog__header { flex: 0 0 auto; cursor: move; user-select: none; }
 .detail-window .el-dialog__body { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .detail-window .el-dialog__footer { flex: 0 0 auto; }
-.approval-detail-window { max-width: 1100px; }
+.approval-detail-window { min-width: 900px; }
 .approval-detail-window .el-dialog__body { display: flex; }
 .approval-detail-content { flex: 1 1 auto; width: 100%; min-height: 0; grid-template-rows: auto minmax(180px, 1fr); }
 .approval-detail-content.has-review-form { grid-template-rows: auto minmax(180px, 1.4fr) minmax(110px, .6fr); }

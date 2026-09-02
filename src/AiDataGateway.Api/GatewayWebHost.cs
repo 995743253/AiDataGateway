@@ -120,7 +120,19 @@ public sealed class GatewayWebHost : IAsyncDisposable
             context.Response.StatusCode = feature?.Error is KeyNotFoundException ? StatusCodes.Status404NotFound : StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { message = feature?.Error.Message ?? "Unexpected error." });
         }));
-        app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvider(webRoot) });
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(webRoot),
+            OnPrepareResponse = context =>
+            {
+                // index.html must revalidate or WebView2 serves a stale shell
+                // while the hashed asset filenames have already changed.
+                var headers = context.Context.Response.Headers;
+                headers.CacheControl = context.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+                    ? "no-cache"
+                    : "public,max-age=31536000,immutable";
+            }
+        });
         app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();

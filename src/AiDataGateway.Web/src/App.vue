@@ -541,7 +541,7 @@
       </el-dialog>
 
       <el-dialog v-model="applicationLogDialog" :fullscreen="logDetailMaximized" :draggable="!logDetailMaximized" width="90%" class="detail-window log-dialog" overflow>
-        <template #header><div class="dialog-header-row"><span class="dialog-header-title">应用日志完整数据</span><el-button class="dialog-max-button" link type="primary" @click="logDetailMaximized = !logDetailMaximized"><el-icon><FullScreen /></el-icon>{{ logDetailMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">应用日志完整数据</span><el-button class="dialog-max-button" link type="primary" @click="toggleDetailMax('logDetailMaximized')"><el-icon><FullScreen /></el-icon>{{ logDetailMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
         <div v-if="selectedApplicationLog" class="detail-dialog">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="事件 ID">{{ selectedApplicationLog.id }}</el-descriptions-item><el-descriptions-item label="时间">{{ formatDate(selectedApplicationLog.timestampUtc) }}</el-descriptions-item>
@@ -557,7 +557,7 @@
       </el-dialog>
 
       <el-dialog v-model="approvalDialog" :fullscreen="approvalMaximized" :draggable="!approvalMaximized" width="900px" class="detail-window approval-detail-window" overflow destroy-on-close>
-        <template #header><div class="dialog-header-row"><span class="dialog-header-title">SQL 审批详情</span><el-button class="dialog-max-button" link type="primary" @click="approvalMaximized = !approvalMaximized"><el-icon><FullScreen /></el-icon>{{ approvalMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">SQL 审批详情</span><el-button class="dialog-max-button" link type="primary" @click="toggleDetailMax('approvalMaximized')"><el-icon><FullScreen /></el-icon>{{ approvalMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
         <div v-if="selectedApproval" class="detail-dialog approval-detail-content" :class="{ 'has-review-form': selectedApproval.status === 'Pending' }">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="工单 ID">{{ selectedApproval.id }}</el-descriptions-item><el-descriptions-item label="状态"><el-tag :type="approvalStatusType(selectedApproval.status)">{{ approvalStatusName(selectedApproval.status) }}</el-tag></el-descriptions-item>
@@ -575,7 +575,7 @@
       </el-dialog>
 
       <el-dialog v-model="logDialog" :fullscreen="auditLogMaximized" :draggable="!auditLogMaximized" width="90%" class="detail-window log-dialog" overflow>
-        <template #header><div class="dialog-header-row"><span class="dialog-header-title">运行日志完整数据</span><el-button class="dialog-max-button" link type="primary" @click="auditLogMaximized = !auditLogMaximized"><el-icon><FullScreen /></el-icon>{{ auditLogMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">运行日志完整数据</span><el-button class="dialog-max-button" link type="primary" @click="toggleDetailMax('auditLogMaximized')"><el-icon><FullScreen /></el-icon>{{ auditLogMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
         <div v-if="selectedLog" class="detail-dialog">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="日志 ID">{{ selectedLog.id }}</el-descriptions-item><el-descriptions-item label="时间">{{ formatDate(selectedLog.createdAtUtc) }}</el-descriptions-item>
@@ -1283,6 +1283,13 @@ export default {
         try { return JSON.stringify(JSON.parse(candidate), null, 2) } catch (error) { /* try next span */ }
       }
       return null
+    },
+    async toggleDetailMax (name) {
+      this[name] = !this[name]
+      await this.$nextTick()
+      // a dragged dialog keeps its translate() offset, which would shift the
+      // fullscreen window away from the viewport origin
+      document.querySelectorAll('.el-dialog.is-fullscreen').forEach((el) => { el.style.transform = '' })
     },
     detectStructuredValue (value) {
       if (typeof value !== 'string' || value.trim().length < 3) return null
