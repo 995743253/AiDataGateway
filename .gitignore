@@ -34,3 +34,4 @@ src/AiDataGateway.Installer/Payload/*.zip
 
 # Superseded binary documentation; Markdown is the source of truth
 Doc/*.docx
+dom.html
