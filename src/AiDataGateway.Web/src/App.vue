@@ -65,26 +65,26 @@
             </button>
           </div>
           <el-menu class="side-menu" :default-active="activeTab" :collapse="sidebarCollapsed" :collapse-transition="false" unique-opened @select="goTo">
-            <el-menu-item index="overview"><span class="menu-glyph">⌂</span><template #title>工作概览</template></el-menu-item>
+            <el-menu-item index="overview"><span class="menu-glyph"><el-icon><Odometer /></el-icon></span><template #title>工作概览</template></el-menu-item>
             <el-sub-menu v-if="canOperate" index="resources">
-              <template #title><span class="menu-glyph">◇</span><span>资源管理</span></template>
+              <template #title><span class="menu-glyph"><el-icon><Folder /></el-icon></span><span>资源管理</span></template>
               <el-menu-item index="projects">项目管理</el-menu-item>
               <el-menu-item index="datasources">数据源</el-menu-item>
               <el-menu-item index="logsources">日志源</el-menu-item>
             </el-sub-menu>
             <el-sub-menu v-if="canViewLogs || canViewMetrics" index="observability">
-              <template #title><span class="menu-glyph">◉</span><span>观测中心</span></template>
+              <template #title><span class="menu-glyph"><el-icon><DataLine /></el-icon></span><span>观测中心</span></template>
               <el-menu-item v-if="canViewLogs" index="applicationlogs">应用日志</el-menu-item>
               <el-menu-item v-if="canViewLogs" index="realtimelogs">实时日志</el-menu-item>
               <el-menu-item v-if="canViewMetrics" index="monitoring">服务器监控</el-menu-item>
               <el-menu-item v-if="canViewLogs" index="logs">网关审计</el-menu-item>
             </el-sub-menu>
             <el-sub-menu v-if="canApprove" index="security">
-              <template #title><span class="menu-glyph">✓</span><span>安全审批</span></template>
+              <template #title><span class="menu-glyph"><el-icon><Lock /></el-icon></span><span>安全审批</span></template>
               <el-menu-item index="approvals">审批记录</el-menu-item>
             </el-sub-menu>
             <el-sub-menu v-if="isAdmin" index="system">
-              <template #title><span class="menu-glyph">⚙</span><span>系统管理</span></template>
+              <template #title><span class="menu-glyph"><el-icon><Setting /></el-icon></span><span>系统管理</span></template>
               <el-menu-item index="settings">系统设置</el-menu-item>
               <el-menu-item index="users">用户管理</el-menu-item>
               <el-menu-item index="clients">OAuth2 客户端</el-menu-item>
@@ -179,7 +179,7 @@
               <div class="app-log-filter-row">
                 <template v-if="selectedApplicationLogSource?.type !== 2 || applicationLogQueryMode === 'simple'">
                   <el-input v-model="applicationLogSearchText" class="log-search" clearable placeholder="关键词，例如：订单失败" @keyup.enter="searchApplicationLogs" />
-                  <template v-if="selectedApplicationLogSource?.type === 2"><el-input v-model="applicationLogPropertyName" class="log-property" clearable placeholder="属性名（可选）" /><el-input v-model="applicationLogPropertyValue" class="log-property" clearable placeholder="属性值（可选）" /></template>
+                  <template v-if="selectedApplicationLogSource?.type === 2"><el-input v-model="applicationLogTopic" class="log-property" clearable placeholder="Topic（可选）" @keyup.enter="searchApplicationLogs" /><el-input v-model="applicationLogPropertyName" class="log-property" clearable placeholder="属性名（可选）" /><el-input v-model="applicationLogPropertyValue" class="log-property" clearable placeholder="属性值（可选）" /></template>
                 </template>
                 <el-input v-else v-model="applicationLogQuery" class="log-advanced-search" clearable placeholder="例如：RequestPath like '/api/%' and StatusCode >= 500" @keyup.enter="searchApplicationLogs" />
                 <div class="filter-buttons"><el-button type="primary" :loading="applicationLogsLoading" @click="searchApplicationLogs">查询</el-button><el-button @click="resetApplicationLogs">重置</el-button></div>
@@ -193,6 +193,7 @@
             <el-table :data="applicationLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table" @row-dblclick="openApplicationLog">
               <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
+              <el-table-column v-if="selectedApplicationLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
               <el-table-column prop="message" label="消息" min-width="360" show-overflow-tooltip />
               <el-table-column label="解析" width="100"><template #default="s"><el-tag v-if="s.row.incomplete" type="warning">不完整</el-tag><el-tag v-else type="success" effect="plain">结构化</el-tag></template></el-table-column>
               <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
@@ -208,7 +209,7 @@
                 <el-select v-model="realtimeLogSourceId" class="log-source-select" filterable placeholder="选择日志源" @change="stopRealtimeLogStream"><el-option v-for="item in logSources.filter(x => x.enabled)" :key="item.id" :label="`[${item.type === 2 ? 'Seq API' : item.type === 3 ? '远程 Agent' : '本地文件'}] ${item.name}（${item.key}）`" :value="item.id" /></el-select>
                 <el-input v-model="realtimeLogSearchText" class="log-search" clearable placeholder="只看包含此关键词的新日志（可选）" />
                 <el-select v-model="realtimeLogLevel" class="status-filter" clearable placeholder="全部级别"><el-option v-for="level in logLevels" :key="level" :label="level" :value="level" /></el-select>
-                <template v-if="selectedRealtimeLogSource?.type === 2"><el-input v-model="realtimeLogPropertyName" class="log-property" clearable placeholder="Seq 属性名（可选）" /><el-input v-model="realtimeLogPropertyValue" class="log-property" clearable placeholder="属性值（可选）" /></template>
+                <template v-if="selectedRealtimeLogSource?.type === 2"><el-input v-model="realtimeLogTopic" class="log-property" clearable placeholder="Topic（可选）" /><el-input v-model="realtimeLogPropertyName" class="log-property" clearable placeholder="属性名（可选）" /><el-input v-model="realtimeLogPropertyValue" class="log-property" clearable placeholder="属性值（可选）" /></template>
                 <div class="filter-buttons"><el-button v-if="!realtimeLogConnected && !realtimeLogConnecting" type="success" @click="startRealtimeLogStream">开始接收</el-button><el-button v-else type="danger" @click="stopRealtimeLogStream">{{ realtimeLogConnecting ? '取消连接' : '停止接收' }}</el-button><el-button @click="clearRealtimeLogs">清空屏幕</el-button></div>
               </div>
             </div>
@@ -216,6 +217,7 @@
             <el-table :data="pagedRealtimeLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table realtime-log-table" @row-dblclick="openApplicationLog">
               <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
+              <el-table-column v-if="selectedRealtimeLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
               <el-table-column prop="message" label="消息" min-width="420" show-overflow-tooltip />
               <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
@@ -317,6 +319,7 @@
                     </div>
                   </el-card>
 
+                  <div class="monitor-samples">
                   <el-table :data="metricSamples" stripe border max-height="360">
                     <el-table-column prop="collectedAtUtc" label="采集时间" width="190"><template #default="s">{{ formatDate(s.row.collectedAtUtc) }}</template></el-table-column>
                     <el-table-column prop="cpuPercent" label="CPU" width="100"><template #default="s">{{ formatPercent(s.row.cpuPercent) }}</template></el-table-column>
@@ -327,6 +330,7 @@
                     <el-table-column label="系统运行时间" min-width="140"><template #default="s">{{ formatDuration(s.row.systemUptimeSeconds) }}</template></el-table-column>
                   </el-table>
                   <el-pagination class="pagination-panel element-pagination" v-model:current-page="metricSamplePage" v-model:page-size="metricSamplePageSize" :page-sizes="pageSizeOptions" :total="metricSampleTotal" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadMetricSamples" @size-change="metricSampleSizeChanged" />
+                  </div>
                 </template>
                 <el-empty v-else description="请选择监控节点" />
               </div>
@@ -536,7 +540,8 @@
         <template #footer><el-button type="primary" @click="monitorCredentialDialog=false">我已保存</el-button></template>
       </el-dialog>
 
-      <el-dialog v-model="applicationLogDialog" title="应用日志完整数据" width="90%" class="detail-window log-dialog" draggable overflow>
+      <el-dialog v-model="applicationLogDialog" :fullscreen="logDetailMaximized" :draggable="!logDetailMaximized" width="90%" class="detail-window log-dialog" overflow>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">应用日志完整数据</span><el-button class="dialog-max-button" link type="primary" @click="logDetailMaximized = !logDetailMaximized"><el-icon><FullScreen /></el-icon>{{ logDetailMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
         <div v-if="selectedApplicationLog" class="detail-dialog">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="事件 ID">{{ selectedApplicationLog.id }}</el-descriptions-item><el-descriptions-item label="时间">{{ formatDate(selectedApplicationLog.timestampUtc) }}</el-descriptions-item>
@@ -545,13 +550,14 @@
             <el-descriptions-item v-if="selectedApplicationLog.exception" label="异常" :span="2"><pre class="inline-exception">{{ selectedApplicationLog.exception }}</pre></el-descriptions-item>
           </el-descriptions>
           <div class="detail-section"><h4>消息</h4><pre class="log-detail">{{ selectedApplicationLog.message || '—' }}</pre></div>
-          <div class="detail-section"><h4>结构化属性</h4><el-table :data="pagedApplicationLogProperties" stripe border max-height="340"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><pre class="property-value">{{ formatCell(s.row.value) }}</pre></template></el-table-column></el-table><el-pagination v-if="applicationLogProperties.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="applicationLogPropertyPage" :page-size="detailPageSize" :total="applicationLogProperties.length" layout="total, prev, pager, next" background /></div>
+          <div class="detail-section"><h4>结构化属性</h4><el-table :data="pagedApplicationLogProperties" stripe border max-height="340"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><div class="property-value-row"><pre class="property-value">{{ formatCell(s.row.value) }}</pre><el-button v-if="detectStructuredValue(s.row.value)" link type="primary" size="small" class="property-view-button" @click="openPropertyValueViewer(s.row)">{{ detectStructuredValue(s.row.value) === 'json' ? '格式化查看' : 'SQL 预览' }}</el-button></div></template></el-table-column></el-table><el-pagination v-if="applicationLogProperties.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="applicationLogPropertyPage" :page-size="detailPageSize" :total="applicationLogProperties.length" layout="total, prev, pager, next" background /></div>
           <div class="detail-section"><h4>原始记录</h4><pre class="log-detail">{{ selectedApplicationLog.rawText }}</pre></div>
         </div>
         <template #footer><el-button @click="applicationLogDialog=false">关闭</el-button></template>
       </el-dialog>
 
-      <el-dialog v-model="approvalDialog" title="SQL 审批详情" width="900px" class="detail-window approval-detail-window" draggable overflow destroy-on-close>
+      <el-dialog v-model="approvalDialog" :fullscreen="approvalMaximized" :draggable="!approvalMaximized" width="900px" class="detail-window approval-detail-window" overflow destroy-on-close>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">SQL 审批详情</span><el-button class="dialog-max-button" link type="primary" @click="approvalMaximized = !approvalMaximized"><el-icon><FullScreen /></el-icon>{{ approvalMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
         <div v-if="selectedApproval" class="detail-dialog approval-detail-content" :class="{ 'has-review-form': selectedApproval.status === 'Pending' }">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="工单 ID">{{ selectedApproval.id }}</el-descriptions-item><el-descriptions-item label="状态"><el-tag :type="approvalStatusType(selectedApproval.status)">{{ approvalStatusName(selectedApproval.status) }}</el-tag></el-descriptions-item>
@@ -568,7 +574,8 @@
         <template #footer><el-button @click="approvalDialog=false">关闭</el-button><template v-if="selectedApproval?.status === 'Pending'"><el-button type="danger" :loading="saving" @click="reviewSelected(false)">拒绝</el-button><el-button type="success" :loading="saving" @click="reviewSelected(true)">批准并执行</el-button></template></template>
       </el-dialog>
 
-      <el-dialog v-model="logDialog" title="运行日志完整数据" width="90%" class="detail-window log-dialog" draggable overflow>
+      <el-dialog v-model="logDialog" :fullscreen="auditLogMaximized" :draggable="!auditLogMaximized" width="90%" class="detail-window log-dialog" overflow>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">运行日志完整数据</span><el-button class="dialog-max-button" link type="primary" @click="auditLogMaximized = !auditLogMaximized"><el-icon><FullScreen /></el-icon>{{ auditLogMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
         <div v-if="selectedLog" class="detail-dialog">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="日志 ID">{{ selectedLog.id }}</el-descriptions-item><el-descriptions-item label="时间">{{ formatDate(selectedLog.createdAtUtc) }}</el-descriptions-item>
@@ -592,6 +599,14 @@
         <template #footer><el-button @click="logDialog=false">关闭</el-button></template>
       </el-dialog>
 
+      <el-dialog v-model="propertyViewerDialog" width="840px" top="6vh" class="property-viewer-dialog" destroy-on-close>
+        <template #header><span class="dialog-header-title">字段 {{ propertyViewer.key }} · {{ propertyViewer.kind === 'json' ? 'JSON 格式化' : 'SQL 预览' }}</span></template>
+        <pre class="beautify-viewer" v-html="propertyViewerHtml"></pre>
+        <template #footer>
+          <el-button @click="copyPropertyValue">复制</el-button>
+          <el-button type="primary" @click="propertyViewerDialog = false">关闭</el-button>
+        </template>
+      </el-dialog>
       <el-dialog v-model="userDialog" :title="editingUser ? '编辑用户' : '新增用户'" width="580px">
         <el-form :model="newUser" label-width="100px"><el-form-item label="用户名"><el-input v-model="newUser.userName" :disabled="!!editingUser" /></el-form-item><el-form-item label="显示名称"><el-input v-model="newUser.displayName" /></el-form-item><el-form-item label="邮箱"><el-input v-model="newUser.email" :disabled="!!editingUser" /></el-form-item><el-form-item v-if="!editingUser" label="密码"><el-input v-model="newUser.password" type="password" show-password /></el-form-item><el-form-item label="角色"><el-select v-model="newUser.roles" multiple class="full-width"><el-option v-for="r in roles" :key="r" :label="r" :value="r" /></el-select></el-form-item><el-form-item v-if="editingUser" label="账号状态"><el-switch v-model="newUser.enabled" active-text="启用" inactive-text="禁用" /></el-form-item></el-form>
         <template #footer><el-button @click="userDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveUser">{{ editingUser ? '保存' : '创建' }}</el-button></template>
@@ -639,9 +654,9 @@ export default {
     logSourceDialog: false, editingLogSource: null, logSourceForm: {},
     monitorTargetDialog: false, editingMonitorTarget: null, monitorTargetForm: {}, monitorCredentialDialog: false, monitorCredential: null,
     selectedMonitorTargetId: '', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
-    applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
-    realtimeLogs: [], realtimeLogPage: 1, realtimeLogPageSize: 50, realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
-    applicationLogDialog: false, selectedApplicationLog: null, applicationLogPropertyPage: 1,
+    applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogTopic: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
+    realtimeLogs: [], realtimeLogPage: 1, realtimeLogPageSize: 50, realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogTopic: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
+    applicationLogDialog: false, selectedApplicationLog: null, applicationLogPropertyPage: 1, logDetailMaximized: false, approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null, selectedLogRowPage: 1, detailPageSize: 20,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
     clientDialog: false, editingClient: null, clientForm: { displayName: '', scopes: [] },
@@ -779,6 +794,25 @@ export default {
     applicationLogPaginationTotal () { return this.applicationLogPartial ? Math.max(this.applicationLogTotal, this.applicationLogPage * this.applicationLogPageSize + 1) : this.applicationLogTotal },
     applicationLogProperties () { return Object.entries(this.selectedApplicationLog?.properties || {}).map(([key, value]) => ({ key, value })) },
     pagedApplicationLogProperties () { return this.paginate(this.applicationLogProperties, this.applicationLogPropertyPage, this.detailPageSize) },
+    propertyViewerHtml () {
+      const text = this.propertyViewer.text || ''
+      if (this.propertyViewer.kind === 'json') {
+        try {
+          const pretty = JSON.stringify(JSON.parse(text), null, 2)
+          return this.escapeHtml(pretty).replace(/("(?:[^"\\]|\.)*")(\s*:)?|\b(true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g, match => {
+            let cls = 'token-number'
+            if (match.startsWith('"')) cls = match.endsWith(':') ? 'token-key' : 'token-string'
+            else if (match === 'true' || match === 'false') cls = 'token-boolean'
+            else if (match === 'null') cls = 'token-null'
+            return `<span class="${cls}">${match}</span>`
+          })
+        } catch (error) { return this.escapeHtml(text) }
+      }
+      if (this.propertyViewer.kind === 'sql') {
+        return this.escapeHtml(text).replace(/\b(select|from|where|insert|into|values|update|set|delete|create|table|primary|key|foreign|references|alter|drop|index|view|inner|left|right|outer|join|on|group|by|order|having|limit|as|distinct|union|all|with|and|or|not|null|asc|desc|exec|use)\b/gi, m => `<span class="token-keyword">${m}</span>`)
+      }
+      return this.escapeHtml(text)
+    },
     userInitials () { return (this.user?.displayName || this.user?.userName || 'U').trim().slice(0, 2).toUpperCase() },
     selectedLogDetail () { return this.parseLogDetail(this.selectedLog?.detail) },
     selectedLogColumns () {
@@ -1199,9 +1233,9 @@ export default {
     },
     applicationLogRequest () {
       const seqAdvanced = this.selectedApplicationLogSource?.type === 2 && this.applicationLogQueryMode === 'advanced'
-      return { logSourceId: this.applicationLogSourceId, query: seqAdvanced ? this.applicationLogQuery.trim() || null : null, searchText: seqAdvanced ? null : this.applicationLogSearchText.trim() || null, propertyName: seqAdvanced ? null : this.applicationLogPropertyName.trim() || null, propertyValue: seqAdvanced ? null : this.applicationLogPropertyValue.trim() || null, level: this.applicationLogLevel || null, fromUtc: this.applicationLogRange?.[0]?.toISOString(), toUtc: this.applicationLogRange?.[1]?.toISOString(), page: this.applicationLogPage, pageSize: this.applicationLogPageSize }
+      return { logSourceId: this.applicationLogSourceId, query: seqAdvanced ? this.applicationLogQuery.trim() || null : null, searchText: seqAdvanced ? null : this.applicationLogSearchText.trim() || null, propertyName: seqAdvanced ? null : (this.applicationLogTopic.trim() ? 'Topic' : (this.applicationLogPropertyName.trim() || null)), propertyValue: seqAdvanced ? null : (this.applicationLogTopic.trim() || this.applicationLogPropertyValue.trim() || null), level: this.applicationLogLevel || null, fromUtc: this.applicationLogRange?.[0]?.toISOString(), toUtc: this.applicationLogRange?.[1]?.toISOString(), page: this.applicationLogPage, pageSize: this.applicationLogPageSize }
     },
-    async resetApplicationLogs () { this.applicationLogQuery = ''; this.applicationLogSearchText = ''; this.applicationLogPropertyName = ''; this.applicationLogPropertyValue = ''; this.applicationLogLevel = ''; this.applicationLogRange = [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()]; this.applicationLogPage = 1; this.applicationLogs = []; this.applicationLogTotal = 0; this.applicationLogWarning = null },
+    async resetApplicationLogs () { this.applicationLogQuery = ''; this.applicationLogSearchText = ''; this.applicationLogTopic = ''; this.applicationLogPropertyName = ''; this.applicationLogPropertyValue = ''; this.applicationLogLevel = ''; this.applicationLogRange = [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()]; this.applicationLogPage = 1; this.applicationLogs = []; this.applicationLogTotal = 0; this.applicationLogWarning = null },
     async startRealtimeLogStream () {
       if (this.realtimeLogEventSource || this.realtimeLogConnecting) return
       const attempt = ++this.realtimeLogAttempt
@@ -1212,8 +1246,11 @@ export default {
       const params = new URLSearchParams({ logSourceId: this.realtimeLogSourceId, fromUtc: new Date().toISOString() })
       if (this.realtimeLogSearchText.trim()) params.set('searchText', this.realtimeLogSearchText.trim())
       if (this.realtimeLogLevel) params.set('level', this.realtimeLogLevel)
-      if (this.realtimeLogPropertyName.trim()) params.set('propertyName', this.realtimeLogPropertyName.trim())
-      if (this.realtimeLogPropertyValue.trim()) params.set('propertyValue', this.realtimeLogPropertyValue.trim())
+      if (this.realtimeLogTopic.trim()) {
+        params.set('propertyName', 'Topic')
+        params.set('propertyValue', this.realtimeLogTopic.trim())
+      } else if (this.realtimeLogPropertyName.trim()) params.set('propertyName', this.realtimeLogPropertyName.trim())
+      if (!this.realtimeLogTopic.trim() && this.realtimeLogPropertyValue.trim()) params.set('propertyValue', this.realtimeLogPropertyValue.trim())
       const stream = new EventSource(`/api/logs/stream?${params.toString()}`, { withCredentials: true })
       this.realtimeLogEventSource = stream
       stream.onopen = () => { if (this.realtimeLogEventSource === stream) { this.realtimeLogConnecting = false; this.realtimeLogConnected = true } }
@@ -1230,6 +1267,47 @@ export default {
     clearRealtimeLogs () { this.realtimeLogs = []; this.realtimeLogPage = 1; this.realtimeLogError = null },
     async applicationLogSizeChanged () { this.applicationLogPage = 1; if (this.applicationLogs.length) await this.loadApplicationLogs() },
     async changeApplicationLogPage (page) { if (page < 1 || page === this.applicationLogPage) return; this.applicationLogPage = page; await this.loadApplicationLogs() },
+    extractJsonPretty (value) {
+      if (typeof value !== 'string') return null
+      const text = value.trim()
+      if (text.length < 3) return null
+      const candidates = []
+      if ((text[0] === '{' && text.endsWith('}')) || (text[0] === '[' && text.endsWith(']'))) candidates.push(text)
+      const braceStart = text.indexOf('{')
+      const braceEnd = text.lastIndexOf('}')
+      if (braceStart >= 0 && braceEnd > braceStart) candidates.push(text.slice(braceStart, braceEnd + 1))
+      const bracketStart = text.indexOf('[')
+      const bracketEnd = text.lastIndexOf(']')
+      if (bracketStart >= 0 && bracketEnd > bracketStart) candidates.push(text.slice(bracketStart, bracketEnd + 1))
+      for (const candidate of candidates) {
+        try { return JSON.stringify(JSON.parse(candidate), null, 2) } catch (error) { /* try next span */ }
+      }
+      return null
+    },
+    detectStructuredValue (value) {
+      if (typeof value !== 'string' || value.trim().length < 3) return null
+      if (this.extractJsonPretty(value) !== null) return 'json'
+      const words = value.toLowerCase().match(/[a-z_]+/g)
+      if (!words || words.length === 0) return null
+      const statements = ['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop', 'truncate', 'merge', 'with']
+      const support = ['from', 'into', 'set', 'table', 'values', 'database', 'index', 'view', 'procedure']
+      if (statements.includes(words[0]) && words.some(word => support.includes(word))) return 'sql'
+      return null
+    },
+    openPropertyValueViewer (row) {
+      const kind = this.detectStructuredValue(row.value)
+      const text = this.formatCell(row.value)
+      this.propertyViewer = { key: row.key, kind, text, pretty: kind === 'json' ? this.extractJsonPretty(row.value) || text : text }
+      this.propertyViewerDialog = true
+    },
+    escapeHtml (text) {
+      return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    },
+    copyPropertyValue () {
+      const text = this.propertyViewer.kind === 'json' && this.propertyViewer.pretty ? this.propertyViewer.pretty : this.propertyViewer.text
+      navigator.clipboard.writeText(text).then(() => ElMessage.success('已复制')).catch(() => ElMessage.error('复制失败'))
+    },
+    topicOf (row) { return row.properties?.Topic ?? row.properties?.topic ?? null },
     openApplicationLog (row) { this.selectedApplicationLog = row; this.applicationLogPropertyPage = 1; this.applicationLogDialog = true },
     logSourceTypeName (type) { return ({ 1: '本地 NLog', 2: 'Seq', 3: '远程 Agent' })[type] || type },
     logLevelType (level) { const value = String(level || '').toLowerCase(); if (value === 'fatal' || value === 'error') return 'danger'; if (value === 'warn' || value === 'warning') return 'warning'; if (value === 'debug' || value === 'trace') return 'info'; return 'success' },

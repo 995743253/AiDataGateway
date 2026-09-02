@@ -35,6 +35,7 @@ import {
   ElTag,
   ElTimeSelect
 } from 'element-plus'
+import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import './styles.css'
@@ -82,4 +83,5 @@ const components = [
 ]
 
 components.forEach(component => app.use(component))
+for (const [name, component] of Object.entries(ElementPlusIconsVue)) app.component(name, component)
 app.mount('#app')
