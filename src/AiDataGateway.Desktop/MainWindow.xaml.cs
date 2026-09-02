@@ -29,6 +29,8 @@ public partial class MainWindow : Window
     private MemoryOverlayWindow? _memoryOverlay;
     private bool _allowExit;
     private bool _checkingForUpdate;
+    private bool _applyingUpdate;
+    private GatewayUpdate? _pendingUpdate;
 
     public MainWindow(
         Uri baseAddress,
@@ -224,20 +226,12 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var result = MessageBox.Show(
-                $"发现新版本 {update.VersionText}（当前 {GitHubUpdateService.CurrentVersionText}）。\n\n是否下载并自动更新？程序目录和数据库目录都会保持不变。",
-                "AiDataGateway 更新", MessageBoxButton.YesNo, MessageBoxImage.Information);
-            if (result != MessageBoxResult.Yes)
-            {
-                SetStatus($"发现新版本 {update.VersionText}", Amber);
-                return;
-            }
-
-            var progress = new Progress<int>(value => SetStatus($"正在下载更新… {value}%", Amber));
-            var installer = await _updateService.DownloadAsync(update, progress);
-            SetStatus("正在启动更新程序…", Amber);
-            GitHubUpdateService.StartInstaller(installer);
-            ExitApplication();
+            // Detection never interrupts with a dialog; the footer button is the
+            // explicit opt-in to download and apply the update.
+            _pendingUpdate = update;
+            UpdateButton.Content = $"立即更新到 v{update.VersionText}";
+            UpdateButton.Visibility = Visibility.Visible;
+            SetStatus($"发现新版本 {update.VersionText}，点击右下角“立即更新”完成升级", Amber);
         }
         catch (Exception exception)
         {
@@ -248,6 +242,34 @@ public partial class MainWindow : Window
         finally
         {
             _checkingForUpdate = false;
+        }
+    }
+
+    private async void OnUpdateClick(object sender, RoutedEventArgs eventArgs)
+    {
+        var update = _pendingUpdate;
+        if (update is null || _applyingUpdate) return;
+        _applyingUpdate = true;
+        UpdateButton.IsEnabled = false;
+        UpdateButton.Content = "正在下载…";
+        try
+        {
+            var progress = new Progress<int>(value => SetStatus($"正在下载更新… {value}%", Amber));
+            var installer = await _updateService.DownloadAsync(update, progress);
+            SetStatus("正在启动更新程序…", Amber);
+            GitHubUpdateService.StartInstaller(installer);
+            ExitApplication();
+        }
+        catch (Exception exception)
+        {
+            SetStatus("更新下载失败", Red);
+            UpdateButton.IsEnabled = true;
+            UpdateButton.Content = $"立即更新到 v{update.VersionText}";
+            MessageBox.Show(exception.Message, "更新失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _applyingUpdate = false;
         }
     }
 

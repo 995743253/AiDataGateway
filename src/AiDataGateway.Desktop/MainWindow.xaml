@@ -145,6 +145,7 @@
                 </StackPanel>
                 <TextBlock x:Name="EndpointText" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#6B778A" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="UpdateButton" Style="{StaticResource AccentFooterButtonStyle}" Content="立即更新" Visibility="Collapsed" Click="OnUpdateClick" />
                     <Button Style="{StaticResource FooterButtonStyle}" Content="检查更新" Click="OnCheckUpdateClick" />
                     <Button Style="{StaticResource AccentFooterButtonStyle}" Content="刷新" Click="OnReloadClick" />
                     <Button Style="{StaticResource FooterButtonStyle}" Content="浏览器打开" Click="OnOpenInBrowserClick" />

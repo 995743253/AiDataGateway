@@ -5,6 +5,7 @@
     <Project Path="src/AiDataGateway.Desktop/AiDataGateway.Desktop.csproj" />
     <Project Path="src/AiDataGateway.Domain/AiDataGateway.Domain.csproj" />
     <Project Path="src/AiDataGateway.Infrastructure/AiDataGateway.Infrastructure.csproj" />
+    <Project Path="src/AiDataGateway.Installer/AiDataGateway.Installer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AiDataGateway.Tests/AiDataGateway.Tests.csproj" />
