@@ -496,7 +496,9 @@ public sealed class GatewayHostTests
                 dataSourceIds = Array.Empty<Guid>(),
                 logSourceIds = new[] { logSourceId }
             });
-            Assert.True(createSecondProject.IsSuccessStatusCode, await createSecondProject.Content.ReadAsStringAsync());
+            var createSecondProjectBody = await createSecondProject.Content.ReadAsStringAsync();
+            Assert.True(createSecondProject.IsSuccessStatusCode, createSecondProjectBody);
+            var secondProjectId = JsonSerializer.Deserialize<JsonElement>(createSecondProjectBody).GetProperty("id").GetGuid();
             var managedLogSources = await client.GetFromJsonAsync<JsonElement>("/api/admin/log-sources");
             var managedLogSource = Assert.Single(managedLogSources.EnumerateArray());
             Assert.Equal(2, managedLogSource.GetProperty("projects").GetArrayLength());
@@ -513,6 +515,30 @@ public sealed class GatewayHostTests
             var applicationLog = Assert.Single(applicationLogs.GetProperty("items").EnumerateArray());
             Assert.Contains("continued message", applicationLog.GetProperty("message").GetString());
             Assert.Contains("InvalidOperationException", applicationLog.GetProperty("exception").GetString());
+
+            var logSqlProjectsResponse = await client.GetAsync($"/api/logs/{logSourceId}/sql/projects");
+            var logSqlProjects = await logSqlProjectsResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(logSqlProjectsResponse.IsSuccessStatusCode, logSqlProjects.ToString());
+            var firstLogProject = logSqlProjects.EnumerateArray().Single(item => item.GetProperty("code").GetString() == "sample-project");
+            Assert.Equal(dataSourceId, Assert.Single(firstLogProject.GetProperty("dataSources").EnumerateArray()).GetProperty("id").GetGuid());
+
+            var logSqlQueryResponse = await client.PostAsJsonAsync($"/api/logs/{logSourceId}/sql/query", new
+            {
+                projectId = project.GetProperty("id").GetGuid(),
+                dataSourceId,
+                sql = "select 1 as value"
+            });
+            var logSqlQuery = await logSqlQueryResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(logSqlQueryResponse.IsSuccessStatusCode, logSqlQuery.ToString());
+            Assert.Equal(1, logSqlQuery.GetProperty("rows")[0].GetProperty("value").GetInt64());
+
+            var unlinkedLogSqlQuery = await client.PostAsJsonAsync($"/api/logs/{logSourceId}/sql/query", new
+            {
+                projectId = secondProjectId,
+                dataSourceId,
+                sql = "select 1 as value"
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, unlinkedLogSqlQuery.StatusCode);
 
             using (var streamTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
             using (var streamRequest = new HttpRequestMessage(HttpMethod.Get,

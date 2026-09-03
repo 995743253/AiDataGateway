@@ -67,3 +67,20 @@ public sealed record LogQueryView(
     int Total,
     bool IsPartial,
     string? Warning);
+
+public sealed record LogSqlProjectView(
+    Guid Id,
+    string Code,
+    string Name,
+    IReadOnlyList<LogSqlDataSourceView> DataSources);
+
+public sealed record LogSqlDataSourceView(
+    Guid Id,
+    string Key,
+    string Name,
+    string Provider);
+
+public sealed record LogSqlQueryRequest(
+    Guid ProjectId,
+    Guid DataSourceId,
+    string Sql);

@@ -122,10 +122,10 @@
 
           <el-tab-pane v-if="canOperate && isPageOpen('projects')" label="项目管理" name="projects">
             <div class="toolbar"><div><h3>项目资源聚合</h3><p>通过唯一项目编号聚合数据库、日志源和服务器监控节点，供页面及 AI 统一解析。</p></div><el-button type="primary" @click="openProject()">新增项目</el-button></div>
-            <el-table :data="pagedProjects" stripe border>
+            <el-table :data="pagedProjects" stripe border height="100%" class="page-table">
               <el-table-column prop="code" label="项目编号" min-width="140" />
               <el-table-column prop="name" label="项目名称" min-width="160" />
-              <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
+              <el-table-column label="说明" min-width="220"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis">{{ s.row.description || '—' }}</span><el-button v-if="isLongCell(s.row.description)" link type="primary" @click="openTextViewer('项目说明', s.row.description)">查看</el-button></div></template></el-table-column>
               <el-table-column label="数据库" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.dataSources" :key="item.id" effect="plain">{{ item.key }}</el-tag><span v-if="!s.row.dataSources.length">—</span></div></template></el-table-column>
               <el-table-column label="日志源" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.logSources" :key="item.id" type="success" effect="plain">{{ item.key }}</el-tag><span v-if="!s.row.logSources.length">—</span></div></template></el-table-column>
               <el-table-column label="监控节点" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.monitorTargets" :key="item.id" type="warning" effect="plain">{{ item.key }}</el-tag><span v-if="!s.row.monitorTargets?.length">—</span></div></template></el-table-column>
@@ -137,12 +137,12 @@
 
           <el-tab-pane v-if="canOperate && isPageOpen('datasources')" label="数据源" name="datasources">
             <div class="toolbar"><div><h3>多数据库连接</h3><p>管理 AI 可以访问的数据库及审批模式。</p></div><el-button type="primary" @click="openDataSource()">新增数据源</el-button></div>
-            <el-table :data="pagedDataSources" stripe>
+            <el-table :data="pagedDataSources" stripe height="100%" class="page-table">
               <el-table-column prop="name" label="名称" min-width="150" />
               <el-table-column prop="key" label="标识" min-width="140" />
               <el-table-column prop="provider" label="类型" width="110"><template #default="s">{{ providerName(s.row.provider) }}</template></el-table-column>
               <el-table-column label="地址" min-width="180"><template #default="s">{{ s.row.host }}:{{ s.row.port }}</template></el-table-column>
-              <el-table-column prop="database" label="数据库" min-width="150" show-overflow-tooltip />
+              <el-table-column label="数据库" min-width="150"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis">{{ s.row.database }}</span><el-button v-if="isLongCell(s.row.database)" link type="primary" @click="openTextViewer('数据库', s.row.database)">查看</el-button></div></template></el-table-column>
               <el-table-column prop="accessMode" label="模式" width="140"><template #default="s">{{ accessName(s.row.accessMode) }}</template></el-table-column>
               <el-table-column label="表黑名单" width="110"><template #default="s"><el-tag v-if="s.row.blockedTables?.length" type="danger" effect="plain">{{ s.row.blockedTables.length }} 张表</el-tag><span v-else>—</span></template></el-table-column>
               <el-table-column label="操作" width="290"><template #default="s"><el-button size="small" @click="testDataSource(s.row)">测试</el-button><el-button size="small" @click="openDataSource(s.row)">编辑</el-button><el-button size="small" type="primary" plain @click="openDataSourceApprovals(s.row)">审批记录</el-button><el-button size="small" type="danger" @click="deleteDataSource(s.row)">删除</el-button></template></el-table-column>
@@ -152,11 +152,11 @@
 
           <el-tab-pane v-if="canOperate && isPageOpen('logsources')" label="日志源" name="logsources">
             <div class="toolbar"><div><h3>日志采集源</h3><p>支持网关本机 NLog、Seq API，以及安装在远端服务器上的采集 Agent。</p></div><el-button type="primary" @click="openLogSource()">新增日志源</el-button></div>
-            <el-table :data="pagedLogSources" stripe border>
+            <el-table :data="pagedLogSources" stripe border height="100%" class="page-table">
               <el-table-column prop="name" label="名称" min-width="160" />
               <el-table-column prop="key" label="日志标识" min-width="140" />
               <el-table-column label="类型" width="120"><template #default="s"><el-tag :type="s.row.type === 2 ? 'warning' : 'primary'">{{ logSourceTypeName(s.row.type) }}</el-tag></template></el-table-column>
-              <el-table-column label="采集位置" min-width="300"><template #default="s"><div class="log-source-location"><strong>{{ s.row.type === 2 ? 'Seq HTTP API' : s.row.type === 3 ? '远程 Agent' : '本地文件夹' }}</strong><span :title="s.row.endpoint">{{ s.row.endpoint || '从 NLog 配置读取文件位置' }}</span></div></template></el-table-column>
+              <el-table-column label="采集位置" min-width="300"><template #default="s"><div class="log-source-location cell-with-action"><div><strong>{{ s.row.type === 2 ? 'Seq HTTP API' : s.row.type === 3 ? '远程 Agent' : '本地文件夹' }}</strong><span class="cell-ellipsis">{{ s.row.endpoint || '从 NLog 配置读取文件位置' }}</span></div><el-button v-if="isLongCell(s.row.endpoint)" link type="primary" @click="openTextViewer('采集位置', s.row.endpoint)">查看</el-button></div></template></el-table-column>
               <el-table-column label="关联项目" min-width="180"><template #default="s"><div class="tag-list"><el-tag v-for="item in s.row.projects" :key="item.id" effect="plain">{{ item.code }}</el-tag><span v-if="!s.row.projects.length">—</span></div></template></el-table-column>
               <el-table-column label="状态" width="90"><template #default="s"><el-tag :type="s.row.enabled ? 'success' : 'info'">{{ s.row.enabled ? '启用' : '禁用' }}</el-tag></template></el-table-column>
               <el-table-column label="操作" width="290"><template #default="s"><el-button size="small" @click="testLogSource(s.row)">测试</el-button><el-button size="small" @click="openLogSource(s.row)">编辑</el-button><el-button size="small" type="primary" plain @click="openLogSourceLogs(s.row)">应用日志</el-button><el-button size="small" type="danger" @click="deleteLogSource(s.row)">删除</el-button></template></el-table-column>
@@ -190,13 +190,13 @@
               <span>{{ selectedApplicationLogSource.type === 2 ? '网关使用 Seq HTTP API 和独立 API Key 查询；日期条件会直接发送给 Seq，避免先下载全部日志。' : selectedApplicationLogSource.type === 3 ? '网关按日期向远端 Agent 查询服务器本地日志，文件内容不会预先全量上传。' : '网关只读取所选日期可能涉及的文件，并限制单次读取量，避免日志过多占用大量内存。' }}</span>
             </div>
             <el-alert v-if="applicationLogWarning" :title="applicationLogWarning" type="warning" show-icon :closable="false" class="log-warning" />
-            <el-table :data="applicationLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table" @row-dblclick="openApplicationLog">
+            <el-table :data="applicationLogs" stripe border height="100%" class="paged-table page-table" @row-dblclick="openApplicationLog">
               <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
               <el-table-column v-if="selectedApplicationLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
-              <el-table-column prop="message" label="消息" min-width="360" show-overflow-tooltip />
+              <el-table-column label="消息" min-width="360"><template #default="s"><span class="cell-ellipsis">{{ s.row.message || '—' }}</span></template></el-table-column>
               <el-table-column label="解析" width="100"><template #default="s"><el-tag v-if="s.row.incomplete" type="warning">不完整</el-tag><el-tag v-else type="success" effect="plain">结构化</el-tag></template></el-table-column>
-              <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
+              <el-table-column label="操作" width="150"><template #default="s"><el-button v-if="extractLogSql(s.row)" size="small" link type="warning" @click="openApplicationLog(s.row, 'sql')">查看 SQL</el-button><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="!applicationLogsLoading && applicationLogs.length === 0" description="请选择日志源并查询" />
             <el-pagination class="pagination-panel element-pagination" v-model:current-page="applicationLogPage" v-model:page-size="applicationLogPageSize" :page-sizes="[20, 50, 100, 200]" :total="applicationLogPaginationTotal" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadApplicationLogs" @size-change="applicationLogSizeChanged" />
@@ -214,12 +214,12 @@
               </div>
             </div>
             <el-alert v-if="realtimeLogError" :title="realtimeLogError" type="warning" show-icon :closable="false" class="log-warning" />
-            <el-table :data="pagedRealtimeLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table realtime-log-table" @row-dblclick="openApplicationLog">
+            <el-table :data="pagedRealtimeLogs" stripe border height="100%" class="paged-table page-table realtime-log-table" @row-dblclick="openApplicationLog">
               <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
               <el-table-column v-if="selectedRealtimeLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
-              <el-table-column prop="message" label="消息" min-width="420" show-overflow-tooltip />
-              <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
+              <el-table-column label="消息" min-width="420"><template #default="s"><span class="cell-ellipsis">{{ s.row.message || '—' }}</span></template></el-table-column>
+              <el-table-column label="操作" width="150"><template #default="s"><el-button v-if="extractLogSql(s.row)" size="small" link type="warning" @click="openApplicationLog(s.row, 'sql')">查看 SQL</el-button><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="!realtimeLogs.length" :description="realtimeLogConnected ? '连接正常，正在等待新日志…' : realtimeLogConnecting ? '正在建立实时连接…' : '请选择日志源并点击“开始接收”'" />
             <el-pagination v-if="realtimeLogs.length" class="pagination-panel element-pagination" v-model:current-page="realtimeLogPage" v-model:page-size="realtimeLogPageSize" :page-sizes="[20, 50, 100]" :total="realtimeLogs.length" layout="total, sizes, prev, pager, next" background />
@@ -243,7 +243,8 @@
               </el-card>
 
               <div class="monitor-detail">
-                <template v-if="selectedMonitorTarget">
+                <el-tabs v-if="selectedMonitorTarget" v-model="monitorSection" class="monitor-subtabs">
+                  <el-tab-pane label="实时概览" name="overview">
                   <el-card class="monitor-summary-card" shadow="never">
                     <div class="monitor-title-row">
                       <div><h3>{{ selectedMonitorTarget.name }}</h3><p>{{ selectedMonitorTarget.hostName || '等待首次采集' }} · {{ selectedMonitorTarget.osDescription || selectedMonitorTarget.key }}</p></div>
@@ -261,66 +262,26 @@
                       </div>
                     </div>
                   </el-card>
+                  </el-tab-pane>
 
-                  <el-card class="monitor-chart-card" shadow="never">
-                    <template #header>
-                      <div class="trend-header">
-                        <div><strong>{{ metricTrendMode === 'recent' ? '近期趋势' : '历史趋势' }}</strong><small>{{ trendSummary }}</small></div>
-                        <div class="trend-controls">
-                          <el-button :type="metricTrendMode === 'recent' ? 'primary' : 'default'" plain @click="setMetricTrendMode('recent')">近期趋势</el-button>
-                          <el-button :type="metricTrendMode === 'history' ? 'primary' : 'default'" plain @click="setMetricTrendMode('history')">历史趋势</el-button>
-                          <el-date-picker v-if="metricTrendMode === 'history'" v-model="metricHistoryRange" type="datetimerange" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" :clearable="false" />
-                          <el-select v-model="metricTrendKey" class="trend-metric-select" filterable placeholder="选择趋势指标" @change="metricHoverPoint = null"><el-option v-for="metric in selectableTrendMetrics" :key="metric.key" :label="`${metric.category} / ${metric.name}`" :value="metric.key" /></el-select>
-                          <el-button :loading="monitorLoading" @click="metricTrendMode === 'history' ? loadHistoricalTrend() : loadMetricSamples()">刷新</el-button>
-                        </div>
+                  <el-tab-pane label="趋势分析" name="trends">
+                    <div class="trend-workspace">
+                      <div class="trend-controls">
+                        <el-button :type="metricTrendMode === 'recent' ? 'primary' : 'default'" plain @click="setMetricTrendMode('recent')">近期趋势</el-button>
+                        <el-button :type="metricTrendMode === 'history' ? 'primary' : 'default'" plain @click="setMetricTrendMode('history')">历史趋势</el-button>
+                        <el-date-picker v-if="metricTrendMode === 'history'" v-model="metricHistoryRange" type="datetimerange" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" :clearable="false" />
+                        <el-select v-model="metricTrendKeys" class="trend-metric-select" multiple collapse-tags collapse-tags-tooltip :max-collapse-tags="2" filterable placeholder="选择最多 4 个指标" @change="trendMetricSelectionChanged"><el-option v-for="metric in selectableTrendMetrics" :key="metric.key" :label="`${metric.category} / ${metric.name}`" :value="metric.key" /></el-select>
+                        <el-button :loading="monitorLoading" @click="metricTrendMode === 'history' ? loadHistoricalTrend() : loadMetricSamples()">刷新</el-button>
+                        <span class="trend-summary">{{ trendSummary }}</span>
                       </div>
-                    </template>
-                    <div class="metric-chart" :aria-label="`${selectedTrendMetric?.name || '指标'}趋势图`" @mouseleave="metricHoverPoint = null">
-                      <div class="chart-plot">
-                        <svg viewBox="0 0 800 280" preserveAspectRatio="xMidYMid meet" role="img">
-                          <title>{{ selectedTrendMetric?.name || metricTrendKey }}趋势图</title>
-                          <defs><linearGradient id="metric-area-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a82bd" stop-opacity="0.22" /><stop offset="100%" stop-color="#2a82bd" stop-opacity="0.02" /></linearGradient></defs>
-                          <g class="chart-y-axis">
-                            <g v-for="tick in metricYAxisTicks" :key="`y-${tick.y}`">
-                              <line x1="72" x2="790" :y1="tick.y" :y2="tick.y" class="chart-grid-line" />
-                              <text x="62" :y="tick.y + 4" text-anchor="end" class="chart-axis-label">{{ tick.label }}</text>
-                            </g>
-                            <line x1="72" x2="72" y1="20" y2="232" class="chart-axis-line" />
-                          </g>
-                          <g class="chart-x-axis">
-                            <line x1="72" x2="790" y1="232" y2="232" class="chart-axis-line" />
-                            <g v-for="tick in metricXAxisTicks" :key="`x-${tick.index}`">
-                              <line :x1="tick.x" :x2="tick.x" y1="232" y2="239" class="chart-axis-tick" />
-                              <text :x="tick.x" y="260" :text-anchor="tick.anchor" class="chart-axis-label chart-time-label">{{ tick.label }}</text>
-                            </g>
-                          </g>
-                          <polygon v-if="metricTrendChartPoints.length > 1" :points="metricTrendAreaPoints" class="chart-area" />
-                          <g v-if="metricTrendMode === 'history'" class="chart-reference-lines">
-                            <g v-for="reference in metricTrendReferenceLines" :key="reference.key">
-                              <line x1="72" x2="790" :y1="reference.y" :y2="reference.y" class="chart-reference-line" :class="reference.key" />
-                              <text x="782" :y="Math.max(14, reference.y - 6)" text-anchor="end" class="chart-reference-label" :class="reference.key">{{ reference.label }}</text>
-                            </g>
-                          </g>
-                          <polyline v-if="metricTrendChartPoints.length > 1" :points="metricTrendPoints" class="chart-line cpu-line" />
-                          <g v-for="point in metricTrendMode === 'recent' ? metricTrendChartPoints : []" :key="point.key" class="chart-point-group" @mouseenter="showMetricPoint(point)" @mousemove="showMetricPoint(point)">
-                            <circle :cx="point.x" :cy="point.y" r="11" class="chart-point-hit" />
-                            <circle :cx="point.x" :cy="point.y" :r="metricHoverPoint?.key === point.key ? 3.8 : 2.4" class="chart-point" :class="{ active: metricHoverPoint?.key === point.key }" />
-                            <title>{{ formatDate(point.timestamp) }}，{{ selectedTrendMetric?.name || metricTrendKey }}：{{ formatMetricValue(point.value, selectedTrendMetric?.unit) }}</title>
-                          </g>
-                        </svg>
-                        <div v-if="metricHoverPoint" class="chart-tooltip" :class="{ 'align-left': metricHoverPoint.x < 175, 'align-right': metricHoverPoint.x > 680, 'place-below': metricHoverPoint.y < 78 }" :style="metricTooltipStyle">
-                          <strong>{{ selectedTrendMetric?.name || metricTrendKey }}</strong>
-                          <span>{{ formatMetricValue(metricHoverPoint.value, selectedTrendMetric?.unit) }}</span>
-                          <small>{{ formatDate(metricHoverPoint.timestamp) }}</small>
-                        </div>
-                        <el-empty v-if="metricTrendChartPoints.length < 2" description="所选时间范围内暂无足够采样点" :image-size="64" />
-                      </div>
-                      <div class="chart-legend"><span><i class="cpu-legend" />{{ selectedTrendMetric?.name || metricTrendKey }}</span><span class="chart-range">{{ trendRangeLabel }}</span></div>
+                      <div class="trend-chart-grid" :class="`chart-count-${selectedTrendMetrics.length}`"><metric-trend-chart v-for="metric in selectedTrendMetrics" :key="metric.key" :metric="metric" :samples="metricTrendSamples" :mode="metricTrendMode" /></div>
+                      <el-empty v-if="!selectedTrendMetrics.length" description="请选择需要显示的趋势指标" />
                     </div>
-                  </el-card>
+                  </el-tab-pane>
 
-                  <div class="monitor-samples">
-                  <el-table :data="metricSamples" stripe border max-height="360">
+                  <el-tab-pane label="采样明细" name="samples">
+                  <div class="monitor-samples fixed-list-page">
+                  <el-table :data="metricSamples" stripe border height="100%" class="page-table">
                     <el-table-column prop="collectedAtUtc" label="采集时间" width="190"><template #default="s">{{ formatDate(s.row.collectedAtUtc) }}</template></el-table-column>
                     <el-table-column prop="cpuPercent" label="CPU" width="100"><template #default="s">{{ formatPercent(s.row.cpuPercent) }}</template></el-table-column>
                     <el-table-column prop="memoryPercent" label="内存" width="100"><template #default="s">{{ formatPercent(s.row.memoryPercent) }}</template></el-table-column>
@@ -331,7 +292,8 @@
                   </el-table>
                   <el-pagination class="pagination-panel element-pagination" v-model:current-page="metricSamplePage" v-model:page-size="metricSamplePageSize" :page-sizes="pageSizeOptions" :total="metricSampleTotal" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadMetricSamples" @size-change="metricSampleSizeChanged" />
                   </div>
-                </template>
+                  </el-tab-pane>
+                </el-tabs>
                 <el-empty v-else description="请选择监控节点" />
               </div>
             </div>
@@ -347,12 +309,12 @@
                 <el-button type="primary" @click="searchApprovals">查询</el-button><el-button @click="resetApprovalSearch">重置</el-button>
               </div>
             </div>
-            <el-table :data="approvals" stripe border max-height="calc(100vh - 360px)" class="paged-table" @row-dblclick="openApproval">
+            <el-table :data="approvals" stripe border height="100%" class="paged-table page-table" @row-dblclick="openApproval">
               <el-table-column prop="dataSourceName" label="数据源" min-width="150"><template #default="s">{{ s.row.dataSourceName || shortId(s.row.dataSourceId) }}</template></el-table-column>
               <el-table-column prop="requestedBy" label="发起者" min-width="150" />
               <el-table-column prop="status" label="状态" width="110"><template #default="s"><el-tag :type="approvalStatusType(s.row.status)">{{ approvalStatusName(s.row.status) }}</el-tag></template></el-table-column>
               <el-table-column prop="riskLevel" label="风险" width="90"><template #default="s"><el-tag :type="riskType(s.row.riskLevel)" effect="plain">{{ s.row.riskLevel }}</el-tag></template></el-table-column>
-              <el-table-column prop="sql" label="SQL 摘要" min-width="300" show-overflow-tooltip />
+              <el-table-column label="SQL 摘要" min-width="300"><template #default="s"><span class="cell-ellipsis">{{ s.row.sql }}</span></template></el-table-column>
               <el-table-column prop="createdAtUtc" label="提交时间" width="180"><template #default="s">{{ formatDate(s.row.createdAtUtc) }}</template></el-table-column>
               <el-table-column label="操作" width="110"><template #default="s"><el-button size="small" type="primary" plain @click="openApproval(s.row)">查看详情</el-button></template></el-table-column>
             </el-table>
@@ -365,13 +327,13 @@
               <div><h3>网关调用与审计日志</h3><p>记录 AI 查询、日志读取、变更提单、人工审批、数据源、用户及认证操作。</p></div>
               <div class="toolbar-actions"><el-input v-model="logKeyword" class="log-search" clearable placeholder="搜索人员、动作、SQL 或结果数据" @keyup.enter="searchAuditLogs" /><el-select v-model="logOutcome" class="status-filter" @change="searchAuditLogs"><el-option label="全部结果" value="" /><el-option label="成功" value="success" /><el-option label="失败" value="failure" /><el-option label="待处理" value="pending" /><el-option label="已拒绝" value="rejected" /></el-select><el-button type="primary" @click="searchAuditLogs">查询</el-button><el-button @click="resetLogSearch">重置</el-button></div>
             </div>
-            <el-table :data="auditLogs" stripe border max-height="calc(100vh - 360px)" class="paged-table" @row-dblclick="openLog">
+            <el-table :data="auditLogs" stripe border height="100%" class="paged-table page-table" @row-dblclick="openLog">
               <el-table-column prop="createdAtUtc" label="时间" width="180"><template #default="s">{{ formatDate(s.row.createdAtUtc) }}</template></el-table-column>
               <el-table-column prop="actor" label="调用者" min-width="150" />
               <el-table-column prop="action" label="动作" min-width="170"><template #default="s">{{ actionName(s.row.action) }}</template></el-table-column>
               <el-table-column prop="outcome" label="结果" width="100"><template #default="s"><el-tag :type="outcomeType(s.row.outcome)">{{ outcomeName(s.row.outcome) }}</el-tag></template></el-table-column>
               <el-table-column prop="dataSourceName" label="数据源" min-width="140"><template #default="s">{{ s.row.dataSourceName || (s.row.dataSourceId ? shortId(s.row.dataSourceId) : '—') }}</template></el-table-column>
-              <el-table-column label="详情" min-width="320" show-overflow-tooltip><template #default="s">{{ logSummary(s.row) }}</template></el-table-column>
+              <el-table-column label="详情" min-width="320"><template #default="s"><span class="cell-ellipsis">{{ logSummary(s.row) }}</span></template></el-table-column>
               <el-table-column label="操作" width="90"><template #default="s"><el-button size="small" link type="primary" @click="openLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="auditLogs.length === 0" description="暂无运行日志" />
@@ -426,7 +388,7 @@
           <el-tab-pane v-if="isAdmin && isPageOpen('users')" label="用户管理" name="users">
           <section class="secondary-page">
           <div class="toolbar"><div><h2>用户管理</h2><p>管理本地后台账号、状态和角色；有历史记录的用户应禁用而不是删除。</p></div><el-button type="primary" @click="openUserDialog()">新增用户</el-button></div>
-          <el-table :data="pagedUsers" stripe>
+          <el-table :data="pagedUsers" stripe height="100%" class="page-table">
             <el-table-column prop="userName" label="用户名" /><el-table-column prop="displayName" label="显示名称" /><el-table-column prop="email" label="邮箱" min-width="200" />
             <el-table-column label="角色" min-width="180"><template #default="s">{{ s.row.roles.join(', ') }}</template></el-table-column>
             <el-table-column label="状态" width="100"><template #default="s"><el-tag :type="s.row.isEnabled?'success':'danger'">{{ s.row.isEnabled?'启用':'禁用' }}</el-tag></template></el-table-column>
@@ -439,8 +401,8 @@
           <el-tab-pane v-if="isAdmin && isPageOpen('clients')" label="OAuth2 客户端" name="clients">
           <section class="secondary-page">
           <div class="toolbar"><div><h2>OAuth2 客户端</h2><p>客户端名称和权限可随时调整；修改权限后已签发 Token 会立即撤销。</p></div><el-button type="primary" @click="openClientDialog()">创建客户端</el-button></div>
-          <el-table :data="pagedClients" stripe>
-            <el-table-column prop="displayName" label="名称" min-width="180" /><el-table-column prop="clientId" label="Client ID" min-width="300" />
+          <el-table :data="pagedClients" stripe height="100%" class="page-table">
+            <el-table-column prop="displayName" label="名称" min-width="180" /><el-table-column label="Client ID" min-width="300"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis">{{ s.row.clientId }}</span><el-button v-if="isLongCell(s.row.clientId)" link type="primary" @click="openTextViewer('Client ID', s.row.clientId)">查看</el-button></div></template></el-table-column>
             <el-table-column label="权限" min-width="360"><template #default="s"><div class="permission-list"><el-tag v-for="scope in s.row.scopes" :key="scope" effect="plain">{{ oauthScopeName(scope) }}</el-tag><span v-if="!s.row.scopes?.length">无业务权限</span></div></template></el-table-column>
             <el-table-column label="操作" width="180"><template #default="s"><el-button size="small" @click="openClientDialog(s.row)">编辑权限</el-button><el-button size="small" type="danger" @click="deleteClient(s.row)">吊销删除</el-button></template></el-table-column>
           </el-table>
@@ -542,17 +504,31 @@
 
       <el-dialog v-model="applicationLogDialog" :fullscreen="logDetailMaximized" :draggable="!logDetailMaximized" width="90%" class="detail-window log-dialog" overflow>
         <template #header><div class="dialog-header-row"><span class="dialog-header-title">应用日志完整数据</span><el-button class="dialog-max-button" link type="primary" @click="toggleDetailMax('logDetailMaximized')"><el-icon><FullScreen /></el-icon>{{ logDetailMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
-        <div v-if="selectedApplicationLog" class="detail-dialog">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="事件 ID">{{ selectedApplicationLog.id }}</el-descriptions-item><el-descriptions-item label="时间">{{ formatDate(selectedApplicationLog.timestampUtc) }}</el-descriptions-item>
-            <el-descriptions-item label="级别"><el-tag :type="logLevelType(selectedApplicationLog.level)">{{ selectedApplicationLog.level || '未知' }}</el-tag></el-descriptions-item><el-descriptions-item label="解析状态"><el-tag :type="selectedApplicationLog.incomplete ? 'warning' : 'success'">{{ selectedApplicationLog.incomplete ? '记录不完整' : '结构化成功' }}</el-tag></el-descriptions-item>
-            <el-descriptions-item v-if="selectedApplicationLog.parseWarning" label="解析提示" :span="2"><span class="warning-text">{{ selectedApplicationLog.parseWarning }}</span></el-descriptions-item>
-            <el-descriptions-item v-if="selectedApplicationLog.exception" label="异常" :span="2"><pre class="inline-exception">{{ selectedApplicationLog.exception }}</pre></el-descriptions-item>
-          </el-descriptions>
-          <div class="detail-section"><h4>消息</h4><pre class="log-detail">{{ selectedApplicationLog.message || '—' }}</pre></div>
-          <div class="detail-section"><h4>结构化属性</h4><el-table :data="pagedApplicationLogProperties" stripe border max-height="340"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><div class="property-value-row"><pre class="property-value">{{ formatCell(s.row.value) }}</pre><el-button v-if="detectStructuredValue(s.row.value)" link type="primary" size="small" class="property-view-button" @click="openPropertyValueViewer(s.row)">{{ detectStructuredValue(s.row.value) === 'json' ? '格式化查看' : 'SQL 预览' }}</el-button></div></template></el-table-column></el-table><el-pagination v-if="applicationLogProperties.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="applicationLogPropertyPage" :page-size="detailPageSize" :total="applicationLogProperties.length" layout="total, prev, pager, next" background /></div>
-          <div class="detail-section"><h4>原始记录</h4><pre class="log-detail">{{ selectedApplicationLog.rawText }}</pre></div>
-        </div>
+        <el-tabs v-if="selectedApplicationLog" v-model="applicationLogDetailTab" class="log-detail-tabs">
+          <el-tab-pane label="概况与消息" name="overview">
+            <div class="detail-tab-page">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="事件 ID">{{ selectedApplicationLog.id }}</el-descriptions-item><el-descriptions-item label="时间">{{ formatDate(selectedApplicationLog.timestampUtc) }}</el-descriptions-item>
+                <el-descriptions-item label="级别"><el-tag :type="logLevelType(selectedApplicationLog.level)">{{ selectedApplicationLog.level || '未知' }}</el-tag></el-descriptions-item><el-descriptions-item label="解析状态"><el-tag :type="selectedApplicationLog.incomplete ? 'warning' : 'success'">{{ selectedApplicationLog.incomplete ? '记录不完整' : '结构化成功' }}</el-tag></el-descriptions-item>
+                <el-descriptions-item v-if="selectedApplicationLog.parseWarning" label="解析提示" :span="2"><span class="warning-text">{{ selectedApplicationLog.parseWarning }}</span></el-descriptions-item>
+                <el-descriptions-item v-if="selectedApplicationLog.exception" label="异常" :span="2"><pre class="inline-exception">{{ selectedApplicationLog.exception }}</pre></el-descriptions-item>
+              </el-descriptions>
+              <div class="detail-section"><h4>消息</h4><pre class="log-detail">{{ selectedApplicationLog.message || '—' }}</pre></div>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="结构化属性" name="properties">
+            <div class="detail-tab-page fixed-list-page"><el-table :data="pagedApplicationLogProperties" stripe border height="100%" class="page-table"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis monospace">{{ formatCell(s.row.value) }}</span><el-button v-if="isLongCell(s.row.value) || detectStructuredValue(s.row.value)" link type="primary" size="small" @click="openPropertyValueViewer(s.row)">查看</el-button></div></template></el-table-column></el-table><el-pagination v-if="applicationLogProperties.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="applicationLogPropertyPage" :page-size="detailPageSize" :total="applicationLogProperties.length" layout="total, prev, pager, next" background /></div>
+          </el-tab-pane>
+          <el-tab-pane v-if="selectedApplicationLogSql" label="SQL 分析" name="sql">
+            <div class="detail-tab-page sql-trace-page">
+              <div class="sql-trace-toolbar"><el-select v-model="logSqlProjectId" placeholder="选择关联项目" filterable @change="logSqlProjectChanged"><el-option v-for="project in logSqlProjects" :key="project.id" :value="project.id" :label="`${project.code} / ${project.name}`" /></el-select><el-select v-model="logSqlDataSourceId" placeholder="选择项目数据源" filterable><el-option v-for="source in logSqlDataSources" :key="source.id" :value="source.id" :label="`${source.key} / ${source.name}（${source.provider}）`" /></el-select><el-tag :type="selectedApplicationLogSqlIsReadOnly ? 'success' : 'warning'" effect="plain">{{ selectedApplicationLogSqlIsReadOnly ? '只读 SQL' : '仅格式化预览' }}</el-tag><el-button type="primary" :disabled="!canExecuteSelectedLogSql" :loading="logSqlLoading" @click="executeSelectedLogSql">尝试只读执行</el-button></div>
+              <el-alert title="只允许执行 SELECT 等只读语句；仍会经过网关的 SQL 安全检查、表黑名单和最大返回行数限制。数据源仅来自该日志源关联项目。" type="info" :closable="false" show-icon />
+              <pre class="beautify-viewer sql-preview" v-html="selectedApplicationLogSqlHtml"></pre>
+              <div v-if="logSqlResult" class="sql-result fixed-list-page"><el-table :data="pagedLogSqlRows" stripe border height="100%" class="page-table"><el-table-column v-for="column in logSqlResult.columns" :key="column" :label="column" min-width="150"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis monospace">{{ formatCell(s.row[column]) }}</span><el-button v-if="isLongCell(s.row[column])" link type="primary" @click="openTextViewer(column, s.row[column])">查看</el-button></div></template></el-table-column></el-table><el-pagination class="pagination-panel element-pagination compact-pagination" v-model:current-page="logSqlResultPage" :page-size="detailPageSize" :total="logSqlResult.rows.length" layout="total, prev, pager, next" background /></div>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="原始记录" name="raw"><div class="detail-tab-page"><pre class="log-detail raw-log-detail">{{ selectedApplicationLog.rawText || '—' }}</pre></div></el-tab-pane>
+        </el-tabs>
         <template #footer><el-button @click="applicationLogDialog=false">关闭</el-button></template>
       </el-dialog>
 
@@ -589,7 +565,7 @@
           <div v-if="Array.isArray(selectedLogDetail.rows)" class="detail-section">
             <h4>查询结果（{{ selectedLogDetail.rows.length }} 行）</h4>
             <el-table :data="pagedSelectedLogRows" stripe border max-height="420" class="query-result-table">
-              <el-table-column v-for="column in selectedLogColumns" :key="column" :label="column" min-width="150" show-overflow-tooltip><template #default="s">{{ formatCell(s.row[column]) }}</template></el-table-column>
+              <el-table-column v-for="column in selectedLogColumns" :key="column" :label="column" min-width="150"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis">{{ formatCell(s.row[column]) }}</span><el-button v-if="isLongCell(s.row[column])" link type="primary" @click="openTextViewer(column, s.row[column])">查看</el-button></div></template></el-table-column>
             </el-table>
             <el-empty v-if="selectedLogDetail.rows.length === 0" description="查询结果为空" />
             <el-pagination v-if="selectedLogDetail.rows.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="selectedLogRowPage" :page-size="detailPageSize" :total="selectedLogDetail.rows.length" layout="total, prev, pager, next" background />
@@ -600,7 +576,7 @@
       </el-dialog>
 
       <el-dialog v-model="propertyViewerDialog" width="840px" top="6vh" class="property-viewer-dialog" destroy-on-close>
-        <template #header><span class="dialog-header-title">字段 {{ propertyViewer.key }} · {{ propertyViewer.kind === 'json' ? 'JSON 格式化' : 'SQL 预览' }}</span></template>
+        <template #header><span class="dialog-header-title">{{ propertyViewer.key }} · {{ propertyViewer.kind === 'json' ? 'JSON 格式化' : propertyViewer.kind === 'sql' ? 'SQL 格式化' : '完整内容' }}</span></template>
         <pre class="beautify-viewer" v-html="propertyViewerHtml"></pre>
         <template #footer>
           <el-button @click="copyPropertyValue">复制</el-button>
@@ -629,10 +605,19 @@
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import MetricTrendChart from './components/MetricTrendChart.vue'
 
 axios.defaults.withCredentials = true
 
+const storedTrendKeys = () => {
+  try {
+    const value = JSON.parse(localStorage.getItem('gateway.metricTrendKeys') || '[]')
+    return Array.isArray(value) && value.every(item => typeof item === 'string') ? value.slice(0, 4) : []
+  } catch (_) { return [] }
+}
+
 export default {
+  components: { MetricTrendChart },
   data: () => ({
     loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', openTabs: ['overview'], sidebarCollapsed: localStorage.getItem('gateway.sidebarCollapsed') === 'true', uiTheme: localStorage.getItem('gateway.uiTheme') === 'dark' ? 'dark' : 'light', zhCn, generatedClient: null,
     eventSource: null, eventConnected: false, eventRefreshTimer: null,
@@ -653,10 +638,10 @@ export default {
     projectDialog: false, editingProject: null, projectForm: {},
     logSourceDialog: false, editingLogSource: null, logSourceForm: {},
     monitorTargetDialog: false, editingMonitorTarget: null, monitorTargetForm: {}, monitorCredentialDialog: false, monitorCredential: null,
-    selectedMonitorTargetId: '', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
+    selectedMonitorTargetId: '', monitorSection: 'overview', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendKeys: storedTrendKeys(), metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
     applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogTopic: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
     realtimeLogs: [], realtimeLogPage: 1, realtimeLogPageSize: 50, realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogTopic: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
-    applicationLogDialog: false, selectedApplicationLog: null, applicationLogPropertyPage: 1, logDetailMaximized: false, approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
+    applicationLogDialog: false, selectedApplicationLog: null, selectedApplicationLogSourceId: '', applicationLogDetailTab: 'overview', applicationLogPropertyPage: 1, logDetailMaximized: false, logSqlProjects: [], logSqlProjectId: '', logSqlDataSourceId: '', logSqlResult: null, logSqlResultPage: 1, logSqlLoading: false, approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null, selectedLogRowPage: 1, detailPageSize: 20,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
     clientDialog: false, editingClient: null, clientForm: { displayName: '', scopes: [] },
@@ -700,6 +685,7 @@ export default {
       const selected = new Set(this.selectedMonitorTarget?.metricKeys || [])
       return this.metricCatalog.filter(item => selected.has(item.key))
     },
+    selectedTrendMetrics () { const selected = new Set(this.metricTrendKeys); return this.selectableTrendMetrics.filter(item => selected.has(item.key)).slice(0, 4) },
     selectedTrendMetric () { return this.metricCatalog.find(item => item.key === this.metricTrendKey) },
     metricTrendValues () { return this.metricTrendSamples.map(item => this.metricValue(item, this.metricTrendKey)).filter(value => value !== null) },
     metricTrendScale () {
@@ -794,6 +780,13 @@ export default {
     applicationLogPaginationTotal () { return this.applicationLogPartial ? Math.max(this.applicationLogTotal, this.applicationLogPage * this.applicationLogPageSize + 1) : this.applicationLogTotal },
     applicationLogProperties () { return Object.entries(this.selectedApplicationLog?.properties || {}).map(([key, value]) => ({ key, value })) },
     pagedApplicationLogProperties () { return this.paginate(this.applicationLogProperties, this.applicationLogPropertyPage, this.detailPageSize) },
+    selectedApplicationLogSql () { return this.extractLogSql(this.selectedApplicationLog) },
+    selectedApplicationLogSqlHtml () { return this.highlightSql(this.formatSql(this.selectedApplicationLogSql)) },
+    selectedApplicationLogSqlIsReadOnly () { return /^\s*(select|with)\b/i.test(this.selectedApplicationLogSql) },
+    selectedLogSqlProject () { return this.logSqlProjects.find(item => item.id === this.logSqlProjectId) },
+    logSqlDataSources () { return this.selectedLogSqlProject?.dataSources || [] },
+    canExecuteSelectedLogSql () { return this.canOperate && this.selectedApplicationLogSqlIsReadOnly && !!this.logSqlProjectId && !!this.logSqlDataSourceId },
+    pagedLogSqlRows () { return this.paginate(this.logSqlResult?.rows || [], this.logSqlResultPage, this.detailPageSize) },
     propertyViewerHtml () {
       const text = this.propertyViewer.text || ''
       if (this.propertyViewer.kind === 'json') {
@@ -809,7 +802,7 @@ export default {
         } catch (error) { return this.escapeHtml(text) }
       }
       if (this.propertyViewer.kind === 'sql') {
-        return this.escapeHtml(text).replace(/\b(select|from|where|insert|into|values|update|set|delete|create|table|primary|key|foreign|references|alter|drop|index|view|inner|left|right|outer|join|on|group|by|order|having|limit|as|distinct|union|all|with|and|or|not|null|asc|desc|exec|use)\b/gi, m => `<span class="token-keyword">${m}</span>`)
+        return this.highlightSql(this.formatSql(text))
       }
       return this.escapeHtml(text)
     },
@@ -1147,6 +1140,16 @@ export default {
     ensureTrendMetric () {
       const keys = this.selectedMonitorTarget?.metricKeys || []
       if (!keys.includes(this.metricTrendKey)) this.metricTrendKey = keys[0] || 'cpu.percent'
+      const valid = this.metricTrendKeys.filter(key => keys.includes(key)).slice(0, 4)
+      this.metricTrendKeys = valid.length ? valid : keys.slice(0, 2)
+      localStorage.setItem('gateway.metricTrendKeys', JSON.stringify(this.metricTrendKeys))
+    },
+    trendMetricSelectionChanged (keys) {
+      if (keys.length > 4) {
+        this.metricTrendKeys = keys.slice(0, 4)
+        ElMessage.warning('一个页面最多同时显示 4 个指标')
+      }
+      localStorage.setItem('gateway.metricTrendKeys', JSON.stringify(this.metricTrendKeys))
     },
     openMonitorTarget (row) {
       this.editingMonitorTarget = row || null
@@ -1301,11 +1304,36 @@ export default {
       if (statements.includes(words[0]) && words.some(word => support.includes(word))) return 'sql'
       return null
     },
-    openPropertyValueViewer (row) {
-      const kind = this.detectStructuredValue(row.value)
-      const text = this.formatCell(row.value)
-      this.propertyViewer = { key: row.key, kind, text, pretty: kind === 'json' ? this.extractJsonPretty(row.value) || text : text }
+    extractLogSql (row) {
+      if (!row) return ''
+      const properties = row.properties || {}
+      const priorityKeys = ['sql', 'query', 'commandtext', 'command_text', 'statement', 'databasecommand', 'database_command']
+      for (const [key, value] of Object.entries(properties)) {
+        if (priorityKeys.includes(String(key).toLowerCase()) && this.detectStructuredValue(String(value)) === 'sql') return String(value).trim()
+      }
+      for (const value of [...Object.values(properties), row.message, row.rawText]) {
+        if (typeof value !== 'string') continue
+        const match = value.match(/\b(select|with|insert|update|delete|merge|create|alter|drop|truncate)\b[\s\S]*/i)
+        if (match && this.detectStructuredValue(match[0]) === 'sql') return match[0].trim()
+      }
+      return ''
+    },
+    formatSql (value) {
+      if (!value) return ''
+      return String(value).trim().replace(/\s+/g, ' ').replace(/\s*;\s*/g, ';\n').replace(/\b(FROM|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|OFFSET|VALUES|SET|UNION(?:\s+ALL)?|INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|FULL\s+JOIN|JOIN|ON|AND|OR)\b/gi, '\n$1').replace(/\n\s*\n/g, '\n').trim()
+    },
+    highlightSql (value) {
+      return this.escapeHtml(value).replace(/\b(select|from|where|insert|into|values|update|set|delete|create|table|primary|key|foreign|references|alter|drop|truncate|merge|index|view|inner|left|right|full|outer|join|on|group|by|order|having|limit|offset|as|distinct|union|all|with|and|or|not|null|asc|desc|exec|use)\b/gi, m => `<span class="token-keyword">${m}</span>`)
+    },
+    isLongCell (value) { return this.formatCell(value).length > 36 },
+    openTextViewer (key, value, kind = null) {
+      const text = this.formatCell(value)
+      const detected = kind || this.detectStructuredValue(text)
+      this.propertyViewer = { key, kind: detected, text, pretty: detected === 'json' ? this.extractJsonPretty(text) || text : text }
       this.propertyViewerDialog = true
+    },
+    openPropertyValueViewer (row) {
+      this.openTextViewer(row.key, row.value)
     },
     escapeHtml (text) {
       return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1315,7 +1343,32 @@ export default {
       navigator.clipboard.writeText(text).then(() => ElMessage.success('已复制')).catch(() => ElMessage.error('复制失败'))
     },
     topicOf (row) { return row.properties?.Topic ?? row.properties?.topic ?? null },
-    openApplicationLog (row) { this.selectedApplicationLog = row; this.applicationLogPropertyPage = 1; this.applicationLogDialog = true },
+    async openApplicationLog (row, tab = 'overview') {
+      this.selectedApplicationLog = row
+      this.selectedApplicationLogSourceId = this.activeTab === 'realtimelogs' ? this.realtimeLogSourceId : this.applicationLogSourceId
+      this.applicationLogPropertyPage = 1
+      this.applicationLogDetailTab = tab === 'sql' && this.extractLogSql(row) ? 'sql' : tab
+      this.logSqlProjects = []; this.logSqlProjectId = ''; this.logSqlDataSourceId = ''; this.logSqlResult = null; this.logSqlResultPage = 1
+      this.applicationLogDialog = true
+      if (this.extractLogSql(row)) await this.loadLogSqlProjects()
+    },
+    async loadLogSqlProjects () {
+      if (!this.selectedApplicationLogSourceId) return
+      try {
+        this.logSqlProjects = (await axios.get(`/api/logs/${this.selectedApplicationLogSourceId}/sql/projects`)).data
+        if (this.logSqlProjects.length === 1) this.logSqlProjectId = this.logSqlProjects[0].id
+        this.logSqlProjectChanged()
+      } catch (e) { this.error(e) }
+    },
+    logSqlProjectChanged () { this.logSqlDataSourceId = this.logSqlDataSources.length === 1 ? this.logSqlDataSources[0].id : ''; this.logSqlResult = null; this.logSqlResultPage = 1 },
+    async executeSelectedLogSql () {
+      if (!this.canExecuteSelectedLogSql) return
+      this.logSqlLoading = true; this.logSqlResult = null; this.logSqlResultPage = 1
+      try {
+        this.logSqlResult = (await axios.post(`/api/logs/${this.selectedApplicationLogSourceId}/sql/query`, { projectId: this.logSqlProjectId, dataSourceId: this.logSqlDataSourceId, sql: this.selectedApplicationLogSql })).data
+        ElMessage.success(`查询完成，返回 ${this.logSqlResult.rows.length} 行${this.logSqlResult.truncated ? '（已按数据源上限截断）' : ''}`)
+      } catch (e) { this.error(e) } finally { this.logSqlLoading = false }
+    },
     logSourceTypeName (type) { return ({ 1: '本地 NLog', 2: 'Seq', 3: '远程 Agent' })[type] || type },
     logLevelType (level) { const value = String(level || '').toLowerCase(); if (value === 'fatal' || value === 'error') return 'danger'; if (value === 'warn' || value === 'warning') return 'warning'; if (value === 'debug' || value === 'trace') return 'info'; return 'success' },
     async openApproval (row) { try { this.selectedApproval = (await axios.get(`/api/approvals/${row.id}`)).data; this.reviewComment = ''; this.approvalDialog = true } catch (e) { this.error(e) } },

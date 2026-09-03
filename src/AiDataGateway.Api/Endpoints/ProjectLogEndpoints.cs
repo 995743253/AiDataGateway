@@ -48,9 +48,35 @@ internal static class ProjectLogEndpoints
         endpoints.MapGet("/api/log-sources", ListReadableLogSourcesAsync).RequireAuthorization();
         endpoints.MapPost("/api/logs/query", QueryLogsAsync).RequireAuthorization();
         endpoints.MapGet("/api/logs/stream", StreamLogsAsync).RequireAuthorization();
+        endpoints.MapGet("/api/logs/{logSourceId:guid}/sql/projects", ListLogSqlProjectsAsync).RequireAuthorization();
+        endpoints.MapPost("/api/logs/{logSourceId:guid}/sql/query", ExecuteLogSqlAsync).RequireAuthorization();
         endpoints.MapGet("/api/gateway/projects/{code}", GetProjectForAiAsync).RequireAuthorization();
         endpoints.MapPost("/api/gateway/logs/query", QueryProjectLogsForAiAsync).RequireAuthorization();
         return endpoints;
+    }
+
+    private static async Task<IResult> ListLogSqlProjectsAsync(
+        Guid logSourceId,
+        HttpContext context,
+        LogSqlTraceService service,
+        CancellationToken cancellationToken)
+    {
+        if (!GatewayPrincipal.Can(context.User, GatewayScopes.LogRead,
+                GatewayRoles.Operator, GatewayRoles.Auditor, GatewayRoles.Approver)) return Results.Forbid();
+        return Results.Ok(await service.ListProjectsAsync(logSourceId, cancellationToken));
+    }
+
+    private static async Task<IResult> ExecuteLogSqlAsync(
+        Guid logSourceId,
+        LogSqlQueryRequest request,
+        HttpContext context,
+        LogSqlTraceService service,
+        CancellationToken cancellationToken)
+    {
+        if (!GatewayPrincipal.Can(context.User, GatewayScopes.QueryExecute,
+                GatewayRoles.Developer, GatewayRoles.Operator)) return Results.Forbid();
+        return Results.Ok(await service.ExecuteReadAsync(logSourceId, request,
+            GatewayPrincipal.Actor(context.User), cancellationToken));
     }
 
     private static async Task StreamLogsAsync(

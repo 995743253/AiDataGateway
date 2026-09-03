@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<ChangeSubmissionService>();
         services.AddScoped<ProjectService>();
         services.AddScoped<LogSourceService>();
+        services.AddScoped<LogSqlTraceService>();
         services.AddScoped<MonitoringService>();
         services.AddSingleton<ISqlSafetyAnalyzer, SqlSafetyAnalyzer>();
         services.AddSingleton<ISqlTableAccessGuard, SqlTableAccessGuard>();
