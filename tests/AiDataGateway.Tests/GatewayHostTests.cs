@@ -763,6 +763,13 @@ public sealed class GatewayHostTests
             var token = hook.GetProperty("token").GetString();
             var hookId = hook.GetProperty("id").GetGuid();
 
+            // listing must not trip over DateTimeOffset ordering on SQLite
+            var listResponse = await client.GetAsync("/api/toolbox/webhooks");
+            Assert.True(listResponse.IsSuccessStatusCode, await listResponse.Content.ReadAsStringAsync());
+            var listed = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(1, listed.GetArrayLength());
+            Assert.Equal("debug hook", listed[0].GetProperty("name").GetString());
+
             using var anonymous = new HttpClient { BaseAddress = host.BaseAddress };
             var ingest = await anonymous.PostAsync($"/toolbox/hook/{token}", new StringContent("{\"ping\":1}", System.Text.Encoding.UTF8, "application/json"));
             Assert.Equal(HttpStatusCode.Accepted, ingest.StatusCode);

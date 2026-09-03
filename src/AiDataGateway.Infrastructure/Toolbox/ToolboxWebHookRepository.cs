@@ -9,10 +9,12 @@ internal sealed class ToolboxWebHookRepository(GatewayDbContext dbContext) : ITo
 {
     public async Task<IReadOnlyList<WebHookDefinition>> ListAsync(CancellationToken cancellationToken = default)
     {
-        return await dbContext.ToolboxWebHooks
+        // SQLite cannot translate ORDER BY for DateTimeOffset values, so the
+        // ordering happens in memory (same approach as ChangeRequestRepository).
+        var hooks = await dbContext.ToolboxWebHooks
             .AsNoTracking()
-            .OrderByDescending(item => item.CreatedAtUtc)
             .ToListAsync(cancellationToken);
+        return hooks.OrderByDescending(item => item.CreatedAtUtc).ToList();
     }
 
     public Task<WebHookDefinition?> FindAsync(Guid id, CancellationToken cancellationToken = default) =>
