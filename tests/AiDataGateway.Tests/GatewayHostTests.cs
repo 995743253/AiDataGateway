@@ -731,6 +731,71 @@ public sealed class GatewayHostTests
         }
     }
 
+    [Fact]
+    public async Task Toolbox_webhooks_support_ingest_history_clear_and_cascade_delete()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), "AiDataGateway.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempPath);
+        GatewayWebHost? host = null;
+        try
+        {
+            host = await StartHostAsync(tempPath);
+            using var client = new HttpClient { BaseAddress = host.BaseAddress };
+            var setupResponse = await client.PostAsJsonAsync("/api/setup", new
+            {
+                userName = "toolbox-admin",
+                email = "toolbox-admin@example.local",
+                displayName = "Toolbox Administrator",
+                password = "StrongPassword10",
+            });
+            Assert.True(setupResponse.IsSuccessStatusCode, await setupResponse.Content.ReadAsStringAsync());
+            var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new
+            {
+                userName = "toolbox-admin",
+                password = "StrongPassword10",
+                rememberMe = false,
+            });
+            Assert.True(loginResponse.IsSuccessStatusCode, await loginResponse.Content.ReadAsStringAsync());
+
+            var createResponse = await client.PostAsJsonAsync("/api/toolbox/webhooks", new { name = "debug hook", description = "集成测试" });
+            Assert.True(createResponse.IsSuccessStatusCode, await createResponse.Content.ReadAsStringAsync());
+            var hook = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var token = hook.GetProperty("token").GetString();
+            var hookId = hook.GetProperty("id").GetGuid();
+
+            using var anonymous = new HttpClient { BaseAddress = host.BaseAddress };
+            var ingest = await anonymous.PostAsync($"/toolbox/hook/{token}", new StringContent("{\"ping\":1}", System.Text.Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.Accepted, ingest.StatusCode);
+
+            var missing = await anonymous.PostAsJsonAsync("/toolbox/hook/deadbeefdead", new { x = 1 });
+            Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+            var deliveries = await client.GetFromJsonAsync<JsonElement>($"/api/toolbox/webhooks/{hookId}/deliveries");
+            Assert.Equal(1, deliveries.GetArrayLength());
+            Assert.Equal("POST", deliveries[0].GetProperty("method").GetString());
+            Assert.Contains("ping", deliveries[0].GetProperty("body").GetString());
+
+            var disable = await client.PutAsJsonAsync($"/api/toolbox/webhooks/{hookId}", new { name = "debug hook", description = "集成测试", enabled = false });
+            Assert.True(disable.IsSuccessStatusCode, await disable.Content.ReadAsStringAsync());
+            var disabledIngest = await anonymous.PostAsJsonAsync($"/toolbox/hook/{token}", new { x = 1 });
+            Assert.Equal(HttpStatusCode.NotFound, disabledIngest.StatusCode);
+
+            await client.PostAsync($"/api/toolbox/webhooks/{hookId}/deliveries/clear", null);
+            deliveries = await client.GetFromJsonAsync<JsonElement>($"/api/toolbox/webhooks/{hookId}/deliveries");
+            Assert.Equal(0, deliveries.GetArrayLength());
+
+            var delete = await client.DeleteAsync($"/api/toolbox/webhooks/{hookId}");
+            Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+            var afterDelete = await anonymous.PostAsJsonAsync($"/toolbox/hook/{token}", new { x = 1 });
+            Assert.Equal(HttpStatusCode.NotFound, afterDelete.StatusCode);
+        }
+        finally
+        {
+            if (host is not null) await host.DisposeAsync().AsTask();
+            DeleteTemporaryStorage(tempPath);
+        }
+    }
+
     private static Task<GatewayWebHost> StartHostAsync(string storagePath)
     {
         return GatewayWebHost.StartAsync(new GatewayHostOptions

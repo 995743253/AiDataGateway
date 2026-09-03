@@ -4,6 +4,7 @@ using AiDataGateway.Application.Maintenance;
 using AiDataGateway.Application.Sql;
 using AiDataGateway.Application.Projects;
 using AiDataGateway.Application.Logs;
+using AiDataGateway.Application.Toolbox;
 using AiDataGateway.Application.Monitoring;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<ChangeSubmissionService>();
         services.AddScoped<ProjectService>();
         services.AddScoped<LogSourceService>();
+        services.AddScoped<ToolboxWebHookService>();
         services.AddScoped<LogSqlTraceService>();
         services.AddScoped<MonitoringService>();
         services.AddSingleton<ISqlSafetyAnalyzer, SqlSafetyAnalyzer>();

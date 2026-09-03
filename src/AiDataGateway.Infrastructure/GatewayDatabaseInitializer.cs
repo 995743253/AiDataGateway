@@ -18,6 +18,7 @@ public sealed class GatewayDatabaseInitializer(
         await EnsureMaintenanceSettingsAsync(cancellationToken);
         await EnsureProjectAndLogTablesAsync(cancellationToken);
         await EnsureMonitoringTablesAsync(cancellationToken);
+        await EnsureToolboxTablesAsync(cancellationToken);
         foreach (var role in GatewayRoles.All)
         {
             if (!await roleManager.RoleExistsAsync(role))
@@ -105,6 +106,41 @@ public sealed class GatewayDatabaseInitializer(
                 "local", "本机网关服务器", Domain.Monitoring.MonitorTargetType.Local), cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private async Task EnsureToolboxTablesAsync(CancellationToken cancellationToken)
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS "GatewayToolboxWebHooks" (
+                "Id" TEXT NOT NULL CONSTRAINT "PK_GatewayToolboxWebHooks" PRIMARY KEY,
+                "Name" TEXT NOT NULL,
+                "Token" TEXT NOT NULL,
+                "Description" TEXT NOT NULL DEFAULT '',
+                "Enabled" INTEGER NOT NULL,
+                "CreatedAtUtc" TEXT NOT NULL
+            )
+            """, cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_GatewayToolboxWebHooks_Token\" ON \"GatewayToolboxWebHooks\" (\"Token\")", cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS "GatewayToolboxWebHookDeliveries" (
+                "Id" INTEGER NOT NULL CONSTRAINT "PK_GatewayToolboxWebHookDeliveries" PRIMARY KEY AUTOINCREMENT,
+                "WebHookId" TEXT NOT NULL,
+                "ReceivedAtUtc" TEXT NOT NULL,
+                "Method" TEXT NOT NULL,
+                "QueryString" TEXT NOT NULL DEFAULT '',
+                "ContentType" TEXT NOT NULL DEFAULT '',
+                "HeadersJson" TEXT NOT NULL DEFAULT '{{}}',
+                "Body" TEXT NOT NULL DEFAULT '',
+                "BodyTruncated" INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT "FK_GatewayToolboxWebHookDeliveries_GatewayToolboxWebHooks_WebHookId" FOREIGN KEY ("WebHookId") REFERENCES "GatewayToolboxWebHooks" ("Id") ON DELETE CASCADE
+            )
+            """, cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "CREATE INDEX IF NOT EXISTS \"IX_GatewayToolboxWebHookDeliveries_WebHookId_Id\" ON \"GatewayToolboxWebHookDeliveries\" (\"WebHookId\", \"Id\")", cancellationToken);
     }
 
     private async Task EnsureMaintenanceSettingsAsync(CancellationToken cancellationToken)

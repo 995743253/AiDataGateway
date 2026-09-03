@@ -89,6 +89,11 @@
               <el-menu-item index="users">用户管理</el-menu-item>
               <el-menu-item index="clients">OAuth2 客户端</el-menu-item>
             </el-sub-menu>
+            <el-sub-menu index="toolbox">
+              <template #title><span class="menu-glyph"><el-icon><Suitcase /></el-icon></span><span>工具箱</span></template>
+              <el-menu-item index="toolboxwebhooks">WebHook 调试</el-menu-item>
+              <el-menu-item index="toolboxtools">格式化与编码</el-menu-item>
+            </el-sub-menu>
           </el-menu>
           <div v-if="!sidebarCollapsed" class="sidebar-foot"><span class="sidebar-live-dot" :class="{ online: eventConnected }" /><span>{{ eventConnected ? '数据实时同步' : '正在连接服务' }}</span></div>
         </aside>
@@ -409,6 +414,62 @@
           <el-pagination class="pagination-panel element-pagination" v-model:current-page="clientPage" v-model:page-size="clientPageSize" :page-sizes="pageSizeOptions" :total="clients.length" layout="total, sizes, prev, pager, next, jumper" background />
           </section>
           </el-tab-pane>
+          <el-tab-pane v-if="isPageOpen('toolboxwebhooks')" label="WebHook 调试" name="toolboxwebhooks">
+            <div class="toolbar"><div><h3>WebHook 调试</h3><p>创建接收地址，让外部系统推送请求到此调试报文；报文仅手动清理，删除 WebHook 会级联删除其全部报文。</p></div><el-button type="primary" @click="openToolboxHook()">新增 WebHook</el-button></div>
+            <div v-if="toolboxHooks.length" class="fixed-list-page"><el-table :data="toolboxHooks" stripe border height="100%" class="page-table">
+              <el-table-column prop="name" label="名称" min-width="180"><template #default="s"><div class="hook-name-cell"><strong>{{ s.row.name }}</strong><small v-if="s.row.description">{{ s.row.description }}</small></div></template></el-table-column>
+              <el-table-column label="调用地址" min-width="380"><template #default="s"><div class="hook-url-row"><span class="cell-ellipsis monospace">{{ toolboxHookUrl(s.row) }}</span><el-button link type="primary" size="small" @click="copyToolboxUrl(s.row)">复制</el-button></div></template></el-table-column>
+              <el-table-column label="启用" width="90"><template #default="s"><el-switch :model-value="s.row.enabled" @change="toggleToolboxHook(s.row, $event)" /></template></el-table-column>
+              <el-table-column label="报文数" width="90"><template #default="s"><el-tag effect="plain">{{ s.row.deliveryCount }}</el-tag></template></el-table-column>
+              <el-table-column label="创建时间" width="180"><template #default="s">{{ formatDate(s.row.createdAtUtc) }}</template></el-table-column>
+              <el-table-column label="操作" width="240"><template #default="s"><el-button size="small" type="primary" plain @click="viewToolboxDeliveries(s.row)">查看报文</el-button><el-button size="small" @click="clearToolboxDeliveries(s.row)">清空报文</el-button><el-button size="small" type="danger" @click="deleteToolboxHook(s.row)">删除</el-button></template></el-table-column>
+            </el-table></div>
+            <el-empty v-else description="还没有 WebHook，点击右上角新增" />
+          </el-tab-pane>
+
+          <el-tab-pane v-if="isPageOpen('toolboxtools')" label="格式化与编码" name="toolboxtools">
+            <div class="toolbar"><div><h3>格式化与编码工具</h3><p>纯本地处理，输入内容不会离开这台电脑。</p></div></div>
+            <el-tabs type="border-card" class="toolbox-tool-tabs">
+              <el-tab-pane label="XML 格式化">
+                <div class="tool-grid">
+                  <el-input v-model="xmlTool.input" type="textarea" :rows="10" placeholder="粘贴需要格式化的 XML" />
+                  <div class="tool-actions"><el-button type="primary" @click="formatXmlTool">格式化</el-button><el-button @click="copyToolOutput('xmlTool.output')">复制结果</el-button><el-button @click="clearTool('xml')">清空</el-button></div>
+                  <el-alert v-if="xmlTool.error" :title="xmlTool.error" type="error" :closable="false" show-icon />
+                  <pre v-if="xmlTool.output" class="beautify-viewer">{{ xmlTool.output }}</pre>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="JSON 格式化">
+                <div class="tool-grid">
+                  <el-input v-model="jsonTool.input" type="textarea" :rows="10" placeholder="粘贴需要格式化的 JSON" />
+                  <div class="tool-actions"><el-button type="primary" @click="formatJsonTool">格式化</el-button><el-button @click="copyToolOutput('jsonTool.output')">复制结果</el-button><el-button @click="clearTool('json')">清空</el-button></div>
+                  <el-alert v-if="jsonTool.error" :title="jsonTool.error" type="error" :closable="false" show-icon />
+                  <pre v-if="jsonTool.output" class="beautify-viewer">{{ jsonTool.output }}</pre>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="大小写转换">
+                <div class="tool-grid">
+                  <el-input v-model="caseTool.input" type="textarea" :rows="8" placeholder="输入文本或标识符" />
+                  <div class="tool-actions">
+                    <el-button @click="convertCase('upper')">全部大写</el-button>
+                    <el-button @click="convertCase('lower')">全部小写</el-button>
+                    <el-button @click="convertCase('camel')">下划线转小驼峰</el-button>
+                    <el-button @click="convertCase('snake')">驼峰转下划线</el-button>
+                  </div>
+                  <el-input v-model="caseTool.output" type="textarea" :rows="6" readonly placeholder="转换结果" />
+                  <div class="tool-actions"><el-button type="primary" @click="copyToolOutput('caseTool.output')">复制结果</el-button><el-button @click="clearTool('case')">清空</el-button></div>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="Base64 编解码">
+                <div class="tool-grid">
+                  <el-input v-model="base64Tool.input" type="textarea" :rows="8" placeholder="编码：输入明文；解码：输入 Base64" />
+                  <div class="tool-actions"><el-button type="primary" @click="encodeBase64">编码</el-button><el-button type="primary" plain @click="decodeBase64">解码</el-button><el-button @click="copyToolOutput('base64Tool.output')">复制结果</el-button><el-button @click="clearTool('base64')">清空</el-button></div>
+                  <el-alert v-if="base64Tool.error" :title="base64Tool.error" type="error" :closable="false" show-icon />
+                  <el-input v-model="base64Tool.output" type="textarea" :rows="6" readonly placeholder="结果" />
+                </div>
+              </el-tab-pane>
+            </el-tabs>
+          </el-tab-pane>
+
         </el-tabs>
         </main>
       </div>
@@ -583,6 +644,26 @@
           <el-button type="primary" @click="propertyViewerDialog = false">关闭</el-button>
         </template>
       </el-dialog>
+      <el-dialog v-model="toolboxHookDialog" :title="editingToolboxHook ? '编辑 WebHook' : '新增 WebHook'" width="560px" destroy-on-close>
+        <el-form :model="toolboxHookForm" label-width="90px">
+          <el-form-item label="名称"><el-input v-model="toolboxHookForm.name" maxlength="100" placeholder="例如：订单回调调试" /></el-form-item>
+          <el-form-item label="描述"><el-input v-model="toolboxHookForm.description" maxlength="200" placeholder="可选" /></el-form-item>
+        </el-form>
+        <template #footer><el-button @click="toolboxHookDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveToolboxHook">{{ editingToolboxHook ? '保存' : '创建' }}</el-button></template>
+      </el-dialog>
+
+      <el-dialog v-model="toolboxDeliveryDialog" width="90%" class="detail-window" :fullscreen="toolboxDeliveryMaximized" :draggable="!toolboxDeliveryMaximized" destroy-on-close>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">报文记录 · {{ toolboxDeliveryHook?.name || '' }}</span><div class="dialog-header-actions"><el-button size="small" type="warning" plain @click="clearToolboxDeliveries(toolboxDeliveryHook)">清空全部报文</el-button><el-button class="dialog-max-button" link type="primary" @click="toggleDetailMax('toolboxDeliveryMaximized')"><el-icon><FullScreen /></el-icon>{{ toolboxDeliveryMaximized ? ' 还原' : ' 全屏' }}</el-button></div></div></template>
+        <div class="fixed-list-page"><el-table :data="toolboxDeliveries" stripe border height="100%" class="page-table">
+          <el-table-column prop="receivedAtUtc" label="接收时间" width="190"><template #default="s">{{ formatDate(s.row.receivedAtUtc) }}</template></el-table-column>
+          <el-table-column prop="method" label="方法" width="90" />
+          <el-table-column label="Content-Type" min-width="160"><template #default="s">{{ s.row.contentType || '—' }}</template></el-table-column>
+          <el-table-column label="查询参数" min-width="160"><template #default="s">{{ s.row.queryString || '—' }}</template></el-table-column>
+          <el-table-column label="报文" min-width="440"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis monospace">{{ s.row.bodyTruncated ? s.row.body + ' …（已截断）' : s.row.body }}</span><el-button v-if="s.row.body" link type="primary" size="small" @click="openTextViewer('报文', s.row.body)">查看</el-button></div></template></el-table-column>
+        </el-table></div>
+        <template #footer><el-button @click="toolboxDeliveryDialog=false">关闭</el-button></template>
+      </el-dialog>
+
       <el-dialog v-model="userDialog" :title="editingUser ? '编辑用户' : '新增用户'" width="580px">
         <el-form :model="newUser" label-width="100px"><el-form-item label="用户名"><el-input v-model="newUser.userName" :disabled="!!editingUser" /></el-form-item><el-form-item label="显示名称"><el-input v-model="newUser.displayName" /></el-form-item><el-form-item label="邮箱"><el-input v-model="newUser.email" :disabled="!!editingUser" /></el-form-item><el-form-item v-if="!editingUser" label="密码"><el-input v-model="newUser.password" type="password" show-password /></el-form-item><el-form-item label="角色"><el-select v-model="newUser.roles" multiple class="full-width"><el-option v-for="r in roles" :key="r" :label="r" :value="r" /></el-select></el-form-item><el-form-item v-if="editingUser" label="账号状态"><el-switch v-model="newUser.enabled" active-text="启用" inactive-text="禁用" /></el-form-item></el-form>
         <template #footer><el-button @click="userDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveUser">{{ editingUser ? '保存' : '创建' }}</el-button></template>
@@ -641,7 +722,7 @@ export default {
     selectedMonitorTargetId: '', monitorSection: 'overview', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendKeys: storedTrendKeys(), metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
     applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogTopic: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
     realtimeLogs: [], realtimeLogPage: 1, realtimeLogPageSize: 50, realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogTopic: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
-    applicationLogDialog: false, selectedApplicationLog: null, selectedApplicationLogSourceId: '', applicationLogDetailTab: 'overview', applicationLogPropertyPage: 1, logDetailMaximized: false, logSqlProjects: [], logSqlProjectId: '', logSqlDataSourceId: '', logSqlResult: null, logSqlResultPage: 1, logSqlLoading: false, approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
+    applicationLogDialog: false, selectedApplicationLog: null, selectedApplicationLogSourceId: '', applicationLogDetailTab: 'overview', applicationLogPropertyPage: 1, logDetailMaximized: false, logSqlProjects: [], logSqlProjectId: '', logSqlDataSourceId: '', logSqlResult: null, logSqlResultPage: 1, logSqlLoading: false, approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' }, toolboxHooks: [], toolboxDeliveries: [], toolboxDeliveryHook: null, toolboxDeliveryDialog: false, toolboxDeliveryMaximized: false, toolboxHookDialog: false, editingToolboxHook: null, toolboxHookForm: { name: '', description: '' }, xmlTool: { input: '', output: '', error: '' }, jsonTool: { input: '', output: '', error: '' }, caseTool: { input: '', output: '' }, base64Tool: { input: '', output: '', error: '' }, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null, selectedLogRowPage: 1, detailPageSize: 20,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
     clientDialog: false, editingClient: null, clientForm: { displayName: '', scopes: [] },
@@ -936,6 +1017,7 @@ export default {
       if (this.activeTab === 'settings') await this.loadMaintenanceSettings()
       if (this.activeTab === 'users') await this.loadUsers()
       if (this.activeTab === 'clients') await this.loadClients()
+      if (this.activeTab === 'toolboxwebhooks') await this.loadToolboxHooks()
     },
     async loadDataSources () { this.dataSources = (await axios.get('/api/admin/datasources')).data; this.dataSourcePage = this.clampPage(this.dataSourcePage, this.dataSources.length, this.dataSourcePageSize) },
     async loadProjects () { this.projects = (await axios.get('/api/admin/projects')).data; this.projectPage = this.clampPage(this.projectPage, this.projects.length, this.projectPageSize) },
@@ -1293,6 +1375,107 @@ export default {
       // a dragged dialog keeps its translate() offset, which would shift the
       // fullscreen window away from the viewport origin
       document.querySelectorAll('.el-dialog.is-fullscreen').forEach((el) => { el.style.transform = '' })
+    },
+    toolboxHookUrl (hook) { return window.location.origin + '/toolbox/hook/' + hook.token },
+    async loadToolboxHooks () {
+      try { this.toolboxHooks = (await axios.get('/api/toolbox/webhooks')).data } catch (e) { this.error(e) }
+    },
+    openToolboxHook (row) {
+      this.editingToolboxHook = row || null
+      this.toolboxHookForm = row ? { name: row.name, description: row.description } : { name: '', description: '' }
+      this.toolboxHookDialog = true
+    },
+    async saveToolboxHook () {
+      this.saving = true
+      try {
+        if (this.editingToolboxHook) await axios.put('/api/toolbox/webhooks/' + this.editingToolboxHook.id, { name: this.toolboxHookForm.name, description: this.toolboxHookForm.description, enabled: this.editingToolboxHook.enabled })
+        else await axios.post('/api/toolbox/webhooks', { name: this.toolboxHookForm.name, description: this.toolboxHookForm.description })
+        this.toolboxHookDialog = false
+        await this.loadToolboxHooks()
+        ElMessage.success('已保存')
+      } catch (e) { this.error(e) } finally { this.saving = false }
+    },
+    async toggleToolboxHook (row, enabled) {
+      try { await axios.put('/api/toolbox/webhooks/' + row.id, { name: row.name, description: row.description, enabled }); await this.loadToolboxHooks() } catch (e) { this.error(e) }
+    },
+    async deleteToolboxHook (row) {
+      try { await ElMessageBox.confirm('确定删除 ' + row.name + '？其全部历史报文将一并删除。', '删除 WebHook', { type: 'warning' }) } catch (e) { return }
+      try { await axios.delete('/api/toolbox/webhooks/' + row.id); await this.loadToolboxHooks(); ElMessage.success('已删除') } catch (e) { this.error(e) }
+    },
+    viewToolboxDeliveries (row) {
+      this.toolboxDeliveryHook = row
+      this.toolboxDeliveries = []
+      this.toolboxDeliveryDialog = true
+      axios.get('/api/toolbox/webhooks/' + row.id + '/deliveries').then(res => { this.toolboxDeliveries = res.data }).catch(e => this.error(e))
+    },
+    async clearToolboxDeliveries (row) {
+      try { await ElMessageBox.confirm('确定清空该 WebHook 的全部历史报文？', '清空报文', { type: 'warning' }) } catch (e) { return }
+      try {
+        await axios.post('/api/toolbox/webhooks/' + row.id + '/deliveries/clear')
+        if (this.toolboxDeliveryHook && this.toolboxDeliveryHook.id === row.id) this.toolboxDeliveries = []
+        await this.loadToolboxHooks()
+        ElMessage.success('已清空')
+      } catch (e) { this.error(e) }
+    },
+    copyToolboxUrl (hook) {
+      navigator.clipboard.writeText(this.toolboxHookUrl(hook)).then(() => ElMessage.success('已复制')).catch(() => ElMessage.error('复制失败'))
+    },
+    formatXmlTool () {
+      try {
+        const doc = new DOMParser().parseFromString(this.xmlTool.input, 'application/xml')
+        const parserError = doc.querySelector('parsererror')
+        if (parserError) throw new Error('XML 格式不正确：' + (parserError.textContent || '').split('\n')[0])
+        this.xmlTool.output = this.prettyXmlNode(doc.documentElement, 0)
+        this.xmlTool.error = ''
+      } catch (e) { this.xmlTool.output = ''; this.xmlTool.error = e.message }
+    },
+    prettyXmlNode (node, depth) {
+      const pad = '  '.repeat(depth)
+      const attrs = Array.from(node.attributes).map(item => ' ' + item.name + '="' + this.escapeHtml(item.value) + '"').join('')
+      const tag = node.tagName
+      const elements = Array.from(node.children)
+      const textParts = Array.from(node.childNodes).filter(item => item.nodeType === 3 && item.textContent.trim())
+      if (!elements.length && !textParts.length) return pad + '<' + tag + attrs + ' />'
+      if (!elements.length) return pad + '<' + tag + attrs + '>' + this.escapeHtml(textParts.map(item => item.textContent.trim()).join(' ')) + '</' + tag + '>'
+      const inner = elements.map(child => this.prettyXmlNode(child, depth + 1)).join('\n')
+      return pad + '<' + tag + attrs + '>\n' + inner + '\n' + pad + '</' + tag + '>'
+    },
+    formatJsonTool () {
+      try { this.jsonTool.output = JSON.stringify(JSON.parse(this.jsonTool.input), null, 2); this.jsonTool.error = '' }
+      catch (e) { this.jsonTool.output = ''; this.jsonTool.error = 'JSON 解析失败：' + e.message }
+    },
+    convertCase (direction) {
+      const text = this.caseTool.input
+      if (direction === 'upper') this.caseTool.output = text.toUpperCase()
+      else if (direction === 'lower') this.caseTool.output = text.toLowerCase()
+      else if (direction === 'camel') this.caseTool.output = text.replace(/[^a-zA-Z0-9]+(.)?/g, (m, c) => c ? c.toUpperCase() : '').replace(/^[A-Z]/, c => c.toLowerCase())
+      else if (direction === 'snake') this.caseTool.output = text.replace(/([a-z0-9])([A-Z])/g, (m, a, b) => a + '_' + b.toLowerCase()).replace(/[-\s]+/g, '_').toLowerCase()
+    },
+    encodeBase64 () {
+      try {
+        const bytes = new TextEncoder().encode(this.base64Tool.input)
+        let binary = ''
+        bytes.forEach(b => { binary += String.fromCharCode(b) })
+        this.base64Tool.output = btoa(binary)
+        this.base64Tool.error = ''
+      } catch (e) { this.base64Tool.output = ''; this.base64Tool.error = '编码失败：' + e.message }
+    },
+    decodeBase64 () {
+      try {
+        const bytes = Uint8Array.from(atob(this.base64Tool.input.trim()), c => c.charCodeAt(0))
+        this.base64Tool.output = new TextDecoder().decode(bytes)
+        this.base64Tool.error = ''
+      } catch (e) { this.base64Tool.output = ''; this.base64Tool.error = '无效的 Base64 字符串' }
+    },
+    copyToolOutput (path) {
+      const value = path.split('.').reduce((object, key) => (object ? object[key] : ''), this)
+      navigator.clipboard.writeText(value || '').then(() => ElMessage.success('已复制')).catch(() => ElMessage.error('复制失败'))
+    },
+    clearTool (kind) {
+      if (kind === 'xml') this.xmlTool = { input: '', output: '', error: '' }
+      if (kind === 'json') this.jsonTool = { input: '', output: '', error: '' }
+      if (kind === 'case') this.caseTool = { input: '', output: '' }
+      if (kind === 'base64') this.base64Tool = { input: '', output: '', error: '' }
     },
     detectStructuredValue (value) {
       if (typeof value !== 'string' || value.trim().length < 3) return null

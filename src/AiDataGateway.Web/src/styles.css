@@ -560,3 +560,14 @@ html.dark .menu-glyph { color: var(--brand-text-soft); }
 .beautify-viewer .token-boolean, .beautify-viewer .token-null { color: #f0a1a8; }
 .beautify-viewer .token-keyword { color: #7fb3ff; font-weight: 600; }
 html.dark .beautify-viewer { background: #0c1a2e; border-color: #22374f; }
+
+/* ---------- Toolbox ---------- */
+.hook-name-cell { display: grid; gap: 2px; }
+.hook-name-cell small { color: var(--brand-text-muted, #738198); }
+.hook-url-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hook-url-row .cell-ellipsis { flex: 1 1 auto; }
+.dialog-header-actions { display: flex; align-items: center; gap: 10px; }
+.toolbox-tool-tabs > .el-tabs__content { padding: 16px; }
+.toolbox-tool-tabs .el-textarea__inner { font-family: Consolas, "Courier New", monospace; }
+.tool-grid { display: grid; gap: 12px; }
+.tool-actions { display: flex; flex-wrap: wrap; gap: 10px; }

@@ -145,6 +145,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
         app.MapSettingsEndpoints();
         app.MapGatewayEndpoints();
         app.MapProjectLogEndpoints();
+        app.MapToolboxEndpoints();
         app.MapMonitoringEndpoints();
         app.MapMcpEndpoints(baseAddress);
         app.MapRealtimeEndpoints();

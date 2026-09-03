@@ -6,6 +6,7 @@ using AiDataGateway.Infrastructure.Maintenance;
 using AiDataGateway.Infrastructure.Logs;
 using AiDataGateway.Infrastructure.Persistence;
 using AiDataGateway.Infrastructure.Security;
+using AiDataGateway.Infrastructure.Toolbox;
 using AiDataGateway.Infrastructure.Monitoring;
 using AiDataGateway.Monitoring;
 using Microsoft.AspNetCore.DataProtection;
@@ -92,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<IMaintenanceSettingsRepository, MaintenanceSettingsRepository>();
         services.AddScoped<IGatewayDataCleaner, GatewayDataCleaner>();
         services.AddScoped<IUserHistoryChecker, UserHistoryChecker>();
+        services.AddScoped<IToolboxWebHookRepository, ToolboxWebHookRepository>();
         services.AddSingleton<MaintenanceScheduleSignal>();
         services.AddSingleton<IMaintenanceScheduleNotifier>(services => services.GetRequiredService<MaintenanceScheduleSignal>());
         services.AddHostedService<GatewayCleanupBackgroundService>();

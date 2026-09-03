@@ -26,10 +26,32 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<MonitorTargetDefinition> MonitorTargets => Set<MonitorTargetDefinition>();
     public DbSet<ServerMetricSample> ServerMetricSamples => Set<ServerMetricSample>();
     public DbSet<ProjectMonitorTargetLink> ProjectMonitorTargets => Set<ProjectMonitorTargetLink>();
+    public DbSet<Domain.Toolbox.WebHookDefinition> ToolboxWebHooks => Set<Domain.Toolbox.WebHookDefinition>();
+    public DbSet<Domain.Toolbox.WebHookDelivery> ToolboxWebHookDeliveries => Set<Domain.Toolbox.WebHookDelivery>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<Domain.Toolbox.WebHookDefinition>(entity =>
+        {
+            entity.ToTable("GatewayToolboxWebHooks");
+            entity.HasKey(item => item.Id);
+            entity.HasIndex(item => item.Token).IsUnique();
+            entity.Property(item => item.Name).HasMaxLength(100).IsRequired();
+            entity.Property(item => item.Token).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.Description).HasDefaultValue(string.Empty).IsRequired();
+        });
+
+        builder.Entity<Domain.Toolbox.WebHookDelivery>(entity =>
+        {
+            entity.ToTable("GatewayToolboxWebHookDeliveries");
+            entity.HasKey(item => item.Id);
+            entity.HasIndex(item => new { item.WebHookId, item.Id });
+            entity.Property(item => item.Method).HasMaxLength(20).IsRequired();
+            entity.Property(item => item.ContentType).HasMaxLength(200);
+            entity.Property(item => item.BodyTruncated).HasDefaultValue(false);
+        });
 
         builder.Entity<DataSourceDefinition>(entity =>
         {
