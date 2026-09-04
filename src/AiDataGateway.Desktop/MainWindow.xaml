@@ -166,6 +166,9 @@
                     <StackPanel>
                         <TextBlock x:Name="UpdateNotesTitle" FontWeight="SemiBold" FontSize="13.5" Foreground="#0F2745" Margin="0,0,0,8" />
                         <TextBlock x:Name="UpdateNotesText" FontSize="12.5" Foreground="#26364F" LineHeight="22" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                            <Button x:Name="UpdateNotesPageButton" Content="打开发布页" FontSize="12" Padding="10,4" Click="OnOpenReleasePageClick" />
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </Border>

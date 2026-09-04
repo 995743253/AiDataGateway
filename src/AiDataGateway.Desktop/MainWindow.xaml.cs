@@ -272,6 +272,7 @@ public partial class MainWindow : Window
         foreach (var rawLine in lines)
         {
             var text = System.Text.RegularExpressions.Regex.Replace(rawLine.Trim(), "\\[([^\\]+)\\]([^)]*)", "$1");
+            text = System.Text.RegularExpressions.Regex.Replace(text, "\\*\\*(\\S[^\\*]*)\\*\\*", "$1");
             if (text.Length == 0)
             {
                 if (result.Count > 0 && result[^1].Length > 0) result.Add(string.Empty);
@@ -286,6 +287,12 @@ public partial class MainWindow : Window
 
         while (result.Count > 0 && result[^1].Length == 0) result.RemoveAt(result.Count - 1);
         return string.Join("\n", result);
+    }
+
+    private void OnOpenReleasePageClick(object sender, RoutedEventArgs eventArgs)
+    {
+        if (_pendingUpdate is null) return;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_pendingUpdate.ReleasePage.ToString()) { UseShellExecute = true });
     }
 
     private async void OnUpdateClick(object sender, RoutedEventArgs eventArgs)
