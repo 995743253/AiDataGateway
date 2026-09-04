@@ -289,12 +289,6 @@ public partial class MainWindow : Window
         return string.Join("\n", result);
     }
 
-    private void OnOpenReleasePageClick(object sender, RoutedEventArgs eventArgs)
-    {
-        if (_pendingUpdate is null) return;
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_pendingUpdate.ReleasePage.ToString()) { UseShellExecute = true });
-    }
-
     private async void OnUpdateClick(object sender, RoutedEventArgs eventArgs)
     {
         var update = _pendingUpdate;
