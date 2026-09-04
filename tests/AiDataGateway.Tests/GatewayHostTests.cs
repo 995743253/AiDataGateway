@@ -2,8 +2,11 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using AiDataGateway.Api;
+using LocalMonitorReportExtension;
 using Microsoft.Data.Sqlite;
 
 namespace AiDataGateway.Tests;
@@ -729,6 +732,119 @@ public sealed class GatewayHostTests
             }
             DeleteTemporaryStorage(tempPath);
         }
+    }
+
+    [Fact]
+    public async Task Trusted_extension_package_adds_page_and_dynamic_mcp_tools()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), "AiDataGateway.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempPath);
+        GatewayWebHost? host = null;
+        try
+        {
+            host = await StartHostAsync(tempPath);
+            var cookies = new CookieContainer();
+            using var handler = new HttpClientHandler { CookieContainer = cookies };
+            using var client = new HttpClient(handler) { BaseAddress = host.BaseAddress };
+            var setupResponse = await client.PostAsJsonAsync("/api/setup", new
+            {
+                userName = "extension-admin",
+                email = "extension-admin@example.local",
+                displayName = "Extension Administrator",
+                password = "StrongPassword10",
+                aiClientName = "Extension Test Client"
+            });
+            var setupBody = await setupResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(setupResponse.IsSuccessStatusCode, setupBody.ToString());
+            var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new
+            {
+                userName = "extension-admin",
+                password = "StrongPassword10",
+                rememberMe = false
+            });
+            Assert.True(loginResponse.IsSuccessStatusCode, await loginResponse.Content.ReadAsStringAsync());
+
+            using var package = BuildExtensionPackage();
+            using var multipart = new MultipartFormDataContent();
+            multipart.Add(new StreamContent(package), "package", "local-monitor-report.zip");
+            var installResponse = await client.PostAsync("/api/admin/custom-modules/install", multipart);
+            var install = await installResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(installResponse.IsSuccessStatusCode, install.ToString());
+            Assert.True(install.GetProperty("loaded").GetBoolean());
+
+            var modules = await client.GetFromJsonAsync<JsonElement>("/api/custom-modules");
+            var module = Assert.Single(modules.EnumerateArray());
+            Assert.Equal("local-monitor-report", module.GetProperty("id").GetString());
+            Assert.Equal(2, module.GetProperty("tools").GetArrayLength());
+
+            var page = await client.GetAsync("/custom-modules/local-monitor-report/ui/");
+            Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+            Assert.Contains("本机监控分析报告", await page.Content.ReadAsStringAsync());
+
+            var uiInvocation = await client.PostAsJsonAsync("/api/custom-modules/local-monitor-report/invoke/list_targets", new { });
+            var uiResult = await uiInvocation.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(uiInvocation.IsSuccessStatusCode, uiResult.ToString());
+            Assert.Contains(uiResult.GetProperty("items").EnumerateArray(), item => item.GetProperty("key").GetString() == "local");
+
+            var tokenResponse = await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = setupBody.GetProperty("clientId").GetString()!,
+                ["client_secret"] = setupBody.GetProperty("clientSecret").GetString()!,
+                ["scope"] = "gateway.metrics.read"
+            }));
+            var token = await tokenResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(tokenResponse.IsSuccessStatusCode, token.ToString());
+            using var aiClient = new HttpClient { BaseAddress = host.BaseAddress };
+            aiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("access_token").GetString());
+
+            var toolListResponse = await aiClient.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 1, method = "tools/list", @params = new { } });
+            var toolList = await toolListResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(toolListResponse.IsSuccessStatusCode, toolList.ToString());
+            var names = toolList.GetProperty("result").GetProperty("tools").EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
+            Assert.Contains("custom_local_monitor_report_generate_report", names);
+
+            aiClient.DefaultRequestHeaders.Add("Mcp-Name", "custom_local_monitor_report_list_targets");
+            var toolCallResponse = await aiClient.PostAsJsonAsync("/mcp", new
+            {
+                jsonrpc = "2.0",
+                id = 2,
+                method = "tools/call",
+                @params = new { name = "custom_local_monitor_report_list_targets", arguments = new { } }
+            });
+            var toolCall = await toolCallResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(toolCallResponse.IsSuccessStatusCode, toolCall.ToString());
+            Assert.False(toolCall.GetProperty("result").GetProperty("isError").GetBoolean());
+            Assert.Contains(toolCall.GetProperty("result").GetProperty("structuredContent").GetProperty("items").EnumerateArray(), item => item.GetProperty("key").GetString() == "local");
+        }
+        finally
+        {
+            if (host is not null) await host.DisposeAsync().AsTask();
+            host = null;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            DeleteTemporaryStorage(tempPath);
+        }
+    }
+
+    private static MemoryStream BuildExtensionPackage()
+    {
+        var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifest = archive.CreateEntry("gateway-extension.json");
+            using (var writer = new StreamWriter(manifest.Open(), new UTF8Encoding(false)))
+                writer.Write("{\"id\":\"local-monitor-report\",\"entryAssembly\":\"LocalMonitorReportExtension.dll\",\"entryType\":\"LocalMonitorReportExtension.LocalMonitorReportModule\",\"enabled\":true,\"contractVersion\":1}");
+            var assembly = archive.CreateEntry("LocalMonitorReportExtension.dll");
+            using (var input = File.OpenRead(typeof(LocalMonitorReportModule).Assembly.Location))
+            using (var output = assembly.Open()) input.CopyTo(output);
+            var page = archive.CreateEntry("wwwroot/index.html");
+            using (var writer = new StreamWriter(page.Open(), new UTF8Encoding(false)))
+                writer.Write("<!doctype html><html><head><meta charset=\"utf-8\"><title>本机监控分析报告</title></head><body>本机监控分析报告</body></html>");
+        }
+        stream.Position = 0;
+        return stream;
     }
 
     [Fact]

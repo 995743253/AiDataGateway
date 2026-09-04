@@ -94,6 +94,11 @@
               <el-menu-item index="toolboxwebhooks">WebHook 调试</el-menu-item>
               <el-menu-item index="toolboxtools">格式化与编码</el-menu-item>
             </el-sub-menu>
+            <el-sub-menu index="customization">
+              <template #title><span class="menu-glyph"><el-icon><Grid /></el-icon></span><span>定制化模块</span></template>
+              <el-menu-item index="custommodules">模块中心</el-menu-item>
+              <el-menu-item v-for="module in customModulePages" :key="module.id" :index="customModuleTab(module)">{{ module.pageTitle || module.name }}</el-menu-item>
+            </el-sub-menu>
           </el-menu>
           <div v-if="!sidebarCollapsed" class="sidebar-foot"><span class="sidebar-live-dot" :class="{ online: eventConnected }" /><span>{{ eventConnected ? '数据实时同步' : '正在连接服务' }}</span></div>
         </aside>
@@ -470,6 +475,36 @@
             </el-tabs>
           </el-tab-pane>
 
+          <el-tab-pane v-if="isPageOpen('custommodules')" label="定制化模块" name="custommodules">
+            <div class="toolbar">
+              <div><h3>定制化模块中心</h3><p>安装企业或私人扩展包，为管理端增加页面，并向 AI 动态注册 MCP 工具。</p></div>
+              <div class="toolbar-actions">
+                <input ref="customModuleFile" class="custom-module-file" type="file" accept=".zip,application/zip" @change="installCustomModule" />
+                <el-button v-if="isAdmin" type="primary" :loading="customModuleInstalling" @click="$refs.customModuleFile?.click()">安装扩展包</el-button>
+              </div>
+            </div>
+            <el-alert v-if="isAdmin" class="custom-module-warning" type="warning" :closable="false" show-icon title="扩展 DLL 是进程内受信任代码，拥有与网关相同的系统权限；请只安装来源可信、经过审核的扩展包。" />
+            <el-table :data="pagedCustomModules" stripe border height="100%" class="page-table">
+              <el-table-column label="模块" min-width="220"><template #default="s"><div class="custom-module-name"><strong>{{ s.row.name }}</strong><small>{{ s.row.id }} · v{{ s.row.version }}</small></div></template></el-table-column>
+              <el-table-column label="说明" min-width="280"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis">{{ s.row.description || '—' }}</span><el-button v-if="isLongCell(s.row.description)" link type="primary" @click="openTextViewer('模块说明', s.row.description)">查看</el-button></div></template></el-table-column>
+              <el-table-column label="MCP 工具" min-width="220"><template #default="s"><div class="tag-list"><el-tag v-for="tool in s.row.tools" :key="tool.publicName" effect="plain">{{ tool.publicName }}</el-tag><span v-if="!s.row.tools?.length">—</span></div></template></el-table-column>
+              <el-table-column label="状态" width="120"><template #default="s"><el-tag :type="s.row.loaded ? 'success' : s.row.enabled ? 'danger' : 'info'">{{ s.row.loaded ? '已加载' : s.row.enabled ? '加载失败' : '已停用' }}</el-tag></template></el-table-column>
+              <el-table-column label="安装时间" width="180"><template #default="s">{{ formatDate(s.row.installedAtUtc) }}</template></el-table-column>
+              <el-table-column label="操作" width="260"><template #default="s">
+                <el-button v-if="s.row.pageUrl && s.row.loaded" size="small" type="primary" plain @click="openCustomModule(s.row)">打开页面</el-button>
+                <el-switch v-if="isAdmin" class="custom-module-switch" :model-value="s.row.enabled" active-text="启用" inactive-text="停用" @change="setCustomModuleEnabled(s.row, $event)" />
+                <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteCustomModule(s.row)">删除</el-button>
+              </template></el-table-column>
+              <template #empty><el-empty description="暂无定制化模块，管理员可上传 .zip 扩展包" /></template>
+            </el-table>
+            <el-alert v-for="module in customModules.filter(item => item.loadError)" :key="module.id" class="custom-module-error" type="error" :closable="false" :title="`${module.name} 加载失败：${module.loadError}`" />
+            <el-pagination class="pagination-panel element-pagination" v-model:current-page="customModulePage" v-model:page-size="customModulePageSize" :page-sizes="pageSizeOptions" :total="customModules.length" layout="total, sizes, prev, pager, next, jumper" background />
+          </el-tab-pane>
+
+          <el-tab-pane v-for="module in customModulePages.filter(item => isPageOpen(customModuleTab(item)))" :key="customModuleTab(module)" :label="module.pageTitle || module.name" :name="customModuleTab(module)">
+            <iframe class="custom-module-frame" :src="module.pageUrl" :title="module.pageTitle || module.name" />
+          </el-tab-pane>
+
         </el-tabs>
         </main>
       </div>
@@ -710,9 +745,9 @@ export default {
       password: [{ required: true, message: '请输入管理员密码', trigger: 'blur' }, { min: 10, message: '密码长度至少为 10 位', trigger: 'blur' }, { pattern: /[a-z]/, message: '密码必须包含小写字母', trigger: 'blur' }, { pattern: /[A-Z]/, message: '密码必须包含大写字母', trigger: 'blur' }, { pattern: /\d/, message: '密码必须包含数字', trigger: 'blur' }]
     },
     loginForm: { userName: 'admin', password: '', rememberMe: true },
-    dataSources: [], projects: [], logSources: [], monitorTargets: [], metricSamples: [], metricTrendSamples: [], metricCatalog: [], metricCatalogDefaultKeys: [], metricCatalogRequiredKeys: [], approvals: [], auditLogs: [], applicationLogs: [], users: [], clients: [], roles: [],
+    dataSources: [], projects: [], logSources: [], monitorTargets: [], metricSamples: [], metricTrendSamples: [], metricCatalog: [], metricCatalogDefaultKeys: [], metricCatalogRequiredKeys: [], approvals: [], auditLogs: [], applicationLogs: [], users: [], clients: [], roles: [], customModules: [],
     pageSizeOptions: [10, 20, 50, 100], projectPage: 1, projectPageSize: 20, dataSourcePage: 1, dataSourcePageSize: 20, logSourcePage: 1, logSourcePageSize: 20, userPage: 1, userPageSize: 20, clientPage: 1, clientPageSize: 20,
-    monitorTargetPage: 1, monitorTargetPageSize: 8,
+    monitorTargetPage: 1, monitorTargetPageSize: 8, customModulePage: 1, customModulePageSize: 20, customModuleInstalling: false,
     approvalFilter: 'all', approvalKeyword: '', approvalDataSourceFilter: null, approvalPage: 1, approvalPageSize: 20, approvalTotal: 0, approvalAllTotal: 0, pendingApprovalTotal: 0,
     logKeyword: '', logOutcome: '', auditLogPage: 1, auditLogPageSize: 20, auditLogTotal: 0, auditLogAllTotal: 0,
     dataSourceDialog: false, editingDataSource: null, dataSourceForm: {},
@@ -747,6 +782,8 @@ export default {
     pagedLogSources () { return this.paginate(this.logSources, this.logSourcePage, this.logSourcePageSize) },
     pagedUsers () { return this.paginate(this.users, this.userPage, this.userPageSize) },
     pagedClients () { return this.paginate(this.clients, this.clientPage, this.clientPageSize) },
+    pagedCustomModules () { return this.paginate(this.customModules, this.customModulePage, this.customModulePageSize) },
+    customModulePages () { return this.customModules.filter(item => item.enabled && item.loaded && item.pageUrl) },
     pagedRealtimeLogs () { return this.paginate(this.realtimeLogs, this.realtimeLogPage, this.realtimeLogPageSize) },
     pagedMonitorTargets () { return this.paginate(this.monitorTargets, this.monitorTargetPage, this.monitorTargetPageSize) },
     selectedApplicationLogSource () { return this.logSources.find(item => item.id === this.applicationLogSourceId) },
@@ -997,7 +1034,7 @@ export default {
       }
     },
     async loadOverview () {
-      const jobs = []
+      const jobs = [this.loadCustomModules()]
       if (this.canOperate) jobs.push(this.loadResourceCatalog())
       if (this.canApprove) jobs.push(this.loadApprovalMetrics())
       if (this.canViewLogs) jobs.push(this.loadAuditLogMetrics())
@@ -1018,6 +1055,7 @@ export default {
       if (this.activeTab === 'users') await this.loadUsers()
       if (this.activeTab === 'clients') await this.loadClients()
       if (this.activeTab === 'toolboxwebhooks') await this.loadToolboxHooks()
+      if (this.activeTab === 'custommodules') await this.loadCustomModules()
     },
     async loadDataSources () { this.dataSources = (await axios.get('/api/admin/datasources')).data; this.dataSourcePage = this.clampPage(this.dataSourcePage, this.dataSources.length, this.dataSourcePageSize) },
     async loadProjects () { this.projects = (await axios.get('/api/admin/projects')).data; this.projectPage = this.clampPage(this.projectPage, this.projects.length, this.projectPageSize) },
@@ -1375,6 +1413,54 @@ export default {
       // a dragged dialog keeps its translate() offset, which would shift the
       // fullscreen window away from the viewport origin
       document.querySelectorAll('.el-dialog.is-fullscreen').forEach((el) => { el.style.transform = '' })
+    },
+    customModuleTab (module) { return 'custommodule:' + module.id },
+    async loadCustomModules () {
+      try {
+        this.customModules = (await axios.get('/api/custom-modules')).data
+        this.customModulePage = this.clampPage(this.customModulePage, this.customModules.length, this.customModulePageSize)
+        const pageTabs = new Set(this.customModulePages.map(item => this.customModuleTab(item)))
+        const removedActive = this.activeTab.startsWith('custommodule:') && !pageTabs.has(this.activeTab)
+        this.openTabs = this.openTabs.filter(name => !name.startsWith('custommodule:') || pageTabs.has(name))
+        if (removedActive) this.activeTab = 'custommodules'
+      } catch (e) { this.error(e) }
+    },
+    async openCustomModule (module) {
+      if (!module?.pageUrl || !module.loaded) return
+      await this.goTo(this.customModuleTab(module))
+    },
+    async installCustomModule (event) {
+      const input = event.target
+      const file = input.files?.[0]
+      if (!file) return
+      try {
+        await ElMessageBox.confirm(`将安装“${file.name}”。扩展 DLL 会在网关进程内运行，请确认其来源可信并已完成代码审核。`, '安装受信任扩展', { type: 'warning', confirmButtonText: '确认安装' })
+      } catch (_) { input.value = ''; return }
+      this.customModuleInstalling = true
+      try {
+        const form = new FormData()
+        form.append('package', file)
+        const result = (await axios.post('/api/admin/custom-modules/install', form)).data
+        await this.loadCustomModules()
+        if (result.loaded) ElMessage.success(`${result.name} 已安装并加载，MCP 客户端下次 tools/list 即可发现新工具`)
+        else ElMessage.error(`${result.name} 已保存，但加载失败：${result.loadError || '未知错误'}`)
+      } catch (e) { this.error(e) } finally { this.customModuleInstalling = false; input.value = '' }
+    },
+    async setCustomModuleEnabled (module, enabled) {
+      try {
+        const result = (await axios.put(`/api/admin/custom-modules/${encodeURIComponent(module.id)}/enabled`, { enabled })).data
+        await this.loadCustomModules()
+        if (enabled && !result.loaded) ElMessage.error(`启用失败：${result.loadError || '扩展无法加载'}`)
+        else ElMessage.success(enabled ? '模块已启用' : '模块已停用')
+      } catch (e) { await this.loadCustomModules(); this.error(e) }
+    },
+    async deleteCustomModule (module) {
+      try { await ElMessageBox.confirm(`确定删除定制化模块“${module.name}”及其已安装制品？`, '删除模块', { type: 'warning' }) } catch (_) { return }
+      try {
+        await axios.delete(`/api/admin/custom-modules/${encodeURIComponent(module.id)}`)
+        await this.loadCustomModules()
+        ElMessage.success('模块已删除')
+      } catch (e) { this.error(e) }
     },
     toolboxHookUrl (hook) { return window.location.origin + '/toolbox/hook/' + hook.token },
     async loadToolboxHooks () {

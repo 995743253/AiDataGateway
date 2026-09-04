@@ -1,0 +1,7 @@
+{
+  "id": "local-monitor-report",
+  "entryAssembly": "LocalMonitorReportExtension.dll",
+  "entryType": "LocalMonitorReportExtension.LocalMonitorReportModule",
+  "contractVersion": 1,
+  "enabled": true
+}

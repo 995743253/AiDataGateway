@@ -8,6 +8,7 @@ using AiDataGateway.Infrastructure.Persistence;
 using AiDataGateway.Infrastructure.Security;
 using AiDataGateway.Infrastructure.Toolbox;
 using AiDataGateway.Infrastructure.Monitoring;
+using AiDataGateway.Infrastructure.Extensions;
 using AiDataGateway.Monitoring;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
@@ -100,6 +101,7 @@ public static class DependencyInjection
         services.AddSingleton<SystemMetricsCollector>();
         services.AddHostedService<LocalMetricsBackgroundService>();
         services.AddSingleton<ICredentialProtector, DataProtectionCredentialProtector>();
+        services.AddSingleton<GatewayExtensionManager>();
         services.AddSingleton<IDatabaseAdapterFactory, DatabaseAdapterFactory>();
         services.AddHttpClient("AiDataGateway.Seq", client => client.Timeout = TimeSpan.FromSeconds(30));
         services.AddSingleton<ILogSourceAdapter, LocalNLogSourceAdapter>();

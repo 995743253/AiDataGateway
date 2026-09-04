@@ -4,6 +4,7 @@ using AiDataGateway.Application.Abstractions;
 using AiDataGateway.Application.Security;
 using AiDataGateway.Api.Realtime;
 using AiDataGateway.Infrastructure;
+using AiDataGateway.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.FileProviders;
@@ -146,6 +147,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
         app.MapGatewayEndpoints();
         app.MapProjectLogEndpoints();
         app.MapToolboxEndpoints();
+        app.MapCustomModuleEndpoints();
         app.MapMonitoringEndpoints();
         app.MapMcpEndpoints(baseAddress);
         app.MapRealtimeEndpoints();
@@ -167,6 +169,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
         {
             await scope.ServiceProvider.GetRequiredService<GatewayDatabaseInitializer>().InitializeAsync(cancellationToken);
         }
+        await app.Services.GetRequiredService<GatewayExtensionManager>().InitializeAsync(cancellationToken);
         await app.StartAsync(cancellationToken);
 
         return new GatewayWebHost(app, baseAddress);

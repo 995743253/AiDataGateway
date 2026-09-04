@@ -57,6 +57,26 @@ $agentZip = Join-Path $releaseRoot "AiDataGateway-MonitorAgent-v$Version-win-x64
 Compress-Archive -Path (Join-Path $applicationDirectory "*") -DestinationPath $applicationZip -CompressionLevel Optimal
 Compress-Archive -Path (Join-Path $agentDirectory "*") -DestinationPath $agentZip -CompressionLevel Optimal
 
+# 定制化模块示例：样例源码与打包好的扩展包随安装包分发，供企业扩展开发者参考
+$samplesSource = Join-Path $repositoryRoot "samples/LocalMonitorReportExtension"
+$samplesRelease = Join-Path $releaseRoot "samples/LocalMonitorReportExtension"
+if (Test-Path -LiteralPath $samplesSource) {
+    Copy-Item -LiteralPath $samplesSource -Destination $samplesRelease -Recurse -Force
+    foreach ($buildFolder in @("bin", "obj")) {
+        $samplesBuildPath = Join-Path $samplesRelease $buildFolder
+        if (Test-Path -LiteralPath $samplesBuildPath) { Remove-Item -LiteralPath $samplesBuildPath -Recurse -Force }
+    }
+}
+
+$samplePackageScript = Join-Path $repositoryRoot "scripts/package-local-monitor-report-extension.ps1"
+$samplePackagePath = Join-Path $releaseRoot "local-monitor-report-1.0.0.zip"
+if (Test-Path -LiteralPath $samplePackageScript) {
+    & $samplePackageScript -OutputPath "artifacts/release/local-monitor-report-1.0.0.zip"
+    if ($LASTEXITCODE -ne 0) { throw "sample extension packaging failed with exit code $LASTEXITCODE." }
+    $sampleHash = (Get-FileHash -LiteralPath $samplePackagePath -Algorithm SHA256).Hash
+    Set-Content -LiteralPath "$samplePackagePath.sha256" -Value "$sampleHash  $([System.IO.Path]::GetFileName($samplePackagePath))" -Encoding ascii
+}
+
 New-Item -ItemType Directory -Path (Split-Path $payloadPath) -Force | Out-Null
 Copy-Item -LiteralPath $applicationZip -Destination $payloadPath -Force
 try {

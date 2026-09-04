@@ -9,6 +9,7 @@ using AiDataGateway.Application.Projects;
 using AiDataGateway.Application.Logs;
 using AiDataGateway.Application.Monitoring;
 using AiDataGateway.Domain.Approvals;
+using AiDataGateway.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using OpenIddict.Validation.AspNetCore;
 
@@ -57,6 +58,7 @@ internal static class McpEndpoints
         ProjectService projects,
         LogSourceService logs,
         MonitoringService monitoring,
+        GatewayExtensionManager extensions,
         CancellationToken cancellationToken)
     {
         if (context.User.Identity?.IsAuthenticated != true ||
@@ -113,8 +115,8 @@ internal static class McpEndpoints
                 {
                     "initialize" => RpcResult(id, Initialize(root)),
                     "ping" => RpcResult(id, new { }),
-                    "tools/list" => RpcResult(id, new { tools = ListTools() }),
-                    "tools/call" => await CallToolAsync(id, root, context, dataSources, queries, submissions, changes, projects, logs, monitoring, cancellationToken),
+                    "tools/list" => RpcResult(id, new { tools = ListTools(context, extensions) }),
+                    "tools/call" => await CallToolAsync(id, root, context, dataSources, queries, submissions, changes, projects, logs, monitoring, extensions, cancellationToken),
                     _ => RpcError(id, -32601, "Method not found", method)
                 };
             }
@@ -139,13 +141,13 @@ internal static class McpEndpoints
         return new
         {
             protocolVersion = negotiatedVersion,
-            capabilities = new { tools = new { listChanged = false } },
+            capabilities = new { tools = new { listChanged = true } },
             serverInfo = new { name = "AiDataGateway", version = typeof(McpEndpoints).Assembly.GetName().Version?.ToString() ?? "1.0.0" },
-            instructions = "Use list_projects to resolve project codes to database, log source, and monitoring identifiers. Use query_database only for read-only SQL, query_logs for application logs, and query_server_metrics for server status. Submit all writes with submit_change; approval is completed by a human in the gateway UI."
+            instructions = "Use tools/list to discover built-in and installed custom_* tools. Use list_projects to resolve project codes to database, log source, and monitoring identifiers. Use query_database only for read-only SQL, query_logs for application logs, and query_server_metrics for server status. Submit all writes with submit_change; approval is completed by a human in the gateway UI."
         };
     }
 
-    private static object[] ListTools() =>
+    private static object[] ListTools(HttpContext context, GatewayExtensionManager extensions) =>
     [
         new
         {
@@ -257,7 +259,15 @@ internal static class McpEndpoints
                 additionalProperties = false
             },
             annotations = new { readOnlyHint = true, destructiveHint = false }
-        }
+        },
+        .. extensions.List().Where(module => module.Enabled && module.Loaded)
+            .SelectMany(module => module.Tools.Where(tool => CustomModuleEndpoints.CanUse(context, tool.Capability)).Select(tool => (object)new
+            {
+                name = tool.PublicName,
+                description = $"[{module.Name}] {tool.Description}",
+                inputSchema = tool.InputSchema,
+                annotations = new { readOnlyHint = tool.ReadOnly, destructiveHint = !tool.ReadOnly }
+            }))
     ];
 
     private static object DataSourceSqlSchema() => new
@@ -283,6 +293,7 @@ internal static class McpEndpoints
         ProjectService projects,
         LogSourceService logs,
         MonitoringService monitoring,
+        GatewayExtensionManager extensions,
         CancellationToken cancellationToken)
     {
         var parameters = RequiredObject(request, "params");
@@ -307,6 +318,8 @@ internal static class McpEndpoints
             "query_database" => await QueryAsync(context, queries, arguments, actor, cancellationToken),
             "submit_change" => await SubmitAsync(context, submissions, arguments, actor, cancellationToken),
             "get_change_status" => await GetChangeStatusAsync(context, changes, arguments, cancellationToken),
+            _ when extensions.FindTool(name) is { } extensionTool && CustomModuleEndpoints.CanUse(context, extensionTool.Capability) =>
+                await extensions.InvokePublicToolAsync(name, arguments, actor, cancellationToken),
             _ => throw new ArgumentException($"Unknown tool '{name}'.")
         };
         return RpcResult(id, ToolSuccess(payload));

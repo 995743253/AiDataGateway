@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\AiDataGateway.Api\AiDataGateway.Api.csproj" />
     <ProjectReference Include="..\..\src\AiDataGateway.Application\AiDataGateway.Application.csproj" />
     <ProjectReference Include="..\..\src\AiDataGateway.Infrastructure\AiDataGateway.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\samples\LocalMonitorReportExtension\LocalMonitorReportExtension.csproj" />
   </ItemGroup>
 
 </Project>

@@ -12,6 +12,7 @@
 - Data Protection 密钥由当前 Windows 用户的 DPAPI 保护。
 - FreeSql 动态支持 SQL Server、MySQL、PostgreSQL、SQLite、Oracle、MariaDB、达梦 DM8 和 Firebird 数据源。
 - 内置 OAuth2 保护的 MCP Streamable HTTP Server（`/mcp`），支持项目解析、数据库只读查询、NLog/Seq 日志查询、服务器指标查询、提交审批和查询工单状态。
+- 受信任定制化模块支持上传私有 DLL 与前端制品，动态嵌入管理页并向 MCP 注册 `custom_*` 工具；专有规则无需合入主仓库。
 - 项目与数据源、日志源、监控节点均为多对多关系；AI 可通过唯一项目编号解析对应资源标识。
 - 服务器监控内置 25 项可选指标，支持节点级采集配置、近期实时趋势及按时间范围查询历史趋势。
 - 日志源支持本机 NLog、Seq 和远程采集 Agent；自动识别 UTF-8/GB18030，支持 NLog 变量、日期限流、Seq 简易查询与 SSE 实时日志。
@@ -34,6 +35,7 @@ src/
 ├── AiDataGateway.Domain          # 纯领域实体和枚举
 ├── AiDataGateway.Application     # 用例、接口、SQL 策略，不依赖基础设施
 ├── AiDataGateway.Infrastructure  # EF Core、Identity、OpenIddict 存储、FreeSql、DPAPI
+├── AiDataGateway.Extensions.Abstractions # 定制化模块公开、稳定的进程内契约
 ├── AiDataGateway.Monitoring      # 无基础设施依赖的跨平台系统指标采集库
 ├── AiDataGateway.MonitorAgent    # 可单独打包的远端指标与本地日志采集程序
 ├── AiDataGateway.Api             # 本地 Kestrel、OAuth2 和 HTTP 端点
@@ -41,6 +43,8 @@ src/
 └── AiDataGateway.Web             # Vue 3 + Element Plus
 tests/
 └── AiDataGateway.Tests           # 领域、SQL 策略和完整认证链路测试
+samples/
+└── LocalMonitorReportExtension   # 可打包安装的本机监控分析示例
 ```
 
 `Application` 不引用 `Infrastructure` 或桌面项目，因此后续可直接将 API 拆到 Windows Service、IIS 或独立进程。
@@ -53,6 +57,7 @@ tests/
 - [MCP Server 接入说明](Doc/MCP服务器接入说明.md)
 - [项目与日志接入说明](Doc/项目与日志接入说明.md)
 - [服务器监控使用说明](Doc/服务器监控使用说明.md)
+- [定制化模块开发指南与公开接口清单](Doc/定制化模块开发指南.md)
 
 ## 构建
 
