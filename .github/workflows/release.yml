@@ -53,7 +53,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $assets = Get-ChildItem -LiteralPath artifacts/release -File | ForEach-Object FullName
-          $notesFile = "Doc/版本说明-$($env:GITHUB_REF_NAME.TrimStart('v')).md"
+          $notesFile = "artifacts/release/release-notes.md"
           if (Test-Path $notesFile) {
             gh release create $env:GITHUB_REF_NAME $assets --verify-tag --notes-file $notesFile --title "AiDataGateway $env:GITHUB_REF_NAME"
           } else {

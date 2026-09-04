@@ -103,4 +103,9 @@ Remove-Item -LiteralPath $applicationDirectory -Recurse -Force
 Remove-Item -LiteralPath $agentDirectory -Recurse -Force
 Remove-Item -LiteralPath $installerPublishDirectory -Recurse -Force
 
+$versionNotes = Get-ChildItem (Join-Path $repositoryRoot "Doc") -Filter "*$Version.md" | Select-Object -First 1
+if ($versionNotes) {
+    Copy-Item -LiteralPath $versionNotes.FullName -Destination (Join-Path $releaseRoot "release-notes.md") -Force
+}
+
 Get-ChildItem -LiteralPath $releaseRoot -File | Select-Object Name, Length, LastWriteTime
