@@ -145,7 +145,11 @@
                 </StackPanel>
                 <TextBlock x:Name="EndpointText" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#6B778A" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button x:Name="UpdateButton" Style="{StaticResource AccentFooterButtonStyle}" Content="立即更新" Visibility="Collapsed" Click="OnUpdateClick" />
+                    <Button x:Name="UpdateButton" Style="{StaticResource AccentFooterButtonStyle}" Content="立即更新" Visibility="Collapsed" Click="OnUpdateClick" MouseEnter="OnUpdateButtonMouseEnter" MouseLeave="OnUpdateButtonMouseLeave">
+                        <Button.ToolTip>
+                            <ToolTip Content="悬浮查看版本更新内容" />
+                        </Button.ToolTip>
+                    </Button>
                     <Button Style="{StaticResource FooterButtonStyle}" Content="检查更新" Click="OnCheckUpdateClick" />
                     <Button Style="{StaticResource AccentFooterButtonStyle}" Content="刷新" Click="OnReloadClick" />
                     <Button Style="{StaticResource FooterButtonStyle}" Content="浏览器打开" Click="OnOpenInBrowserClick" />
@@ -153,5 +157,18 @@
                 </StackPanel>
             </Grid>
         </Border>
+        <Popup x:Name="UpdateNotesPopup" PlacementTarget="{Binding ElementName=UpdateButton}" Placement="Top" VerticalOffset="10" AllowsTransparency="True" PopupAnimation="Fade" StaysOpen="False">
+            <Border Background="#FDFEFF" BorderBrush="#C9D6E4" BorderThickness="1" CornerRadius="10" Padding="18,14" MaxWidth="560" MinWidth="360">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="315" Opacity="0.24" Color="#1D3A5F" />
+                </Border.Effect>
+                <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock x:Name="UpdateNotesTitle" FontWeight="SemiBold" FontSize="13.5" Foreground="#0F2745" Margin="0,0,0,8" />
+                        <TextBlock x:Name="UpdateNotesText" FontSize="12.5" Foreground="#26364F" LineHeight="22" TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

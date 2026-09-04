@@ -231,6 +231,8 @@ public partial class MainWindow : Window
             _pendingUpdate = update;
             UpdateButton.Content = $"立即更新到 v{update.VersionText}";
             UpdateButton.Visibility = Visibility.Visible;
+            UpdateNotesTitle.Text = $"AiDataGateway v{update.VersionText} 更新内容";
+            UpdateNotesText.Text = FormatReleaseNotes(update.ReleaseNotes);
             SetStatus($"发现新版本 {update.VersionText}，点击右下角“立即更新”完成升级", Amber);
         }
         catch (Exception exception)
@@ -245,11 +247,53 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnUpdateButtonMouseEnter(object sender, System.Windows.Input.MouseEventArgs eventArgs) => ShowUpdateNotes();
+
+    private void OnUpdateButtonMouseLeave(object sender, System.Windows.Input.MouseEventArgs eventArgs)
+    {
+        if (!UpdateNotesPopup.IsMouseOver) UpdateNotesPopup.IsOpen = false;
+    }
+
+    private void ShowUpdateNotes()
+    {
+        if (_pendingUpdate is null) return;
+        UpdateNotesTitle.Text = $"AiDataGateway v{_pendingUpdate.VersionText} 更新内容";
+        UpdateNotesText.Text = FormatReleaseNotes(_pendingUpdate.ReleaseNotes);
+        UpdateNotesPopup.IsOpen = true;
+    }
+
+    // The release body is the 版本说明 markdown; render it as clean bullet text
+    // without pulling in a markdown renderer.
+    private static string FormatReleaseNotes(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown)) return "暂无详细更新说明。";
+        var lines = markdown.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        var result = new System.Collections.Generic.List<string>();
+        foreach (var rawLine in lines)
+        {
+            var text = System.Text.RegularExpressions.Regex.Replace(rawLine.Trim(), "\\[([^\\]+)\\]([^)]*)", "$1");
+            if (text.Length == 0)
+            {
+                if (result.Count > 0 && result[^1].Length > 0) result.Add(string.Empty);
+                continue;
+            }
+
+            text = text.TrimStart('#').Trim();
+            if (text.StartsWith("- ")) text = "•  " + text[2..].Trim();
+            else if (text.StartsWith("* ")) text = "•  " + text[2..].Trim();
+            result.Add(text);
+        }
+
+        while (result.Count > 0 && result[^1].Length == 0) result.RemoveAt(result.Count - 1);
+        return string.Join("\n", result);
+    }
+
     private async void OnUpdateClick(object sender, RoutedEventArgs eventArgs)
     {
         var update = _pendingUpdate;
         if (update is null || _applyingUpdate) return;
         _applyingUpdate = true;
+        UpdateNotesPopup.IsOpen = false;
         UpdateButton.IsEnabled = false;
         UpdateButton.Content = "正在下载…";
         try

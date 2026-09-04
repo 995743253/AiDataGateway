@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace AiDataGateway.Desktop;
 
-internal sealed record GatewayUpdate(Version Version, string VersionText, string AssetName, Uri DownloadUrl, string Sha256, Uri ReleasePage);
+internal sealed record GatewayUpdate(Version Version, string VersionText, string AssetName, Uri DownloadUrl, string Sha256, Uri ReleasePage, string ReleaseNotes);
 
 internal sealed class GitHubUpdateService
 {
@@ -68,7 +68,8 @@ internal sealed class GitHubUpdateService
             sha256 = ParseChecksum(await Client.GetStringAsync(checksumAsset.BrowserDownloadUrl, cancellationToken));
         }
 
-        return new GatewayUpdate(remoteVersion, versionText, installer.Name, new Uri(installer.BrowserDownloadUrl), sha256, new Uri(release.HtmlUrl));
+        return new GatewayUpdate(remoteVersion, versionText, installer.Name, new Uri(installer.BrowserDownloadUrl), sha256,
+            new Uri(release.HtmlUrl), release.Body);
     }
 
     private async Task<GatewayUpdate?> CheckViaFeedAsync(CancellationToken cancellationToken)
@@ -83,13 +84,35 @@ internal sealed class GitHubUpdateService
             return null;
         }
 
+        // The atom entry carries the release notes as HTML; strip the tags so
+        // the hover popup can show plain text without an extra API call.
+        var notes = StripHtml(ExtractLatestEntryContent(feed));
+
         // Release download URLs are deterministic from the tag, and the
         // checksum asset ships alongside every installer the release script uploads.
         var assetName = $"AiDataGateway-Setup-v{versionText}-win-x64.exe";
         var downloadBase = $"{DownloadBaseUrl}{tag}/";
         var sha256 = ParseChecksum(await Client.GetStringAsync(downloadBase + assetName + ".sha256", cancellationToken));
         return new GatewayUpdate(remoteVersion, versionText, assetName,
-            new Uri(downloadBase + assetName), sha256, new Uri(ReleasePageUrl + tag));
+            new Uri(downloadBase + assetName), sha256, new Uri(ReleasePageUrl + tag), notes);
+    }
+
+    private static string? ExtractLatestEntryContent(string feed)
+    {
+        var contentStart = feed.IndexOf("<content", StringComparison.Ordinal);
+        if (contentStart < 0) return null;
+        var openEnd = feed.IndexOf('>', contentStart);
+        var closeStart = feed.IndexOf("</content>", openEnd, StringComparison.Ordinal);
+        if (openEnd < 0 || closeStart < 0) return null;
+        return feed[(openEnd + 1)..closeStart];
+    }
+
+    private static string StripHtml(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+        var decoded = System.Net.WebUtility.HtmlDecode(html);
+        var text = System.Text.RegularExpressions.Regex.Replace(decoded, "<[^>]+>", "\n");
+        return System.Text.RegularExpressions.Regex.Replace(text, "(\n){3,}", "\n\n").Trim();
     }
 
     private static bool IsNewerVersion(Version remoteVersion)
@@ -173,6 +196,7 @@ internal sealed class GitHubUpdateService
     private sealed class ReleaseDto
     {
         [JsonPropertyName("tag_name")] public string TagName { get; init; } = string.Empty;
+        [JsonPropertyName("body")] public string Body { get; init; } = string.Empty;
         [JsonPropertyName("html_url")] public string HtmlUrl { get; init; } = string.Empty;
         [JsonPropertyName("assets")] public List<AssetDto> Assets { get; init; } = [];
     }
