@@ -395,10 +395,11 @@ public sealed class GatewayHostTests
             Assert.Equal("secret_records", Assert.Single(created.GetProperty("blockedTables").EnumerateArray()).GetString());
 
             var applicationLogPath = Path.Combine(tempPath, "sample-application.log");
+            var applicationLogTime = DateTime.Now.AddMinutes(-1);
             await File.WriteAllTextAsync(applicationLogPath,
-                "2026-08-29 10:00:00.0000|Info|Sample|started|\n" +
-                "2026-08-29 10:00:01.0000|Error|Sample|request failed\ncontinued message|System.InvalidOperationException: broken\n" +
-                "2026-08-29 10:00:02.0000|Warning|Sample||");
+                $"{applicationLogTime:yyyy-MM-dd HH:mm:ss.ffff}|Info|Sample|started|\n" +
+                $"{applicationLogTime.AddSeconds(1):yyyy-MM-dd HH:mm:ss.ffff}|Error|Sample|request failed\ncontinued message|System.InvalidOperationException: broken\n" +
+                $"{applicationLogTime.AddSeconds(2):yyyy-MM-dd HH:mm:ss.ffff}|Warning|Sample||");
             var createLogSource = await client.PostAsJsonAsync("/api/admin/log-sources", new
             {
                 key = "sample-nlog",
@@ -730,6 +731,88 @@ public sealed class GatewayHostTests
             {
                 await host.DisposeAsync();
             }
+            DeleteTemporaryStorage(tempPath);
+        }
+    }
+
+    [Fact]
+    public async Task Administrator_password_can_be_recovered_and_recovery_password_can_be_changed()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), "AiDataGateway.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempPath);
+        GatewayWebHost? host = null;
+        try
+        {
+            host = await StartHostAsync(tempPath);
+            var cookies = new CookieContainer();
+            using var handler = new HttpClientHandler { CookieContainer = cookies };
+            using var client = new HttpClient(handler) { BaseAddress = host.BaseAddress };
+            var setup = await client.PostAsJsonAsync("/api/setup", new
+            {
+                userName = "recovery-admin",
+                email = "recovery-admin@example.local",
+                displayName = "Recovery Administrator",
+                password = "StrongPassword10",
+                aiClientName = "Recovery Test Client"
+            });
+            Assert.True(setup.IsSuccessStatusCode, await setup.Content.ReadAsStringAsync());
+            var login = await client.PostAsJsonAsync("/api/auth/login", new { userName = "recovery-admin", password = "StrongPassword10", rememberMe = true });
+            Assert.True(login.IsSuccessStatusCode, await login.Content.ReadAsStringAsync());
+            Assert.Contains(login.Headers.GetValues("Set-Cookie"), value => value.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+
+            var status = await client.GetFromJsonAsync<JsonElement>("/api/settings/admin-recovery");
+            Assert.True(status.GetProperty("usesDefaultPassword").GetBoolean());
+            await client.PostAsync("/api/auth/logout", null);
+
+            var defaultReset = await client.PostAsJsonAsync("/api/auth/reset-admin-password", new
+            {
+                userName = "recovery-admin",
+                resetPassword = "admin",
+                newPassword = "DefaultReset20"
+            });
+            Assert.Equal(HttpStatusCode.NoContent, defaultReset.StatusCode);
+            login = await client.PostAsJsonAsync("/api/auth/login", new { userName = "recovery-admin", password = "DefaultReset20" });
+            Assert.True(login.IsSuccessStatusCode, await login.Content.ReadAsStringAsync());
+
+            var update = await client.PutAsJsonAsync("/api/settings/admin-recovery", new { newResetPassword = "PrivateRecovery42" });
+            Assert.True(update.IsSuccessStatusCode, await update.Content.ReadAsStringAsync());
+            Assert.False((await update.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("usesDefaultPassword").GetBoolean());
+            await client.PostAsync("/api/auth/logout", null);
+
+            var wrong = await client.PostAsJsonAsync("/api/auth/reset-admin-password", new
+            {
+                userName = "recovery-admin",
+                resetPassword = "admin",
+                newPassword = "新密码abc"
+            });
+            Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+
+            var weak = await client.PostAsJsonAsync("/api/auth/reset-admin-password", new
+            {
+                userName = "recovery-admin",
+                resetPassword = "PrivateRecovery42",
+                newPassword = "weak"
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, weak.StatusCode);
+
+            var reset = await client.PostAsJsonAsync("/api/auth/reset-admin-password", new
+            {
+                userName = "recovery-admin",
+                resetPassword = "PrivateRecovery42",
+                newPassword = "新密码abc"
+            });
+            Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
+
+            var oldLogin = await client.PostAsJsonAsync("/api/auth/login", new { userName = "recovery-admin", password = "StrongPassword10" });
+            Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+            oldLogin = await client.PostAsJsonAsync("/api/auth/login", new { userName = "recovery-admin", password = "DefaultReset20" });
+            Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+            var newLogin = await client.PostAsJsonAsync("/api/auth/login", new { userName = "recovery-admin", password = "新密码abc" });
+            Assert.True(newLogin.IsSuccessStatusCode, await newLogin.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            if (host is not null) await host.DisposeAsync().AsTask();
             DeleteTemporaryStorage(tempPath);
         }
     }

@@ -5,6 +5,8 @@
 ## 当前能力
 
 - ASP.NET Core Identity 用户、密码、角色、锁定和会话管理；支持编辑、启用/禁用和受限永久删除。
+- 登录页支持使用独立重置口令恢复 Administrator 登录密码；初始重置口令为 `admin`，可在系统设置中加密修改，并带失败审计与频率限制。
+- 登录密码只要求至少 6 位并兼容中文；可用受保护的持久 Cookie 在本机记住登录状态 30 天，不保存明文密码。
 - OpenIddict OAuth2/OIDC 服务，支持 Authorization Code + PKCE、Client Credentials 和 Refresh Token。
 - OAuth2 客户端支持编辑名称/Scope 和吊销删除；权限调整后旧 Token 立即失效，Client Secret 保持不变。
 - AI 客户端默认只能获得项目/数据源读取、只读查询、日志读取、服务器指标读取和提交变更 Scope。

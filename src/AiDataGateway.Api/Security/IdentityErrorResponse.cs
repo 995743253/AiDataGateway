@@ -21,7 +21,7 @@ internal static class IdentityErrorResponse
         "InvalidEmail" => "请输入有效的邮箱地址。",
         "DuplicateUserName" => "该用户名已存在。",
         "DuplicateEmail" => "该邮箱已被使用。",
-        "PasswordTooShort" => "密码长度至少为 10 位。",
+        "PasswordTooShort" => "密码长度至少为 6 位。",
         "PasswordRequiresDigit" => "密码必须包含数字。",
         "PasswordRequiresLower" => "密码必须包含小写字母。",
         "PasswordRequiresUpper" => "密码必须包含大写字母。",

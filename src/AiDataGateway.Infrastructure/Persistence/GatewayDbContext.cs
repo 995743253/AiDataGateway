@@ -98,6 +98,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             entity.HasKey(item => item.Id);
             entity.Property(item => item.CleanupTimeLocal).HasMaxLength(5).IsRequired();
             entity.Property(item => item.ApprovalExpirationMinutes).HasDefaultValue(15).IsRequired();
+            entity.Property(item => item.ProtectedAdminResetPassword).IsRequired();
             entity.Property(item => item.LastCleanupSummary).HasMaxLength(500);
         });
 

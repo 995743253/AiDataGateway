@@ -581,3 +581,7 @@ html.dark .beautify-viewer { background: #0c1a2e; border-color: #22374f; }
 .custom-module-name small { overflow: hidden; color: var(--brand-text-muted); font-family: Consolas, "Courier New", monospace; text-overflow: ellipsis; white-space: nowrap; }
 .custom-module-switch { margin: 0 8px; }
 .custom-module-frame { display: block; width: 100%; height: calc(100vh - 142px); min-height: 520px; background: var(--brand-bg-page); border: 1px solid var(--brand-border); border-radius: 12px; }
+.auth-assist { display: flex; justify-content: center; margin-top: 12px; }
+.auth-card .el-checkbox { margin: 0 0 12px; }
+.admin-reset-form { margin-top: 18px; }
+.admin-recovery-card .el-alert { margin-bottom: 18px; }

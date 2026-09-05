@@ -47,10 +47,10 @@ public static class DependencyInjection
 
         services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
             {
-                options.Password.RequiredLength = 10;
-                options.Password.RequireDigit = true;
-                options.Password.RequireLowercase = true;
-                options.Password.RequireUppercase = true;
+                options.Password.RequiredLength = 6;
+                options.Password.RequireDigit = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireUppercase = false;
                 options.Password.RequireNonAlphanumeric = false;
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
@@ -64,7 +64,7 @@ public static class DependencyInjection
             options.Cookie.Name = "AiDataGateway.Auth";
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
-            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.ExpireTimeSpan = TimeSpan.FromDays(30);
             options.SlidingExpiration = true;
             options.Events.OnRedirectToLogin = context =>
             {

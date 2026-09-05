@@ -12,7 +12,7 @@
           <el-form-item label="邮箱" prop="email"><el-input v-model="setup.email" autocomplete="email" /></el-form-item>
           <el-form-item label="显示名称" prop="displayName"><el-input v-model="setup.displayName" /></el-form-item>
           <el-form-item label="管理员密码" prop="password"><el-input v-model="setup.password" type="password" autocomplete="new-password" show-password /></el-form-item>
-          <p class="form-hint">至少 10 位，并同时包含大写字母、小写字母和数字。</p>
+          <p class="form-hint">至少 6 位，可使用中文、英文、数字或符号。</p>
           <el-button native-type="submit" type="primary" class="full-button" :loading="saving">完成初始化</el-button>
         </el-form>
       </el-card>
@@ -25,9 +25,23 @@
         <el-form label-position="top" @keyup.enter="login">
           <el-form-item label="用户名"><el-input v-model="loginForm.userName" /></el-form-item>
           <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password /></el-form-item>
+          <el-checkbox v-model="loginForm.rememberMe">记住密码（本机保持登录 30 天）</el-checkbox>
           <el-button type="primary" class="full-button" :loading="saving" @click="login">登录</el-button>
+          <p class="form-hint">不会在页面保存明文密码；使用受保护的登录 Cookie 记住登录状态。</p>
+          <div class="auth-assist"><el-button link type="primary" @click="openAdminReset">忘记管理员密码？</el-button></div>
         </el-form>
       </el-card>
+      <el-dialog v-model="adminResetDialog" title="重置管理员登录密码" width="520px" append-to-body destroy-on-close>
+        <el-alert title="仅可重置已启用的 Administrator 账号。初始重置口令为 admin，建议登录后立即在系统设置中修改。" type="warning" :closable="false" show-icon />
+        <el-form :model="adminResetForm" label-position="top" class="admin-reset-form">
+          <el-form-item label="管理员用户名"><el-input v-model="adminResetForm.userName" autocomplete="username" /></el-form-item>
+          <el-form-item label="重置口令"><el-input v-model="adminResetForm.resetPassword" type="password" show-password autocomplete="off" /></el-form-item>
+          <el-form-item label="新的登录密码"><el-input v-model="adminResetForm.newPassword" type="password" show-password autocomplete="new-password" /></el-form-item>
+          <el-form-item label="确认新的登录密码"><el-input v-model="adminResetForm.confirmPassword" type="password" show-password autocomplete="new-password" @keyup.enter="resetAdminPassword" /></el-form-item>
+          <span class="field-help">新登录密码至少 6 位，可使用中文、英文、数字或符号。</span>
+        </el-form>
+        <template #footer><el-button @click="adminResetDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="resetAdminPassword">确认重置</el-button></template>
+      </el-dialog>
     </div>
 
     <div v-else class="shell">
@@ -374,6 +388,15 @@
               <el-alert v-if="desktopSettings.storagePathManagedByEnvironment" title="当前路径由 AI_GATEWAY_STORAGE_PATH 环境变量管理，不能在软件内迁移。" type="warning" :closable="false" show-icon />
               <el-alert v-else-if="!desktopSettings.available" title="数据库迁移仅能从 AiDataGateway Windows 客户端执行。" type="info" :closable="false" show-icon />
               <div class="settings-actions"><el-button type="primary" :loading="storageMigrationBusy" :disabled="!desktopSettings.storageMigrationAvailable || !storageMigrationTarget" @click="migrateStorage">迁移并重启</el-button></div>
+            </el-form>
+          </el-card>
+          <el-card class="settings-card admin-recovery-card" shadow="never">
+            <template #header><div><strong>管理员密码恢复</strong><p class="settings-subtitle">登录页可使用独立重置口令恢复 Administrator 账号的登录密码。</p></div></template>
+            <el-form label-width="150px" class="settings-form">
+              <el-alert v-if="adminRecovery.usesDefaultPassword" title="当前仍使用默认重置口令 admin。为了避免他人重置管理员密码，请立即修改。" type="warning" :closable="false" show-icon />
+              <el-alert v-else title="已设置自定义管理员重置口令，系统不会显示或返回原口令。" type="success" :closable="false" show-icon />
+              <el-form-item label="新的重置口令"><el-input v-model="adminRecovery.newResetPassword" type="password" show-password maxlength="128" placeholder="4–128 位；保存后立即生效" autocomplete="new-password" /></el-form-item>
+              <div class="settings-actions"><el-button type="primary" :loading="saving" :disabled="adminRecovery.newResetPassword.length < 4" @click="saveAdminRecoveryPassword">修改重置口令</el-button></div>
             </el-form>
           </el-card>
           <el-card class="settings-card" shadow="never">
@@ -742,9 +765,10 @@ export default {
       userName: [{ required: true, message: '请输入用户名', trigger: 'blur' }, { pattern: /^[a-zA-Z0-9._@+-]+$/, message: '用户名只能包含英文字母、数字及 . - _ @ +', trigger: 'blur' }],
       email: [{ required: true, message: '请输入邮箱地址', trigger: 'blur' }, { type: 'email', message: '请输入有效的邮箱地址', trigger: ['blur', 'change'] }],
       displayName: [{ required: true, message: '请输入显示名称', trigger: 'blur' }],
-      password: [{ required: true, message: '请输入管理员密码', trigger: 'blur' }, { min: 10, message: '密码长度至少为 10 位', trigger: 'blur' }, { pattern: /[a-z]/, message: '密码必须包含小写字母', trigger: 'blur' }, { pattern: /[A-Z]/, message: '密码必须包含大写字母', trigger: 'blur' }, { pattern: /\d/, message: '密码必须包含数字', trigger: 'blur' }]
+      password: [{ required: true, message: '请输入管理员密码', trigger: 'blur' }, { min: 6, message: '密码长度至少为 6 位', trigger: 'blur' }]
     },
     loginForm: { userName: 'admin', password: '', rememberMe: true },
+    adminResetDialog: false, adminResetForm: { userName: 'admin', resetPassword: '', newPassword: '', confirmPassword: '' },
     dataSources: [], projects: [], logSources: [], monitorTargets: [], metricSamples: [], metricTrendSamples: [], metricCatalog: [], metricCatalogDefaultKeys: [], metricCatalogRequiredKeys: [], approvals: [], auditLogs: [], applicationLogs: [], users: [], clients: [], roles: [], customModules: [],
     pageSizeOptions: [10, 20, 50, 100], projectPage: 1, projectPageSize: 20, dataSourcePage: 1, dataSourcePageSize: 20, logSourcePage: 1, logSourcePageSize: 20, userPage: 1, userPageSize: 20, clientPage: 1, clientPageSize: 20,
     monitorTargetPage: 1, monitorTargetPageSize: 8, customModulePage: 1, customModulePageSize: 20, customModuleInstalling: false,
@@ -762,6 +786,7 @@ export default {
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
     clientDialog: false, editingClient: null, clientForm: { displayName: '', scopes: [] },
     maintenanceSettings: { cleanupEnabled: true, retentionDays: 3, cleanupTimeLocal: '03:00', approvalExpirationMinutes: 15, lastCleanupAtUtc: null, lastCleanupSummary: null },
+    adminRecovery: { usesDefaultPassword: true, newResetPassword: '' },
     desktopSettings: { available: false, memoryOverlayEnabled: false, storagePath: '', storageMigrationAvailable: false, storagePathManagedByEnvironment: false }, desktopMessageHandler: null, storageMigrationTarget: '', storageMigrationBusy: false,
     providers: [{ value: 1, label: 'SQL Server', port: 1433 }, { value: 2, label: 'MySQL', port: 3306 }, { value: 3, label: 'PostgreSQL', port: 5432 }, { value: 4, label: 'SQLite', port: 1 }, { value: 5, label: 'Oracle', port: 1521 }, { value: 6, label: 'MariaDB', port: 3306 }, { value: 7, label: '达梦 DM8', port: 5236 }, { value: 8, label: 'Firebird', port: 3050 }],
     accessModes: [{ value: 0, label: '禁用' }, { value: 1, label: '只读' }, { value: 2, label: '写入需审批' }, { value: 3, label: '开发模式' }],
@@ -1005,6 +1030,28 @@ export default {
       this.saving = true
       try { this.user = (await axios.post('/api/auth/login', this.loginForm)).data; await this.loadOverview(); this.connectEvents() } catch (e) { this.error(e) } finally { this.saving = false }
     },
+    openAdminReset () {
+      this.adminResetForm = { userName: this.loginForm.userName || 'admin', resetPassword: '', newPassword: '', confirmPassword: '' }
+      this.adminResetDialog = true
+    },
+    async resetAdminPassword () {
+      const form = this.adminResetForm
+      if (!form.userName.trim() || !form.resetPassword) { ElMessage.warning('请输入管理员用户名和重置口令'); return }
+      if (form.newPassword.length < 6) { ElMessage.warning('新密码至少需要 6 位'); return }
+      if (form.newPassword !== form.confirmPassword) { ElMessage.warning('两次输入的新密码不一致'); return }
+      this.saving = true
+      try {
+        await axios.post('/api/auth/reset-admin-password', { userName: form.userName.trim(), resetPassword: form.resetPassword, newPassword: form.newPassword })
+        this.loginForm.userName = form.userName.trim()
+        this.loginForm.password = ''
+        this.adminResetDialog = false
+        ElMessage.success('管理员登录密码已重置，请使用新密码登录')
+      } catch (e) {
+        if (e.response?.status === 401) ElMessage.error('管理员用户名或重置口令不正确')
+        else if (e.response?.status === 429) ElMessage.error('尝试次数过多，请一分钟后再试')
+        else this.error(e)
+      } finally { this.saving = false }
+    },
     async logout () { this.disconnectEvents(); await axios.post('/api/auth/logout'); this.user = null; this.activeTab = 'overview'; this.openTabs = ['overview'] },
     async handleUserCommand (command) { if (command === 'logout') return this.logout(); await this.goTo(command) },
     applyUiTheme () { document.documentElement.classList.toggle('dark', this.uiTheme === 'dark') },
@@ -1142,7 +1189,11 @@ export default {
     async openLogPage () { if (!this.canViewLogs) return; this.logKeyword = ''; this.logOutcome = ''; this.auditLogPage = 1; await this.goTo('logs') },
     async loadUsers () { const [users, roles] = await Promise.all([axios.get('/api/admin/users'), axios.get('/api/admin/roles')]); this.users = users.data; this.roles = roles.data; this.userPage = this.clampPage(this.userPage, this.users.length, this.userPageSize) },
     async loadClients () { this.clients = (await axios.get('/api/admin/oauth-clients')).data; this.clientPage = this.clampPage(this.clientPage, this.clients.length, this.clientPageSize) },
-    async loadMaintenanceSettings () { this.maintenanceSettings = (await axios.get('/api/settings/maintenance')).data },
+    async loadMaintenanceSettings () {
+      const [maintenance, recovery] = await Promise.all([axios.get('/api/settings/maintenance'), axios.get('/api/settings/admin-recovery')])
+      this.maintenanceSettings = maintenance.data
+      this.adminRecovery = { ...recovery.data, newResetPassword: '' }
+    },
     connectEvents () {
       this.disconnectEvents()
       const source = new EventSource('/api/events', { withCredentials: true })
@@ -1700,6 +1751,17 @@ export default {
       this.saving = true
       try { this.maintenanceSettings = (await axios.put('/api/settings/maintenance', { cleanupEnabled: this.maintenanceSettings.cleanupEnabled, retentionDays: this.maintenanceSettings.retentionDays, cleanupTimeLocal: this.maintenanceSettings.cleanupTimeLocal, approvalExpirationMinutes: this.maintenanceSettings.approvalExpirationMinutes })).data; ElMessage.success('系统设置已保存') } catch (e) { this.error(e) } finally { this.saving = false }
     },
+    async saveAdminRecoveryPassword () {
+      const value = this.adminRecovery.newResetPassword.trim()
+      if (value.length < 4) { ElMessage.warning('重置口令至少需要 4 位'); return }
+      try { await ElMessageBox.confirm('修改后，登录页只能使用新的重置口令恢复管理员密码。请确认已经妥善保存。', '修改管理员重置口令', { type: 'warning' }) } catch (_) { return }
+      this.saving = true
+      try {
+        const status = (await axios.put('/api/settings/admin-recovery', { newResetPassword: value })).data
+        this.adminRecovery = { ...status, newResetPassword: '' }
+        ElMessage.success('管理员重置口令已修改')
+      } catch (e) { this.error(e) } finally { this.saving = false }
+    },
     async cleanupNow () {
       try { await ElMessageBox.confirm(`将删除 ${this.maintenanceSettings.retentionDays} 天以前的运行日志、审批记录、服务器指标和日志文件，是否继续？`, '立即清理', { type: 'warning' }) } catch (e) { if (!this.isCanceled(e)) this.error(e); return }
       this.saving = true
@@ -1713,7 +1775,7 @@ export default {
     riskType (risk) { return ({ Low: 'success', Medium: 'warning', High: 'danger', Critical: 'danger' })[risk] || 'info' },
     outcomeName (outcome) { return ({ success: '成功', failure: '失败', pending: '待处理', rejected: '已拒绝' })[outcome] || outcome },
     outcomeType (outcome) { return ({ success: 'success', failure: 'danger', pending: 'warning', rejected: 'danger' })[outcome] || 'info' },
-    actionName (action) { return ({ 'system.setup': '系统初始化', 'auth.login': '用户登录', 'auth.logout': '用户退出', 'query.execute': 'AI 只读查询', 'query.blocked': '黑名单拦截查询', 'change.submit': '提交 SQL 工单', 'change.review': '审核 SQL 工单', 'change.execute': '执行 SQL 变更', 'datasource.create': '创建数据源', 'datasource.update': '更新数据源', 'datasource.delete': '删除数据源', 'datasource.test': '测试数据源', 'project.create': '创建项目', 'project.update': '更新项目', 'project.delete': '删除项目', 'logsource.create': '创建日志源', 'logsource.update': '更新日志源', 'logsource.delete': '删除日志源', 'logsource.test': '测试日志源', 'log.query': '读取应用日志', 'settings.maintenance.update': '更新系统设置', 'maintenance.cleanup': '清理日志与记录', 'user.create': '创建用户', 'user.update': '更新用户', 'user.delete': '删除用户', 'oauth-client.create': '创建 OAuth2 客户端', 'oauth-client.delete': '吊销 OAuth2 客户端' })[action] || action },
+    actionName (action) { return ({ 'system.setup': '系统初始化', 'auth.login': '用户登录', 'auth.logout': '用户退出', 'auth.admin-password-reset.verify': '校验管理员重置口令', 'auth.admin-password-reset': '重置管理员登录密码', 'settings.admin-recovery.update': '修改管理员重置口令', 'query.execute': 'AI 只读查询', 'query.blocked': '黑名单拦截查询', 'change.submit': '提交 SQL 工单', 'change.review': '审核 SQL 工单', 'change.execute': '执行 SQL 变更', 'datasource.create': '创建数据源', 'datasource.update': '更新数据源', 'datasource.delete': '删除数据源', 'datasource.test': '测试数据源', 'project.create': '创建项目', 'project.update': '更新项目', 'project.delete': '删除项目', 'logsource.create': '创建日志源', 'logsource.update': '更新日志源', 'logsource.delete': '删除日志源', 'logsource.test': '测试日志源', 'log.query': '读取应用日志', 'settings.maintenance.update': '更新系统设置', 'maintenance.cleanup': '清理日志与记录', 'user.create': '创建用户', 'user.update': '更新用户', 'user.delete': '删除用户', 'oauth-client.create': '创建 OAuth2 客户端', 'oauth-client.delete': '吊销 OAuth2 客户端' })[action] || action },
     isCanceled (e) { return e === 'cancel' || e === 'close' || e?.message === 'cancel' || e?.message === 'close' }
   }
 }

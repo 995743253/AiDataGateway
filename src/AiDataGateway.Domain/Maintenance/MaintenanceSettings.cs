@@ -23,6 +23,7 @@ public sealed class MaintenanceSettings
     public int RetentionDays { get; private set; }
     public string CleanupTimeLocal { get; private set; } = "03:00";
     public int ApprovalExpirationMinutes { get; private set; }
+    public string ProtectedAdminResetPassword { get; private set; } = string.Empty;
     public DateTimeOffset? LastCleanupAtUtc { get; private set; }
     public string? LastCleanupSummary { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
@@ -54,5 +55,11 @@ public sealed class MaintenanceSettings
         LastCleanupAtUtc = completedAtUtc;
         LastCleanupSummary = summary;
         UpdatedAtUtc = completedAtUtc;
+    }
+
+    public void SetProtectedAdminResetPassword(string protectedPassword)
+    {
+        ProtectedAdminResetPassword = protectedPassword ?? throw new ArgumentNullException(nameof(protectedPassword));
+        UpdatedAtUtc = DateTimeOffset.UtcNow;
     }
 }

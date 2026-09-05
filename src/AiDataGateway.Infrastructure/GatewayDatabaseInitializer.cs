@@ -153,6 +153,7 @@ public sealed class GatewayDatabaseInitializer(
                 "RetentionDays" INTEGER NOT NULL,
                 "CleanupTimeLocal" TEXT NOT NULL,
                 "ApprovalExpirationMinutes" INTEGER NOT NULL DEFAULT 15,
+                "ProtectedAdminResetPassword" TEXT NOT NULL DEFAULT '',
                 "LastCleanupAtUtc" TEXT NULL,
                 "LastCleanupSummary" TEXT NULL,
                 "UpdatedAtUtc" TEXT NOT NULL
@@ -163,6 +164,11 @@ public sealed class GatewayDatabaseInitializer(
             "GatewayMaintenanceSettings",
             "ApprovalExpirationMinutes",
             "ALTER TABLE \"GatewayMaintenanceSettings\" ADD COLUMN \"ApprovalExpirationMinutes\" INTEGER NOT NULL DEFAULT 15",
+            cancellationToken);
+        await EnsureColumnAsync(
+            "GatewayMaintenanceSettings",
+            "ProtectedAdminResetPassword",
+            "ALTER TABLE \"GatewayMaintenanceSettings\" ADD COLUMN \"ProtectedAdminResetPassword\" TEXT NOT NULL DEFAULT ''",
             cancellationToken);
 
         if (!await dbContext.MaintenanceSettings.AnyAsync(item => item.Id == MaintenanceSettings.SingletonId, cancellationToken))

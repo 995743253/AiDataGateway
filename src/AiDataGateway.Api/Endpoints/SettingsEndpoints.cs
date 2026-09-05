@@ -1,4 +1,5 @@
 using AiDataGateway.Api.Security;
+using AiDataGateway.Api.Contracts;
 using AiDataGateway.Application.Maintenance;
 using AiDataGateway.Application.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -27,6 +28,16 @@ internal static class SettingsEndpoints
             MaintenanceService service,
             CancellationToken cancellationToken) =>
             Results.Ok(await service.RunCleanupAsync(GatewayPrincipal.Actor(context.User), cancellationToken)));
+
+        settings.MapGet("/admin-recovery", async (AdminRecoveryService service, CancellationToken cancellationToken) =>
+            Results.Ok(await service.GetStatusAsync(cancellationToken)));
+
+        settings.MapPut("/admin-recovery", async (
+            UpdateAdminRecoveryRequest request,
+            HttpContext context,
+            AdminRecoveryService service,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await service.UpdateAsync(request.NewResetPassword, GatewayPrincipal.Actor(context.User), cancellationToken)));
 
         return endpoints;
     }

@@ -7,9 +7,11 @@ using AiDataGateway.Infrastructure;
 using AiDataGateway.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.FileProviders;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
+using System.Threading.RateLimiting;
 
 namespace AiDataGateway.Api;
 
@@ -52,6 +54,17 @@ public sealed class GatewayWebHost : IAsyncDisposable
             storage.ProtectKeysWithDpapi = !options.UseEphemeralCertificates;
         });
         builder.Services.AddAuthorization();
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddFixedWindowLimiter("admin-recovery", limiter =>
+            {
+                limiter.PermitLimit = 5;
+                limiter.Window = TimeSpan.FromMinutes(1);
+                limiter.QueueLimit = 0;
+                limiter.AutoReplenishment = true;
+            });
+        });
         builder.Services.AddAuthentication(authentication =>
             {
                 authentication.DefaultAuthenticateScheme = "Gateway";
@@ -135,6 +148,7 @@ public sealed class GatewayWebHost : IAsyncDisposable
             }
         });
         app.UseRouting();
+        app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
 

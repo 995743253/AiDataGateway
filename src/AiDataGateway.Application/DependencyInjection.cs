@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<DataSourceService>();
         services.AddScoped<QueryService>();
         services.AddScoped<MaintenanceService>();
+        services.AddScoped<AdminRecoveryService>();
         services.AddScoped<ChangeSubmissionService>();
         services.AddScoped<ProjectService>();
         services.AddScoped<LogSourceService>();
