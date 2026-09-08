@@ -215,6 +215,7 @@
             </div>
             <el-alert v-if="applicationLogWarning" :title="applicationLogWarning" type="warning" show-icon :closable="false" class="log-warning" />
             <el-table :data="applicationLogs" stripe border height="100%" class="paged-table page-table" @row-dblclick="openApplicationLog">
+              <el-table-column v-if="selectedApplicationLogSource?.type === 2" type="expand" width="48"><template #default="s"><div class="structured-log-expand"><div class="structured-log-expand-title">事件属性层级</div><StructuredValueTree :value="s.row.properties || {}" /></div></template></el-table-column>
               <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
               <el-table-column v-if="selectedApplicationLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
@@ -239,6 +240,7 @@
             </div>
             <el-alert v-if="realtimeLogError" :title="realtimeLogError" type="warning" show-icon :closable="false" class="log-warning" />
             <el-table :data="pagedRealtimeLogs" stripe border height="100%" class="paged-table page-table realtime-log-table" @row-dblclick="openApplicationLog">
+              <el-table-column v-if="selectedRealtimeLogSource?.type === 2" type="expand" width="48"><template #default="s"><div class="structured-log-expand"><div class="structured-log-expand-title">事件属性层级</div><StructuredValueTree :value="s.row.properties || {}" /></div></template></el-table-column>
               <el-table-column prop="timestampUtc" label="时间" width="190"><template #default="s">{{ formatDate(s.row.timestampUtc) }}</template></el-table-column>
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
               <el-table-column v-if="selectedRealtimeLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
@@ -298,7 +300,7 @@
                         <el-button :loading="monitorLoading" @click="metricTrendMode === 'history' ? loadHistoricalTrend() : loadMetricSamples()">刷新</el-button>
                         <span class="trend-summary">{{ trendSummary }}</span>
                       </div>
-                      <div class="trend-chart-grid" :class="`chart-count-${selectedTrendMetrics.length}`"><metric-trend-chart v-for="metric in selectedTrendMetrics" :key="metric.key" :metric="metric" :samples="metricTrendSamples" :mode="metricTrendMode" /></div>
+                      <div class="trend-chart-grid" :class="`chart-count-${selectedTrendMetrics.length}`"><metric-trend-chart v-for="metric in selectedTrendMetrics" :key="metric.key" :metric="metric" :samples="metricTrendSamples" :mode="metricTrendMode" @expand="openMetricChart" /></div>
                       <el-empty v-if="!selectedTrendMetrics.length" description="请选择需要显示的趋势指标" />
                     </div>
                   </el-tab-pane>
@@ -566,7 +568,7 @@
           <el-form-item label="采集方式"><div class="log-source-type-picker"><div class="log-source-type-buttons"><el-button :type="logSourceForm.type === 1 ? 'primary' : 'default'" :plain="logSourceForm.type !== 1" @click="selectLogSourceType(1)">本机 NLog</el-button><el-button :type="logSourceForm.type === 2 ? 'warning' : 'default'" :plain="logSourceForm.type !== 2" @click="selectLogSourceType(2)">Seq API</el-button><el-button :type="logSourceForm.type === 3 ? 'success' : 'default'" :plain="logSourceForm.type !== 3" @click="selectLogSourceType(3)">远程 Agent</el-button></div><p>{{ logSourceForm.type === 1 ? '读取网关所在电脑的 NLog 文件。' : logSourceForm.type === 2 ? '调用 Seq API，每条日志源使用独立 API Key。' : '通过单独部署的采集 Agent 追溯远程服务器本地日志。' }}</p></div></el-form-item>
           <template v-if="logSourceForm.type === 1">
             <el-alert title="本地文件夹采集不会连接 Seq。只需填写日志文件夹；默认读取其中最近的 *.log 文件。也可以直接填写完整文件名或通配符。" type="info" show-icon :closable="false" class="source-mode-alert" />
-            <el-form-item label="日志文件夹"><el-input v-model="logSourceForm.endpoint" placeholder="例如 D:\Logs\OrderApi，或 D:\Logs\OrderApi\*.log" /><span class="field-help">支持绝对文件夹、完整文件名和通配符；文件夹模式默认匹配 *.log。也支持相对 NLog 配置的路径以及 ${basedir}、${shortdate} 等常见变量。</span></el-form-item>
+            <el-form-item label="日志文件夹"><el-input v-model="logSourceForm.endpoint" placeholder="例如 D:\Logs\OrderApi，或 D:\Logs\OrderApi\*.log" /><span class="field-help">文件夹会递归读取日期等子目录中的 *.log，并自动发现目录内的 NLog.config；也支持完整文件名、通配符以及 ${basedir}、${shortdate} 等常见变量。</span></el-form-item>
             <el-form-item label="NLog 配置（可选）"><el-input v-model="logSourceForm.nLogConfiguration" type="textarea" :rows="6" placeholder="仅在需要自动读取 fileName/layout 时填写：可粘贴 NLog XML，或填写 nlog.config 的绝对路径" /></el-form-item>
             <el-form-item label="目标名称"><el-input v-model="logSourceForm.nLogTargetName" placeholder="配置包含多个 File target 时填写 target name" /></el-form-item>
             <el-form-item label="Layout 覆盖"><el-input v-model="logSourceForm.nLogLayout" type="textarea" :rows="3" placeholder="可留空并从 File target 提取，例如 ${longdate}|${level}|${message}|${exception}" /></el-form-item>
@@ -722,6 +724,12 @@
         <template #footer><el-button @click="toolboxDeliveryDialog=false">关闭</el-button></template>
       </el-dialog>
 
+      <el-dialog v-model="metricChartDialog" width="92%" class="detail-window metric-chart-window" :fullscreen="metricChartMaximized" :draggable="!metricChartMaximized" destroy-on-close>
+        <template #header><div class="dialog-header-row"><span class="dialog-header-title">{{ expandedMetric?.name || '指标趋势' }} · {{ selectedMonitorTarget?.name || '' }}</span><el-button class="dialog-max-button" link type="primary" @click="metricChartMaximized = !metricChartMaximized"><el-icon><FullScreen /></el-icon>{{ metricChartMaximized ? ' 还原' : ' 全屏' }}</el-button></div></template>
+        <div v-if="expandedMetric" class="metric-chart-dialog-content"><metric-trend-chart :metric="expandedMetric" :samples="metricTrendSamples" :mode="metricTrendMode" :expandable="false" expanded /></div>
+        <template #footer><span class="metric-dialog-summary">{{ trendSummary }}</span><el-button @click="metricChartDialog=false">关闭</el-button></template>
+      </el-dialog>
+
       <el-dialog v-model="userDialog" :title="editingUser ? '编辑用户' : '新增用户'" width="580px">
         <el-form :model="newUser" label-width="100px"><el-form-item label="用户名"><el-input v-model="newUser.userName" :disabled="!!editingUser" /></el-form-item><el-form-item label="显示名称"><el-input v-model="newUser.displayName" /></el-form-item><el-form-item label="邮箱"><el-input v-model="newUser.email" :disabled="!!editingUser" /></el-form-item><el-form-item v-if="!editingUser" label="密码"><el-input v-model="newUser.password" type="password" show-password /></el-form-item><el-form-item label="角色"><el-select v-model="newUser.roles" multiple class="full-width"><el-option v-for="r in roles" :key="r" :label="r" :value="r" /></el-select></el-form-item><el-form-item v-if="editingUser" label="账号状态"><el-switch v-model="newUser.enabled" active-text="启用" inactive-text="禁用" /></el-form-item></el-form>
         <template #footer><el-button @click="userDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveUser">{{ editingUser ? '保存' : '创建' }}</el-button></template>
@@ -745,6 +753,7 @@ import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import MetricTrendChart from './components/MetricTrendChart.vue'
+import StructuredValueTree from './components/StructuredValueTree.vue'
 
 axios.defaults.withCredentials = true
 
@@ -756,7 +765,7 @@ const storedTrendKeys = () => {
 }
 
 export default {
-  components: { MetricTrendChart },
+  components: { MetricTrendChart, StructuredValueTree },
   data: () => ({
     loading: true, saving: false, needsSetup: false, user: null, activeTab: 'overview', openTabs: ['overview'], sidebarCollapsed: localStorage.getItem('gateway.sidebarCollapsed') === 'true', uiTheme: localStorage.getItem('gateway.uiTheme') === 'dark' ? 'dark' : 'light', zhCn, generatedClient: null,
     eventSource: null, eventConnected: false, eventRefreshTimer: null,
@@ -778,7 +787,7 @@ export default {
     projectDialog: false, editingProject: null, projectForm: {},
     logSourceDialog: false, editingLogSource: null, logSourceForm: {},
     monitorTargetDialog: false, editingMonitorTarget: null, monitorTargetForm: {}, monitorCredentialDialog: false, monitorCredential: null,
-    selectedMonitorTargetId: '', monitorSection: 'overview', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendKeys: storedTrendKeys(), metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null,
+    selectedMonitorTargetId: '', monitorSection: 'overview', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendKeys: storedTrendKeys(), metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null, metricChartDialog: false, metricChartMaximized: false, expandedMetric: null,
     applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogTopic: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
     realtimeLogs: [], realtimeLogPage: 1, realtimeLogPageSize: 50, realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogTopic: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
     applicationLogDialog: false, selectedApplicationLog: null, selectedApplicationLogSourceId: '', applicationLogDetailTab: 'overview', applicationLogPropertyPage: 1, logDetailMaximized: false, logSqlProjects: [], logSqlProjectId: '', logSqlDataSourceId: '', logSqlResult: null, logSqlResultPage: 1, logSqlLoading: false, approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' }, toolboxHooks: [], toolboxDeliveries: [], toolboxDeliveryHook: null, toolboxDeliveryDialog: false, toolboxDeliveryMaximized: false, toolboxHookDialog: false, editingToolboxHook: null, toolboxHookForm: { name: '', description: '' }, xmlTool: { input: '', output: '', error: '' }, jsonTool: { input: '', output: '', error: '' }, caseTool: { input: '', output: '' }, base64Tool: { input: '', output: '', error: '' }, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
@@ -1165,6 +1174,7 @@ export default {
     async openLogSourcePage () { if (this.canOperate) await this.goTo('logsources') },
     async openApplicationLogPage () { if (!this.canViewLogs) return; await this.goTo('applicationlogs') },
     async openMonitoringPage () { if (!this.canViewMetrics) return; await this.goTo('monitoring') },
+    openMetricChart (metric) { this.expandedMetric = metric; this.metricChartMaximized = false; this.metricChartDialog = true },
     async openApprovalPage (status = 'all') { if (!this.canApprove) return; this.approvalFilter = status; this.approvalKeyword = ''; this.approvalPage = 1; await this.goTo('approvals') },
     async openLogSourceLogs (row) {
       if (!row.enabled) { ElMessage.warning('该日志源已禁用，请先启用后再查看应用日志'); return }
@@ -1615,6 +1625,7 @@ export default {
       if (kind === 'base64') this.base64Tool = { input: '', output: '', error: '' }
     },
     detectStructuredValue (value) {
+      if (value !== null && typeof value === 'object') return 'json'
       if (typeof value !== 'string' || value.trim().length < 3) return null
       if (this.extractJsonPretty(value) !== null) return 'json'
       const words = value.toLowerCase().match(/[a-z_]+/g)
@@ -1662,7 +1673,26 @@ export default {
       const text = this.propertyViewer.kind === 'json' && this.propertyViewer.pretty ? this.propertyViewer.pretty : this.propertyViewer.text
       navigator.clipboard.writeText(text).then(() => ElMessage.success('已复制')).catch(() => ElMessage.error('复制失败'))
     },
-    topicOf (row) { return row.properties?.Topic ?? row.properties?.topic ?? null },
+    topicOf (row) { return this.findNestedProperty(row?.properties, 'Topic') },
+    findNestedProperty (value, propertyName, depth = 0, visited = new Set()) {
+      if (value === null || value === undefined || depth > 10) return null
+      if (typeof value === 'string') {
+        const parsed = this.extractJsonPretty(value)
+        if (parsed === null) return null
+        try { return this.findNestedProperty(JSON.parse(parsed), propertyName, depth + 1, visited) } catch (_) { return null }
+      }
+      if (typeof value !== 'object' || visited.has(value)) return null
+      visited.add(value)
+      if (!Array.isArray(value)) {
+        const entry = Object.entries(value).find(([key]) => key.toLowerCase() === propertyName.toLowerCase())
+        if (entry && entry[1] !== null && typeof entry[1] !== 'object') return entry[1]
+      }
+      for (const nested of Array.isArray(value) ? value : Object.values(value)) {
+        const found = this.findNestedProperty(nested, propertyName, depth + 1, visited)
+        if (found !== null && found !== undefined) return found
+      }
+      return null
+    },
     async openApplicationLog (row, tab = 'overview') {
       this.selectedApplicationLog = row
       this.selectedApplicationLogSourceId = this.activeTab === 'realtimelogs' ? this.realtimeLogSourceId : this.applicationLogSourceId

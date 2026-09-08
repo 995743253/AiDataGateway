@@ -12,6 +12,15 @@ internal static partial class NLogConfigurationResolver
     {
         var configText = connection.NLogConfiguration.Trim();
         var configDirectory = AppContext.BaseDirectory;
+        if (string.IsNullOrWhiteSpace(configText))
+        {
+            var endpoint = Environment.ExpandEnvironmentVariables(connection.Endpoint.Trim());
+            if (Directory.Exists(endpoint))
+            {
+                var discoveredConfig = FindConfigurationFile(Path.GetFullPath(endpoint));
+                if (discoveredConfig is not null) configText = discoveredConfig;
+            }
+        }
         if (!string.IsNullOrWhiteSpace(configText) && !configText.StartsWith('<'))
         {
             var configPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(configText));
@@ -75,9 +84,9 @@ internal static partial class NLogConfigurationResolver
         var fullPattern = Path.GetFullPath(filePattern);
         if (Directory.Exists(fullPattern))
         {
-            return FilterFiles(Directory.GetFiles(fullPattern, "*.log", SearchOption.TopDirectoryOnly), fromUtc, toUtc)
+            return FilterFiles(EnumerateFiles(fullPattern, "*.log", recursive: true), fromUtc, toUtc)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
-                .Take(100)
+                .Take(500)
                 .ToArray();
         }
 
@@ -86,17 +95,71 @@ internal static partial class NLogConfigurationResolver
             return File.Exists(fullPattern) && FilterFiles([fullPattern], fromUtc, toUtc).Any() ? [fullPattern] : [];
         }
 
-        var directory = Path.GetDirectoryName(fullPattern);
+        var directory = GetWildcardSearchRoot(fullPattern);
         var pattern = Path.GetFileName(fullPattern);
-        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory) || string.IsNullOrWhiteSpace(pattern))
         {
             return [];
         }
 
-        return FilterFiles(Directory.GetFiles(directory, pattern, SearchOption.TopDirectoryOnly), fromUtc, toUtc)
+        var pathMatcher = BuildPathMatcher(fullPattern);
+        return FilterFiles(EnumerateFiles(directory, pattern, recursive: true).Where(path => pathMatcher.IsMatch(path)), fromUtc, toUtc)
             .OrderByDescending(File.GetLastWriteTimeUtc)
-            .Take(100)
+            .Take(500)
             .ToArray();
+    }
+
+    private static string? FindConfigurationFile(string directory)
+    {
+        foreach (var name in new[] { "NLog.config", "nlog.config" })
+        {
+            var exact = Path.Combine(directory, name);
+            if (File.Exists(exact)) return exact;
+        }
+
+        return EnumerateFiles(directory, "*.config", recursive: true)
+            .OrderBy(path => Path.GetRelativePath(directory, path).Count(character => character is '\\' or '/'))
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(path => Path.GetFileName(path).Contains("nlog", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IEnumerable<string> EnumerateFiles(string directory, string pattern, bool recursive)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = recursive,
+            IgnoreInaccessible = true,
+            ReturnSpecialDirectories = false,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        try { return Directory.EnumerateFiles(directory, pattern, options); }
+        catch (IOException) { return []; }
+        catch (UnauthorizedAccessException) { return []; }
+    }
+
+    private static string? GetWildcardSearchRoot(string pattern)
+    {
+        var wildcard = pattern.IndexOfAny(['*', '?']);
+        if (wildcard < 0) return Path.GetDirectoryName(pattern);
+        var separator = pattern.LastIndexOfAny(['\\', '/'], wildcard);
+        if (separator < 0) return Path.GetPathRoot(pattern);
+        var root = pattern[..separator];
+        return string.IsNullOrWhiteSpace(root) ? Path.GetPathRoot(pattern) : root;
+    }
+
+    private static Regex BuildPathMatcher(string pattern)
+    {
+        var expression = new System.Text.StringBuilder("\\A");
+        for (var index = 0; index < pattern.Length; index++)
+        {
+            var current = pattern[index];
+            if (current == '*') expression.Append("[^\\\\/]*");
+            else if (current == '?') expression.Append("[^\\\\/]");
+            else if (current is '\\' or '/') expression.Append("[\\\\/]");
+            else expression.Append(Regex.Escape(current.ToString()));
+        }
+        expression.Append("\\z");
+        return new Regex(expression.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private static IEnumerable<string> FilterFiles(IEnumerable<string> files, DateTimeOffset? fromUtc, DateTimeOffset? toUtc)
@@ -106,7 +169,7 @@ internal static partial class NLogConfigurationResolver
         var to = toUtc?.UtcDateTime ?? DateTime.MaxValue;
         return files.Where(file =>
         {
-            var nameMatch = FileDateRegex().Matches(Path.GetFileNameWithoutExtension(file)).Cast<Match>().LastOrDefault();
+            var nameMatch = FileDateRegex().Matches(file).Cast<Match>().LastOrDefault();
             if (nameMatch?.Success == true && DateTime.TryParseExact(nameMatch.Value,
                     ["yyyy-MM-dd-HH", "yyyy-MM-dd", "yyyyMMddHH", "yyyyMMdd"],
                     System.Globalization.CultureInfo.InvariantCulture,

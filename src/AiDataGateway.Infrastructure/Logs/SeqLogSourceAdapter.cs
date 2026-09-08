@@ -42,6 +42,7 @@ internal sealed class SeqLogSourceAdapter(IHttpClientFactory httpClientFactory) 
         var mapped = elements.Select(FromSeqEvent)
             .Where(item => !options.FromUtc.HasValue || !item.TimestampUtc.HasValue || item.TimestampUtc >= options.FromUtc)
             .Where(item => !options.ToUtc.HasValue || !item.TimestampUtc.HasValue || item.TimestampUtc <= options.ToUtc)
+            .Where(item => MatchesProperty(item, options))
             .OrderByDescending(item => item.TimestampUtc ?? DateTimeOffset.MinValue)
             .ToArray();
         var skip = (options.Page - 1) * options.PageSize;
@@ -87,9 +88,19 @@ internal sealed class SeqLogSourceAdapter(IHttpClientFactory httpClientFactory) 
             var name = options.PropertyName.Trim();
             if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Za-z_][A-Za-z0-9_.]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant))
                 throw new ArgumentException("Seq 属性名只能包含字母、数字、下划线和点，且必须以字母或下划线开头。");
-            parts.Add(string.IsNullOrWhiteSpace(options.PropertyValue)
-                ? $"{name} is not null"
-                : $"{name} = '{options.PropertyValue.Trim().Replace("'", "''")}'");
+            if (name.Equals("Topic", StringComparison.OrdinalIgnoreCase))
+            {
+                // Topic is frequently placed inside an envelope instead of at the event root.
+                // Use Seq's text search to reduce the result set, then verify the nested property locally.
+                if (!string.IsNullOrWhiteSpace(options.PropertyValue))
+                    parts.Add($"\"{options.PropertyValue.Trim().Replace("\\", "\\\\").Replace("\"", "\\\"")}\"");
+            }
+            else
+            {
+                parts.Add(string.IsNullOrWhiteSpace(options.PropertyValue)
+                    ? $"{name} is not null"
+                    : $"{name} = '{options.PropertyValue.Trim().Replace("'", "''")}'");
+            }
         }
         if (!string.IsNullOrWhiteSpace(options.Level)) parts.Add($"@Level = '{options.Level.Trim().Replace("'", "''")}'");
         if (options.FromUtc.HasValue) parts.Add($"@Timestamp >= DateTime('{options.FromUtc.Value.UtcDateTime:yyyy-MM-ddTHH:mm:ss.fff}Z')");
@@ -111,6 +122,12 @@ internal sealed class SeqLogSourceAdapter(IHttpClientFactory httpClientFactory) 
         return [];
     }
 
+    internal static StructuredLogEvent ParseEventForTest(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return FromSeqEvent(document.RootElement);
+    }
+
     private static StructuredLogEvent FromSeqEvent(JsonElement element)
     {
         var properties = element.ValueKind == JsonValueKind.Object
@@ -122,6 +139,10 @@ internal sealed class SeqLogSourceAdapter(IHttpClientFactory httpClientFactory) 
         var level = GetString(properties, "Level", "@l") ?? "Information";
         var message = GetString(properties, "RenderedMessage", "Message", "@m", "MessageTemplate", "@mt");
         var exception = GetString(properties, "Exception", "@x");
+        if (StructuredLogValueNormalizer.TryParseString(message, out var messageBody))
+        {
+            properties["_messageJson"] = messageBody;
+        }
         if (properties.TryGetValue("Properties", out var nested) && nested is Dictionary<string, object?> nestedProperties)
         {
             foreach (var item in nestedProperties) properties.TryAdd(item.Key, item.Value);
@@ -129,31 +150,38 @@ internal sealed class SeqLogSourceAdapter(IHttpClientFactory httpClientFactory) 
         return new StructuredLogEvent(id, timestamp, level, message, exception, properties, raw);
     }
 
-    private static object? JsonValue(JsonElement value) => value.ValueKind switch
-    {
-        JsonValueKind.Null => null,
-        JsonValueKind.String => value.GetString(),
-        JsonValueKind.True => true,
-        JsonValueKind.False => false,
-        JsonValueKind.Number when value.TryGetInt64(out var integer) => integer,
-        JsonValueKind.Number when value.TryGetDecimal(out var number) => number,
-        JsonValueKind.Object => value.EnumerateObject().ToDictionary(item => item.Name, item => JsonValue(item.Value), StringComparer.OrdinalIgnoreCase),
-        _ => JsonSerializer.Deserialize<object>(value.GetRawText())
-    };
+    private static object? JsonValue(JsonElement value) => StructuredLogValueNormalizer.FromJsonElement(value);
 
     private static string? GetString(IReadOnlyDictionary<string, object?> values, params string[] names)
     {
         foreach (var name in names)
         {
-            if (values.TryGetValue(name, out var value)) return value?.ToString();
+            if (values.TryGetValue(name, out var value)) return StringValue(value);
         }
         return null;
     }
+
+    private static string? StringValue(object? value) => value switch
+    {
+        null => null,
+        string text => text,
+        IReadOnlyDictionary<string, object?> or IEnumerable<object?> => JsonSerializer.Serialize(value),
+        _ => value.ToString()
+    };
 
     private static DateTimeOffset? ParseTimestamp(string? value) =>
         DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var timestamp)
             ? timestamp.ToUniversalTime()
             : null;
+
+    private static bool MatchesProperty(StructuredLogEvent item, LogQueryOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.PropertyName)) return true;
+        var value = StructuredLogValueNormalizer.FindProperty(item.Properties, options.PropertyName.Trim());
+        if (value is null) return false;
+        return string.IsNullOrWhiteSpace(options.PropertyValue) ||
+               StringValue(value)?.Contains(options.PropertyValue.Trim(), StringComparison.OrdinalIgnoreCase) == true;
+    }
 
     private static async Task<string> ErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {

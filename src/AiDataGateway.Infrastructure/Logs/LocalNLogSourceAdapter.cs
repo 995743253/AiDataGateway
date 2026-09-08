@@ -228,6 +228,7 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
         var level = GetString(properties, "@l", "Level", "level") ?? "Information";
         var message = GetString(properties, "@m", "RenderedMessage", "Message", "message", "@mt");
         var exception = GetString(properties, "@x", "Exception", "exception");
+        if (StructuredLogValueNormalizer.TryParseString(message, out var messageBody)) properties["_messageJson"] = messageBody;
         properties["_file"] = file;
         return new StructuredLogEvent(EventId(raw), timestamp, level, message, exception, properties, raw);
     }
@@ -246,16 +247,103 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
                 var envelope = ParseCommonNLogEnvelope(raw);
                 if (envelope.Count > 0) fields = envelope;
             }
+
             var timestamp = ParseTimestamp(GetString(fields, "timestamp", "longdate", "date", "time"));
             var level = GetString(fields, "level");
             var message = fields.ContainsKey("message") ? GetString(fields, "message") : raw;
             var exception = GetString(fields, "exception");
+
+            foreach (var key in fields.Keys.ToArray())
+            {
+                if (fields[key] is string fieldText) fields[key] = StructuredLogValueNormalizer.FromString(fieldText);
+            }
+
+            // A layout ending in ${exception} makes the message/exception split ambiguous:
+            // without a real stack trace the whole segment is just the log message.
+            if (string.IsNullOrEmpty(message) && !LooksLikeExceptionText(exception))
+            {
+                message = exception;
+                exception = null;
+            }
+
+            if (StructuredLogValueNormalizer.TryParseString(message, out var messageBody)) fields["_messageJson"] = messageBody;
+
+            // Layouts without ${level} (e.g. ${longdate}|[${threadid}][${module}][${tag}]${message})
+            // still expose the level through the file name prefix and leading bracket tags.
+            if (level is null)
+            {
+                var bracket = MatchLeadingBrackets(message);
+                if (bracket is not null)
+                {
+                    var threadIdKnown = fields.ContainsKey("threadid") && fields["threadid"] is not null;
+                    if (!threadIdKnown && bracket.Value.ThreadId is not null) fields.TryAdd("threadid", bracket.Value.ThreadId);
+                    var moduleName = threadIdKnown ? bracket.Value.ThreadId : bracket.Value.Module;
+                    if (moduleName is not null) fields.TryAdd("module", moduleName);
+                    if (bracket.Value.Tag is not null) fields.TryAdd("logtag", bracket.Value.Tag);
+                    message = bracket.Value.Remainder;
+                    fields["message"] = message;
+                }
+
+                level = InferLevelFromFileName(file);
+                if (level is not null) fields.TryAdd("level", level);
+            }
+
             fields["_file"] = file;
+            if (fields.ContainsKey("exception") && exception is null) fields["exception"] = null;
             var incomplete = truncated && index == 0;
             results.Add(new StructuredLogEvent(EventId(raw), timestamp, level, message, exception, fields, raw,
                 incomplete, incomplete ? "日志文件只读取了尾部，第一条记录可能不完整。" : null));
         }
         return results;
+    }
+
+    private static bool LooksLikeExceptionText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var firstLine = text.Split('\n', 2)[0];
+        if (firstLine.Contains("Exception", StringComparison.Ordinal) || firstLine.Contains("   at ")) return true;
+        return false;
+    }
+
+    private static readonly string[] KnownLevels =
+        ["Trace", "Debug", "Info", "Information", "Warn", "Warning", "Error", "Fatal"];
+
+    private static string? InferLevelFromFileName(string file)
+    {
+        var name = Path.GetFileName(file);
+        var dash = name.IndexOf('-');
+        var prefix = (dash > 0 ? name[..dash] : Path.GetFileNameWithoutExtension(name)).Trim();
+        return KnownLevels.FirstOrDefault(level => level.Equals(prefix, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static (string? ThreadId, string? Module, string? Tag, string Remainder)? MatchLeadingBrackets(string? message)
+    {
+        if (string.IsNullOrEmpty(message) || message[0] != '[') return null;
+        var firstEnd = message.IndexOf(']');
+        if (firstEnd < 0) return null;
+
+        var secondStart = firstEnd + 1;
+        if (secondStart >= message.Length || message[secondStart] != '[') return null;
+        var secondEnd = message.IndexOf(']', secondStart);
+        if (secondEnd < 0) return null;
+
+        var thirdStart = secondEnd + 1;
+        string? tag = null;
+        var remainderStart = secondStart;
+        if (thirdStart < message.Length && message[thirdStart] == '[')
+        {
+            var thirdEnd = message.IndexOf(']', thirdStart);
+            if (thirdEnd > thirdStart)
+            {
+                tag = message[(thirdStart + 1)..thirdEnd];
+                remainderStart = thirdEnd + 1;
+            }
+        }
+
+        var first = message[1..firstEnd].Trim();
+        var second = message[secondStart..secondEnd].Trim();
+        var remainder = remainderStart < message.Length ? message[remainderStart..].TrimStart() : string.Empty;
+        return (first, second, tag, remainder);
     }
 
     private static bool LevelTokenPolluted(Dictionary<string, object?> fields)
@@ -396,21 +484,20 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
     {
         foreach (var name in names)
         {
-            if (fields.TryGetValue(name, out var value)) return value?.ToString();
+            if (fields.TryGetValue(name, out var value)) return StringValue(value);
         }
         return null;
     }
 
-    private static object? JsonValue(JsonElement value) => value.ValueKind switch
+    private static string? StringValue(object? value) => value switch
     {
-        JsonValueKind.Null => null,
-        JsonValueKind.String => value.GetString(),
-        JsonValueKind.True => true,
-        JsonValueKind.False => false,
-        JsonValueKind.Number when value.TryGetInt64(out var integer) => integer,
-        JsonValueKind.Number when value.TryGetDecimal(out var number) => number,
-        _ => JsonSerializer.Deserialize<object>(value.GetRawText())
+        null => null,
+        string text => text,
+        IReadOnlyDictionary<string, object?> or IEnumerable<object?> => JsonSerializer.Serialize(value),
+        _ => value.ToString()
     };
+
+    private static object? JsonValue(JsonElement value) => StructuredLogValueNormalizer.FromJsonElement(value);
 
     private static bool LooksLikeJson(string text) => text.TrimStart().StartsWith('{') || text.TrimStart().StartsWith('[');
 

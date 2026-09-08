@@ -1,6 +1,7 @@
 using System.Threading;
 using System.IO;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using AiDataGateway.Api;
 
@@ -16,6 +17,12 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs eventArgs)
     {
         base.OnStartup(eventArgs);
+        if (eventArgs.Args.Any(argument => string.Equals(argument, "--release-smoke-test", StringComparison.OrdinalIgnoreCase)))
+        {
+            Shutdown(RunReleaseSmokeTest());
+            return;
+        }
+
         _singleInstance = new Mutex(initiallyOwned: true, @"Local\AiDataGateway.Desktop", out var createdNew);
         if (!createdNew)
         {
@@ -53,6 +60,54 @@ public partial class App : System.Windows.Application
             MigrateStorageAsync);
         MainWindow = window;
         window.Show();
+    }
+
+    private static int RunReleaseSmokeTest()
+    {
+        var storagePath = Path.Combine(Path.GetTempPath(), "AiDataGateway.ReleaseSmoke", Guid.NewGuid().ToString("N"));
+        GatewayWebHost? webHost = null;
+        MainWindow? window = null;
+        try
+        {
+            Directory.CreateDirectory(storagePath);
+            using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop();
+
+            webHost = GatewayWebHost.StartAsync(new GatewayHostOptions
+            {
+                Port = port,
+                ListenAddress = "127.0.0.1",
+                StoragePath = storagePath,
+                WebRootPath = Path.Combine(storagePath, "wwwroot"),
+                UseEphemeralCertificates = true
+            }).GetAwaiter().GetResult();
+
+            using var client = new HttpClient { BaseAddress = webHost.BaseAddress };
+            using var response = client.GetAsync("/api/health").GetAwaiter().GetResult();
+            response.EnsureSuccessStatusCode();
+
+            // Constructing the window validates that the obfuscator kept all BAML/XAML bindings intact.
+            window = new MainWindow(webHost.BaseAddress, storagePath, false, _ => Task.FromResult<string?>(null));
+            window.DisposeForReleaseSmokeTest();
+            window = null;
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            try { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "release-smoke-error.txt"), exception.ToString()); } catch { }
+            return 1;
+        }
+        finally
+        {
+            window?.DisposeForReleaseSmokeTest();
+            if (webHost is not null)
+            {
+                try { Task.Run(() => webHost.DisposeAsync().AsTask()).Wait(TimeSpan.FromSeconds(5)); } catch { }
+            }
+            try { Directory.Delete(storagePath, true); } catch { }
+        }
     }
 
     private async Task<string?> MigrateStorageAsync(string targetPath)

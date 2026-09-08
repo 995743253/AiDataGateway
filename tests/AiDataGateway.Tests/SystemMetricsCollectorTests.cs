@@ -19,11 +19,13 @@ public sealed class SystemMetricsCollectorTests
     [Fact]
     public void Collector_only_returns_requested_extended_metrics()
     {
-        var snapshot = new SystemMetricsCollector().Collect([.. MetricCatalog.RequiredKeys, "system.process_count"]);
+        var snapshot = new SystemMetricsCollector().Collect([.. MetricCatalog.RequiredKeys, "system.process_count", "system.thread_count"]);
 
         Assert.True(snapshot.MemoryTotalBytes >= snapshot.MemoryUsedBytes);
         Assert.True(snapshot.DiskTotalBytes >= snapshot.DiskUsedBytes);
         Assert.Contains("system.process_count", snapshot.ExtendedMetrics.Keys);
+        Assert.Contains("system.thread_count", snapshot.ExtendedMetrics.Keys);
+        Assert.True(snapshot.ExtendedMetrics["system.thread_count"] > 0);
         Assert.DoesNotContain("gc.heap_size_bytes", snapshot.ExtendedMetrics.Keys);
     }
 }

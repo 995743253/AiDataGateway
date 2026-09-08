@@ -12,6 +12,8 @@ $applicationDirectory = Join-Path $releaseRoot "AiDataGateway-v$Version-win-x64"
 $agentDirectory = Join-Path $releaseRoot "AiDataGateway-MonitorAgent-v$Version-win-x64"
 $installerPublishDirectory = Join-Path $releaseRoot "installer-publish"
 $payloadPath = Join-Path $repositoryRoot "src/AiDataGateway.Installer/Payload/AiDataGateway-payload.zip"
+$obfuscationRoot = Join-Path $repositoryRoot "artifacts/obfuscation-maps/v$Version"
+$protectionScript = Join-Path $repositoryRoot "build/Protect-DotNetArtifacts.ps1"
 
 if ($releaseRoot -notlike "$repositoryRoot\artifacts\*") {
     throw "OutputDirectory must be located under the repository artifacts directory."
@@ -35,6 +37,8 @@ finally {
 
 dotnet restore (Join-Path $repositoryRoot "AiDataGateway.sln")
 if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE." }
+dotnet tool restore
+if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed with exit code $LASTEXITCODE." }
 dotnet test (Join-Path $repositoryRoot "AiDataGateway.sln") -c Release --no-restore -p:Version=$Version
 if ($LASTEXITCODE -ne 0) { throw "dotnet test failed with exit code $LASTEXITCODE." }
 dotnet publish (Join-Path $repositoryRoot "src/AiDataGateway.Desktop/AiDataGateway.Desktop.csproj") `
@@ -45,6 +49,43 @@ dotnet publish (Join-Path $repositoryRoot "src/AiDataGateway.MonitorAgent/AiData
     -c Release -r win-x64 --self-contained true -p:Version=$Version `
     -p:DebugType=None -p:DebugSymbols=false -o $agentDirectory
 if ($LASTEXITCODE -ne 0) { throw "monitor agent publish failed with exit code $LASTEXITCODE." }
+
+# Protect first-party implementation assemblies before they enter either ZIP or the installer.
+# The public extension contract stays unobfuscated so independently built enterprise modules remain compatible.
+& $protectionScript -InputDirectory $applicationDirectory `
+    -MappingDirectory (Join-Path $obfuscationRoot "desktop") `
+    -KeepPublicApi `
+    -AssemblyNames @(
+        "AiDataGateway.Desktop.dll",
+        "AiDataGateway.Application.dll",
+        "AiDataGateway.Domain.dll",
+        "AiDataGateway.Infrastructure.dll",
+        "AiDataGateway.Monitoring.dll"
+    )
+if ($LASTEXITCODE -ne 0) { throw "desktop artifact protection failed with exit code $LASTEXITCODE." }
+
+& $protectionScript -InputDirectory $agentDirectory `
+    -MappingDirectory (Join-Path $obfuscationRoot "monitor-agent") `
+    -KeepPublicApi `
+    -AssemblyNames @(
+        "AiDataGateway.MonitorAgent.dll",
+        "AiDataGateway.Monitoring.dll"
+    )
+if ($LASTEXITCODE -ne 0) { throw "monitor agent protection failed with exit code $LASTEXITCODE." }
+
+$smokeErrorPath = Join-Path $applicationDirectory "release-smoke-error.txt"
+if (Test-Path -LiteralPath $smokeErrorPath) { Remove-Item -LiteralPath $smokeErrorPath -Force }
+$smokeProcess = Start-Process -FilePath (Join-Path $applicationDirectory "AiDataGateway.Desktop.exe") `
+    -ArgumentList "--release-smoke-test" -WindowStyle Hidden -PassThru
+if (-not $smokeProcess.WaitForExit(60000)) {
+    $smokeProcess.Kill($true)
+    throw "protected desktop smoke test timed out after 60 seconds."
+}
+if ($smokeProcess.ExitCode -ne 0) {
+    $smokeError = if (Test-Path -LiteralPath $smokeErrorPath) { Get-Content -LiteralPath $smokeErrorPath -Raw } else { "No error report was generated." }
+    throw "protected desktop smoke test failed with exit code $($smokeProcess.ExitCode).`n$smokeError"
+}
+if (Test-Path -LiteralPath $smokeErrorPath) { Remove-Item -LiteralPath $smokeErrorPath -Force }
 
 $optionalRuntime = Join-Path $repositoryRoot "WebView2Runtime"
 if (Test-Path -LiteralPath (Join-Path $optionalRuntime "msedgewebview2.exe")) {

@@ -88,6 +88,8 @@ dotnet run --project src/AiDataGateway.Desktop/AiDataGateway.Desktop.csproj
 
 普通用户推荐使用 GitHub Release 中的 Windows Setup。首次安装可以分别选择程序目录和数据库目录；后续安装器与应用内更新会自动识别原目录，并保留 `gateway.db`、`keys` 和本地日志。发布、更新和卸载行为见 [安装与自动更新说明](Doc/安装与自动更新说明.md)。
 
+正式 Release 会对桌面端、应用层、基础设施层和远程采集端的一方程序集执行保守混淆，并在打包前启动混淆后的 Web API、SQLite 和 WPF 资源自检。公开扩展契约保持稳定；私有扩展可使用 `scripts/protect-extension-package.ps1` 单独生成受保护的上传包。混淆映射仅保存在本机构建目录，不会进入 ZIP、安装器或 GitHub Release。
+
 关闭主窗口时程序最小化到系统托盘；必须从托盘选择“退出”才会停止本地 API。
 
 ## AI 获取 Token

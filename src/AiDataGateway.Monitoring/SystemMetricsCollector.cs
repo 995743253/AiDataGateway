@@ -22,25 +22,54 @@ public sealed class SystemMetricsCollector
         using var process = Process.GetCurrentProcess();
         var extended = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
 
-        Add("memory.available_bytes", memory.Available);
-        Add("pagefile.used_bytes", memory.PageFileUsed);
-        Add("pagefile.percent", Percent(memory.PageFileUsed, memory.PageFileTotal));
-        Add("disk.free_bytes", disk.Free);
+        Add("memory.available_bytes", () => memory.Available);
+        Add("pagefile.used_bytes", () => memory.PageFileUsed);
+        Add("pagefile.percent", () => Percent(memory.PageFileUsed, memory.PageFileTotal));
+        Add("disk.free_bytes", () => disk.Free);
+        Add("disk.volume_count", () => disk.VolumeCount);
 
-        var networkRates = ReadNetworkRates(network, collectedAt);
-        Add("network.receive_bytes_per_second", networkRates.ReceivedPerSecond);
-        Add("network.send_bytes_per_second", networkRates.SentPerSecond);
+        if (Wants("network.receive_bytes_per_second") || Wants("network.send_bytes_per_second"))
+        {
+            var networkRates = ReadNetworkRates((network.Received, network.Sent), collectedAt);
+            Add("network.receive_bytes_per_second", () => networkRates.ReceivedPerSecond);
+            Add("network.send_bytes_per_second", () => networkRates.SentPerSecond);
+        }
+        Add("network.interface_count", () => network.InterfaceCount);
+        Add("network.active_interface_count", () => network.ActiveInterfaceCount);
 
-        Add("process.cpu_percent", ReadProcessCpuPercent(process, collectedAt));
-        Add("process.private_memory_bytes", SafeRead(() => process.PrivateMemorySize64));
-        Add("process.thread_count", SafeRead(() => process.Threads.Count));
-        Add("process.handle_count", SafeRead(() => process.HandleCount));
-        Add("process.uptime_seconds", SafeRead(() => Math.Max(0, (collectedAt - process.StartTime.ToUniversalTime()).TotalSeconds)));
-        Add("system.logical_processor_count", Environment.ProcessorCount);
-        if (Wants("system.process_count")) extended["system.process_count"] = ReadProcessCount();
-        if (Wants("system.tcp_connection_count")) extended["system.tcp_connection_count"] = ReadTcpConnectionCount();
-        Add("gc.managed_memory_bytes", GC.GetTotalMemory(false));
-        Add("gc.heap_size_bytes", GC.GetGCMemoryInfo().HeapSizeBytes);
+        Add("process.cpu_percent", () => ReadProcessCpuPercent(process, collectedAt));
+        Add("process.private_memory_bytes", () => SafeRead(() => process.PrivateMemorySize64));
+        Add("process.paged_memory_bytes", () => SafeRead(() => process.PagedMemorySize64));
+        Add("process.virtual_memory_bytes", () => SafeRead(() => process.VirtualMemorySize64));
+        Add("process.thread_count", () => SafeRead(() => process.Threads.Count));
+        Add("process.handle_count", () => SafeRead(() => process.HandleCount));
+        Add("process.uptime_seconds", () => SafeRead(() => Math.Max(0, (collectedAt - process.StartTime.ToUniversalTime()).TotalSeconds)));
+        Add("system.logical_processor_count", () => Environment.ProcessorCount);
+        if (Wants("system.process_count") || Wants("system.thread_count") || Wants("system.handle_count"))
+        {
+            var systemProcesses = ReadSystemProcessSnapshot(Wants("system.thread_count"), Wants("system.handle_count"));
+            Add("system.process_count", () => systemProcesses.ProcessCount);
+            Add("system.thread_count", () => systemProcesses.ThreadCount);
+            Add("system.handle_count", () => systemProcesses.HandleCount);
+        }
+        if (Wants("system.tcp_connection_count") || Wants("system.tcp_established_count") || Wants("system.udp_listener_count"))
+        {
+            var sockets = ReadSocketSnapshot();
+            Add("system.tcp_connection_count", () => sockets.TcpConnectionCount);
+            Add("system.tcp_established_count", () => sockets.TcpEstablishedCount);
+            Add("system.udp_listener_count", () => sockets.UdpListenerCount);
+        }
+        Add("gc.managed_memory_bytes", () => GC.GetTotalMemory(false));
+        if (Wants("gc.heap_size_bytes") || Wants("gc.fragmented_bytes") || Wants("gc.committed_bytes"))
+        {
+            var gc = GC.GetGCMemoryInfo();
+            Add("gc.heap_size_bytes", () => gc.HeapSizeBytes);
+            Add("gc.fragmented_bytes", () => gc.FragmentedBytes);
+            Add("gc.committed_bytes", () => gc.TotalCommittedBytes);
+        }
+        Add("gc.gen0_collection_count", () => GC.CollectionCount(0));
+        Add("gc.gen1_collection_count", () => GC.CollectionCount(1));
+        Add("gc.gen2_collection_count", () => GC.CollectionCount(2));
 
         return new SystemMetricSnapshot(
             collectedAt,
@@ -57,9 +86,11 @@ public sealed class SystemMetricsCollector
             Math.Max(0, Environment.TickCount64 / 1_000),
             extended);
 
-        void Add(string key, double value)
+        void Add(string key, Func<double> reader)
         {
-            if (Wants(key) && double.IsFinite(value) && value >= 0) extended[key] = Math.Round(value, 2);
+            if (!Wants(key)) return;
+            var value = reader();
+            if (double.IsFinite(value) && value >= 0) extended[key] = Math.Round(value, 2);
         }
     }
 
@@ -156,6 +187,7 @@ public sealed class SystemMetricsCollector
     {
         long total = 0;
         long free = 0;
+        var volumeCount = 0;
         foreach (var drive in DriveInfo.GetDrives())
         {
             try
@@ -163,6 +195,7 @@ public sealed class SystemMetricsCollector
                 if (!drive.IsReady || drive.DriveType is DriveType.CDRom or DriveType.Network) continue;
                 total = SaturatingAdd(total, drive.TotalSize);
                 free = SaturatingAdd(free, drive.AvailableFreeSpace);
+                volumeCount++;
             }
             catch
             {
@@ -170,18 +203,22 @@ public sealed class SystemMetricsCollector
             }
         }
 
-        return new DiskData(Math.Max(0, total - free), total, free);
+        return new DiskData(Math.Max(0, total - free), total, free, volumeCount);
     }
 
-    private static (long Received, long Sent) ReadNetwork()
+    private static NetworkData ReadNetwork()
     {
         long received = 0;
         long sent = 0;
+        var interfaceCount = 0;
+        var activeInterfaceCount = 0;
         try
         {
             foreach (var network in NetworkInterface.GetAllNetworkInterfaces())
             {
+                interfaceCount++;
                 if (network.OperationalStatus != OperationalStatus.Up || network.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                activeInterfaceCount++;
                 var statistics = network.GetIPStatistics();
                 received = SaturatingAdd(received, statistics.BytesReceived);
                 sent = SaturatingAdd(sent, statistics.BytesSent);
@@ -192,7 +229,7 @@ public sealed class SystemMetricsCollector
             // Network counters are optional on some platforms.
         }
 
-        return (received, sent);
+        return new NetworkData(received, sent, interfaceCount, activeInterfaceCount);
     }
 
     private (double ReceivedPerSecond, double SentPerSecond) ReadNetworkRates((long Received, long Sent) current, DateTimeOffset collectedAt)
@@ -228,21 +265,42 @@ public sealed class SystemMetricsCollector
         }
     }
 
-    private static int ReadProcessCount()
+    private static SystemProcessSnapshot ReadSystemProcessSnapshot(bool includeThreads, bool includeHandles)
     {
         try
         {
             var processes = Process.GetProcesses();
-            try { return processes.Length; }
+            long threadCount = 0;
+            long handleCount = 0;
+            try
+            {
+                foreach (var item in processes)
+                {
+                    if (includeThreads)
+                    {
+                        try { threadCount = SaturatingAdd(threadCount, item.Threads.Count); } catch { }
+                    }
+                    if (includeHandles)
+                    {
+                        try { handleCount = SaturatingAdd(handleCount, item.HandleCount); } catch { }
+                    }
+                }
+                return new SystemProcessSnapshot(processes.Length, threadCount, handleCount);
+            }
             finally { foreach (var process in processes) process.Dispose(); }
         }
-        catch { return 0; }
+        catch { return new SystemProcessSnapshot(0, 0, 0); }
     }
 
-    private static int ReadTcpConnectionCount()
+    private static SocketSnapshot ReadSocketSnapshot()
     {
-        try { return IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections().Length; }
-        catch { return 0; }
+        try
+        {
+            var properties = IPGlobalProperties.GetIPGlobalProperties();
+            var tcp = properties.GetActiveTcpConnections();
+            return new SocketSnapshot(tcp.Length, tcp.Count(item => item.State == TcpState.Established), properties.GetActiveUdpListeners().Length);
+        }
+        catch { return new SocketSnapshot(0, 0, 0); }
     }
 
     private static double SafeRead(Func<double> reader)
@@ -268,7 +326,10 @@ public sealed class SystemMetricsCollector
     private readonly record struct NetworkSample(long Received, long Sent, DateTimeOffset CollectedAt);
     private readonly record struct ProcessCpuSample(TimeSpan TotalProcessorTime, DateTimeOffset CollectedAt);
     private readonly record struct MemoryData(long Used, long Total, long Available, long PageFileUsed, long PageFileTotal);
-    private readonly record struct DiskData(long Used, long Total, long Free);
+    private readonly record struct DiskData(long Used, long Total, long Free, int VolumeCount);
+    private readonly record struct NetworkData(long Received, long Sent, int InterfaceCount, int ActiveInterfaceCount);
+    private readonly record struct SystemProcessSnapshot(int ProcessCount, long ThreadCount, long HandleCount);
+    private readonly record struct SocketSnapshot(int TcpConnectionCount, int TcpEstablishedCount, int UdpListenerCount);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct FileTime

@@ -544,6 +544,13 @@ public partial class MainWindow : Window
             new Action(() => System.Windows.Application.Current.Shutdown()));
     }
 
+    internal void DisposeForReleaseSmokeTest()
+    {
+        _allowExit = true;
+        _trayIcon.Dispose();
+        Close();
+    }
+
     private void OnMinimizeClick(object sender, RoutedEventArgs eventArgs) => WindowState = WindowState.Minimized;
 
     private void OnMaximizeClick(object sender, RoutedEventArgs eventArgs) =>

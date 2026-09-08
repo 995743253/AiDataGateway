@@ -133,6 +133,39 @@ public sealed class NLogParserTests
     }
 
     [Fact]
+    public void Seq_topic_filter_supports_topic_nested_inside_an_envelope()
+    {
+        var filter = SeqLogSourceAdapter.BuildFilter(new LogQueryOptions(PropertyName: "Topic", PropertyValue: "orders.created"));
+
+        Assert.Equal("\"orders.created\"", filter);
+        Assert.DoesNotContain("Topic =", filter);
+    }
+
+    [Fact]
+    public void Seq_parser_recursively_expands_json_strings_and_preserves_nested_topic()
+    {
+        const string json = """
+            {
+              "Id": "event-1",
+              "UtcTimestamp": "2026-09-08T10:00:00Z",
+              "RenderedMessage": "{\"Envelope\":{\"Metadata\":{\"Topic\":\"orders.created\",\"Retry\":false}}}",
+              "Properties": {
+                "Payload": "{\"Order\":{\"Id\":42,\"Lines\":[{\"Sku\":\"A-1\"}]}}"
+              }
+            }
+            """;
+
+        var item = SeqLogSourceAdapter.ParseEventForTest(json);
+
+        Assert.Equal("event-1", item.Id);
+        Assert.Contains("orders.created", item.Message);
+        var message = Assert.IsType<Dictionary<string, object?>>(item.Properties["_messageJson"]);
+        Assert.Equal("orders.created", StructuredLogValueNormalizer.FindProperty(message, "Topic"));
+        var payload = Assert.IsType<Dictionary<string, object?>>(item.Properties["Payload"]);
+        Assert.Equal(42L, StructuredLogValueNormalizer.FindProperty(payload, "Id"));
+    }
+
+    [Fact]
     public async Task Local_source_includes_exactly_ten_megabytes_and_truncates_above_it()
     {
         var path = Path.Combine(Path.GetTempPath(), $"AiDataGateway-NLog-{Guid.NewGuid():N}.log");
@@ -203,5 +236,49 @@ public sealed class NLogParserTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Folder_source_recursively_discovers_date_grouped_logs()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"AiDataGateway-NLog-{Guid.NewGuid():N}");
+        var day = Path.Combine(directory, "2026-09-08");
+        Directory.CreateDirectory(day);
+        try
+        {
+            var file = Path.Combine(day, "application.log");
+            File.WriteAllText(file, "nested");
+
+            var files = NLogConfigurationResolver.FindFiles(directory,
+                DateTimeOffset.Parse("2026-09-08T00:00:00+08:00"),
+                DateTimeOffset.Parse("2026-09-08T23:59:59+08:00"));
+
+            Assert.Contains(file, files);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void Folder_source_auto_discovers_nlog_configuration_in_root()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"AiDataGateway-NLog-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "NLog.config"),
+                """
+                <nlog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                  <targets><target xsi:type="File" name="main" fileName="${basedir}/2026-09-08/app.log" layout="${longdate}|${level}|${message}" /></targets>
+                </nlog>
+                """);
+
+            var resolved = NLogConfigurationResolver.Resolve(new LogSourceConnection(
+                LogSourceType.LocalNLog, directory, string.Empty, string.Empty, string.Empty, string.Empty));
+
+            Assert.Equal("${longdate}|${level}|${message}", resolved.Layout);
+            Assert.Equal(Path.GetFullPath(directory), resolved.FilePattern);
+            Assert.Equal(Path.GetFullPath(directory), resolved.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
     }
 }

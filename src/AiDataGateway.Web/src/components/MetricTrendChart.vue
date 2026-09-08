@@ -1,9 +1,9 @@
 <template>
-  <el-card class="metric-trend-card" shadow="never">
+  <el-card class="metric-trend-card" :class="{ 'expanded-chart': expanded }" shadow="never">
     <template #header>
       <div class="metric-trend-heading">
         <div><strong>{{ metric.name }}</strong><small>{{ metric.category }}</small></div>
-        <span>{{ rangeLabel }}</span>
+        <div class="metric-trend-actions"><span>{{ rangeLabel }}</span><el-button v-if="expandable" link type="primary" size="small" title="放大查看" @click="$emit('expand', metric)"><el-icon><FullScreen /></el-icon>放大</el-button></div>
       </div>
     </template>
     <div class="metric-chart" @mouseleave="hoverPoint = null">
@@ -27,7 +27,8 @@
 
 <script>
 export default {
-  props: { metric: { type: Object, required: true }, samples: { type: Array, default: () => [] }, mode: { type: String, default: 'recent' } },
+  emits: ['expand'],
+  props: { metric: { type: Object, required: true }, samples: { type: Array, default: () => [] }, mode: { type: String, default: 'recent' }, expandable: { type: Boolean, default: true }, expanded: { type: Boolean, default: false } },
   data: () => ({ hoverPoint: null }),
   computed: {
     gradientId () { return `metric-gradient-${String(this.metric.key).replace(/[^a-z0-9]/gi, '-')}` },
@@ -75,7 +76,8 @@ export default {
 .metric-trend-card { min-width: 0; height: 100%; }
 .metric-trend-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .metric-trend-heading > div { display:grid; gap:2px; }
-.metric-trend-heading small, .metric-trend-heading > span { color:var(--brand-text-muted); font-size:12px; }
+.metric-trend-heading small, .metric-trend-actions > span { color:var(--brand-text-muted); font-size:12px; }
+.metric-trend-actions { display:flex !important; grid-auto-flow:column; align-items:center; gap:10px !important; white-space:nowrap; }
 .metric-chart { position:relative; }
 .chart-plot { position:relative; width:100%; aspect-ratio:20/7; }
 .chart-plot svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
@@ -92,5 +94,8 @@ export default {
 .chart-point-group { cursor:pointer; }.chart-point-hit { fill:transparent; stroke:transparent; pointer-events:all; }.chart-point { fill:#fff; stroke:#1769aa; stroke-width:1.5; }.chart-point.active { fill:#1769aa; stroke:#fff; stroke-width:2; }
 .chart-tooltip { --tooltip-x:-50%; position:absolute; z-index:4; display:grid; gap:3px; min-width:154px; padding:10px 12px; color:#edf6ff; background:rgba(15,39,67,.96); border:1px solid rgba(125,190,235,.35); border-radius:8px; pointer-events:none; transform:translate(var(--tooltip-x),calc(-100% - 10px)); }.chart-tooltip.align-left { --tooltip-x:-8%; }.chart-tooltip.align-right { --tooltip-x:-92%; }.chart-tooltip.place-below { transform:translate(var(--tooltip-x),12px); }.chart-tooltip span { color:#fff; font-size:18px; font-weight:700; }.chart-tooltip small { color:#b9c9da; font-size:11px; }
 .chart-plot > :deep(.el-empty) { position:absolute; inset:28px 0 36px 70px; z-index:2; padding:0; background:rgba(255,255,255,.72); }
+.metric-trend-card.expanded-chart :deep(.el-card__body) { height:calc(100% - 58px); box-sizing:border-box; }
+.metric-trend-card.expanded-chart .metric-chart,.metric-trend-card.expanded-chart .chart-plot { height:100%; }
+.metric-trend-card.expanded-chart .chart-plot { min-height:440px; aspect-ratio:auto; }
 :global(html.dark) .chart-grid-line { stroke:#26364e; }:global(html.dark) .chart-axis-line,:global(html.dark) .chart-axis-tick { stroke:#46607f; }:global(html.dark) .chart-axis-label { fill:#8ea0b8; }:global(html.dark) .chart-point { fill:#152033; }:global(html.dark) .chart-reference-label { stroke:rgba(14,23,37,.92); }:global(html.dark) .chart-plot > :deep(.el-empty) { background:rgba(14,23,37,.72); }
 </style>
