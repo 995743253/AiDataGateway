@@ -41,3 +41,5 @@ check-eventlog.ps1
 fix-display.py
 repair.ps1.py
 dom*.html
+repair*.py
+run-diag.sh
