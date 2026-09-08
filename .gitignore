@@ -35,3 +35,9 @@ src/AiDataGateway.Installer/Payload/*.zip
 # Superseded binary documentation; Markdown is the source of truth
 Doc/*.docx
 dom*.html
+
+# local diagnostics scripts
+check-eventlog.ps1
+fix-display.py
+repair.ps1.py
+dom*.html
