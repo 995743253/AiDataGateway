@@ -1,0 +1,10 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+  AiDataGateway.Monitoring -> D:\WorkStation\DataGateway\src\AiDataGateway.Monitoring\bin\Debug\net10.0\AiDataGateway.Monitoring.dll
+  AiDataGateway.Extensions.Abstractions -> D:\WorkStation\DataGateway\src\AiDataGateway.Extensions.Abstractions\bin\Debug\net10.0\AiDataGateway.Extensions.Abstractions.dll
+  AiDataGateway.Domain -> D:\WorkStation\DataGateway\src\AiDataGateway.Domain\bin\Debug\net10.0\AiDataGateway.Domain.dll
+  LocalMonitorReportExtension -> D:\WorkStation\DataGateway\samples\LocalMonitorReportExtension\bin\Debug\net10.0\LocalMonitorReportExtension.dll
+  AiDataGateway.Application -> D:\WorkStation\DataGateway\src\AiDataGateway.Application\bin\Debug\net10.0\AiDataGateway.Application.dll
+  AiDataGateway.Infrastructure -> D:\WorkStation\DataGateway\src\AiDataGateway.Infrastructure\bin\Debug\net10.0\AiDataGateway.Infrastructure.dll
+  AiDataGateway.Api -> D:\WorkStation\DataGateway\src\AiDataGateway.Api\bin\Debug\net10.0\AiDataGateway.Api.dll
+D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\LocalAdapterDiagnostics.cs(25,93): error CS1061: “string”未包含“Key”的定义，并且找不到可接受第一个“string”类型参数的可访问扩展方法“Key”(是否缺少 using 指令或程序集引用?) [D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\AiDataGateway.Tests.csproj]

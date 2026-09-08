@@ -1,0 +1,57 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+  AiDataGateway.Extensions.Abstractions -> D:\WorkStation\DataGateway\src\AiDataGateway.Extensions.Abstractions\bin\Debug\net10.0\AiDataGateway.Extensions.Abstractions.dll
+  AiDataGateway.Domain -> D:\WorkStation\DataGateway\src\AiDataGateway.Domain\bin\Debug\net10.0\AiDataGateway.Domain.dll
+  AiDataGateway.Monitoring -> D:\WorkStation\DataGateway\src\AiDataGateway.Monitoring\bin\Debug\net10.0\AiDataGateway.Monitoring.dll
+  LocalMonitorReportExtension -> D:\WorkStation\DataGateway\samples\LocalMonitorReportExtension\bin\Debug\net10.0\LocalMonitorReportExtension.dll
+  AiDataGateway.Application -> D:\WorkStation\DataGateway\src\AiDataGateway.Application\bin\Debug\net10.0\AiDataGateway.Application.dll
+  AiDataGateway.Infrastructure -> D:\WorkStation\DataGateway\src\AiDataGateway.Infrastructure\bin\Debug\net10.0\AiDataGateway.Infrastructure.dll
+  AiDataGateway.Api -> D:\WorkStation\DataGateway\src\AiDataGateway.Api\bin\Debug\net10.0\AiDataGateway.Api.dll
+  AiDataGateway.Tests -> D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll
+D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll (.NETCoreApp,Version=v10.0)的测试运行
+总共 1 个测试文件与指定模式相匹配。
+D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.08]   Discovering: AiDataGateway.Tests
+[xUnit.net 00:00:00.12]   Discovered:  AiDataGateway.Tests
+[xUnit.net 00:00:00.14]   Starting:    AiDataGateway.Tests
+[probe-files] count=33: DEBUG-00.log | DEBUG-01.log | DEBUG-02.log | DEBUG-03.log | DEBUG-04.log | DEBUG-05.log | DEBUG-06.log | DEBUG-07.log | DEBUG-08.log | DEBUG-09.log | DEBUG-10.log | DEBUG-11.log | DEBUG-12.log | DEBUG-13.log | DEBUG-14.log | DEBUG-15.log | ERROR-15.log | INFO-00.log | INFO-01.log | INFO-02.log | INFO-03.log | INFO-04.log | INFO-05.log | INFO-06.log | INFO-07.log | INFO-08.log | INFO-09.log | INFO-10.log | INFO-11.log | INFO-12.log | INFO-13.log | INFO-14.log | INFO-15.log
+[probe] DEBUG-11.log: records=20
+[probe] DEBUG-10.log: records=360
+[probe] DEBUG-09.log: records=350
+[probe] DEBUG-08.log: records=360
+[probe] DEBUG-07.log: records=360
+[probe] DEBUG-06.log: records=360
+[probe] DEBUG-05.log: records=360
+[probe] DEBUG-04.log: records=350
+[probe] DEBUG-03.log: records=360
+[probe] DEBUG-02.log: records=360
+[probe] DEBUG-01.log: records=360
+[probe] DEBUG-00.log: records=360
+[xUnit.net 00:00:00.32]   Finished:    AiDataGateway.Tests
+  已通过 AiDataGateway.Tests.LocalAdapterDiagnostics.Diagnose_folder_parse [147 ms]
+  标准输出消息:
+ events: 2000
+   file DEBUG-05.log=190 levels[Debug]
+   file DEBUG-06.log=360 levels[Debug]
+   file DEBUG-07.log=360 levels[Debug]
+   file DEBUG-08.log=360 levels[Debug]
+   file DEBUG-09.log=350 levels[Debug]
+   file DEBUG-10.log=360 levels[Debug]
+   file DEBUG-11.log=20 levels[Debug]
+ == level=Debug time=2026-09-08 03:58:59.692
+    message: [Message]Response : {"apiInfo":{"transactionKey":"3fc3e32f-603f-4a5e-883e-82ecece9ae7f","packageType":"Infrast
+    exception: <null>
+ == level=Debug time=2026-09-08 03:58:59.621
+    message: [Message]API : Finished
+    exception: <null>
+ == level=Debug time=2026-09-08 03:58:59.597
+    message: [Message]API : ExecuteFlow end
+    exception: <null>
+
+
+
+测试运行成功。
+测试总数: 1
+     通过数: 1
+总时间: 0.7764 秒

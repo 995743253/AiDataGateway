@@ -1,0 +1,30 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+  AiDataGateway.Domain -> D:\WorkStation\DataGateway\src\AiDataGateway.Domain\bin\Debug\net10.0\AiDataGateway.Domain.dll
+  AiDataGateway.Monitoring -> D:\WorkStation\DataGateway\src\AiDataGateway.Monitoring\bin\Debug\net10.0\AiDataGateway.Monitoring.dll
+  AiDataGateway.Extensions.Abstractions -> D:\WorkStation\DataGateway\src\AiDataGateway.Extensions.Abstractions\bin\Debug\net10.0\AiDataGateway.Extensions.Abstractions.dll
+  AiDataGateway.Application -> D:\WorkStation\DataGateway\src\AiDataGateway.Application\bin\Debug\net10.0\AiDataGateway.Application.dll
+  LocalMonitorReportExtension -> D:\WorkStation\DataGateway\samples\LocalMonitorReportExtension\bin\Debug\net10.0\LocalMonitorReportExtension.dll
+  AiDataGateway.Infrastructure -> D:\WorkStation\DataGateway\src\AiDataGateway.Infrastructure\bin\Debug\net10.0\AiDataGateway.Infrastructure.dll
+  AiDataGateway.Api -> D:\WorkStation\DataGateway\src\AiDataGateway.Api\bin\Debug\net10.0\AiDataGateway.Api.dll
+  AiDataGateway.Tests -> D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll
+D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll (.NETCoreApp,Version=v10.0)的测试运行
+总共 1 个测试文件与指定模式相匹配。
+D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.07]   Discovering: AiDataGateway.Tests
+[xUnit.net 00:00:00.11]   Discovered:  AiDataGateway.Tests
+[xUnit.net 00:00:00.13]   Starting:    AiDataGateway.Tests
+[xUnit.net 00:00:00.30]   Finished:    AiDataGateway.Tests
+  已通过 AiDataGateway.Tests.LocalAdapterDiagnostics.Diagnose_error_entries [141 ms]
+  标准输出消息:
+ events: 2000
+ by file: DEBUG-05.log=190 levels[Debug] | DEBUG-06.log=360 levels[Debug] | DEBUG-07.log=360 levels[Debug] | DEBUG-08.log=360 levels[Debug] | DEBUG-09.log=350 levels[Debug] | DEBUG-10.log=360 levels[Debug] | DEBUG-11.log=20 levels[Debug]
+ by level: Debug=2000
+
+
+
+测试运行成功。
+测试总数: 1
+     通过数: 1
+总时间: 0.7753 秒

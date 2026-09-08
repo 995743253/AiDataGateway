@@ -1,0 +1,23 @@
+events: 2000
+  file DEBUG-10.log=297 levels[Debug]
+  file DEBUG-11.log=360 levels[Debug]
+  file DEBUG-12.log=359 levels[Debug]
+  file DEBUG-13.log=330 levels[Debug]
+  file DEBUG-14.log=127 levels[Debug]
+  file DEBUG-15.log=214 levels[Debug]
+  file ERROR-15.log=1 levels[Error]
+  file INFO-10.log=60 levels[Info]
+  file INFO-11.log=72 levels[Info]
+  file INFO-12.log=73 levels[Info]
+  file INFO-13.log=66 levels[Info]
+  file INFO-14.log=22 levels[Info]
+  file INFO-15.log=19 levels[Info]
+== level=Debug time=2026-09-08 07:20:14.388
+   message: [Message]Response : {"apiInfo":{"transactionKey":"93ee365c-2650-4ad2-817b-e93b02f8f9ca","packageType":"Infrast
+   exception: <null>
+== level=Debug time=2026-09-08 07:20:14.328
+   message: [Message]API : Finished
+   exception: <null>
+== level=Debug time=2026-09-08 07:20:14.298
+   message: [Message]API : ExecuteFlow end
+   exception: <null>

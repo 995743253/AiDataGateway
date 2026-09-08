@@ -10,7 +10,7 @@ namespace AiDataGateway.Infrastructure.Logs;
 
 public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
 {
-    private const int MaximumReadBytes = 10 * 1024 * 1024;
+    private const long MaxFileBytes = 10 * 1024 * 1024;
     public LogSourceType Type => LogSourceType.LocalNLog;
 
     public Task<LogSourceTestResult> TestAsync(LogSourceConnection connection, CancellationToken cancellationToken = default)
@@ -33,23 +33,20 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
     {
         var resolved = NLogConfigurationResolver.Resolve(connection);
         var files = NLogConfigurationResolver.FindFiles(resolved.FilePattern, options.FromUtc, options.ToUtc);
-        if (files.Count == 0)
-        {
-            throw new FileNotFoundException($"No log files match '{resolved.FilePattern}'.");
-        }
 
-        var remainingBytes = MaximumReadBytes;
         var chunks = new List<(string Text, bool Truncated, string File)>();
+        var skippedFiles = new List<string>();
         foreach (var file in files)
         {
-            if (remainingBytes <= 0)
+            // 单文件超过上限直接跳过，不解析
+            if (new FileInfo(file).Length > MaxFileBytes)
             {
-                break;
+                skippedFiles.Add(Path.GetFileName(file));
+                continue;
             }
 
-            var chunk = await ReadTailAsync(file, remainingBytes, resolved.EncodingName, cancellationToken);
-            remainingBytes -= chunk.BytesRead;
-            chunks.Add((chunk.Text, chunk.Truncated, file));
+            var text = await ReadFileAsync(file, resolved.EncodingName, cancellationToken);
+            chunks.Add((text, false, file));
         }
 
         var events = new List<StructuredLogEvent>();
@@ -66,26 +63,23 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
             .ToArray();
         var skip = (options.Page - 1) * options.PageSize;
         var items = filtered.Skip(skip).Take(options.PageSize).ToArray();
-        var partial = chunks.Any(item => item.Truncated) || files.Count > chunks.Count;
-        return new LogQueryResult(items, options.Page, options.PageSize, filtered.Length, partial,
-            partial ? "日志文件较大，仅在所选日期文件的最近 10 MB（含 10 MB）内容中查询；可缩小时间范围以查看更完整的结果。" : null);
+        var partial = chunks.Any(item => item.Truncated) || skippedFiles.Count > 0;
+        var warning = partial
+            ? (skippedFiles.Count > 0
+                ? $"{skippedFiles.Count} 个日志文件超过 {MaxFileBytes / (1024 * 1024)} MB，已跳过未解析：{string.Join("、", skippedFiles)}"
+                : "部分日志文件只读取了尾部，第一条记录可能不完整。")
+            : null;
+        return new LogQueryResult(items, options.Page, options.PageSize, filtered.Length, partial, warning);
     }
 
     internal static IReadOnlyList<StructuredLogEvent> ParseForTest(string text, string layout, bool json = false, bool truncated = false) =>
         json ? ParseJsonDocuments(text, truncated, "test.log") : ParseTextRecords(text, layout, truncated, "test.log");
 
-    private static async Task<(string Text, int BytesRead, bool Truncated)> ReadTailAsync(string path, int maximumBytes, string? encodingName, CancellationToken cancellationToken)
+    private static async Task<string> ReadFileAsync(string path, string? encodingName, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
             64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var bytesToRead = (int)Math.Min(stream.Length, maximumBytes);
-        var truncated = stream.Length > bytesToRead;
-        if (truncated)
-        {
-            stream.Seek(-bytesToRead, SeekOrigin.End);
-        }
-
-        var buffer = new byte[bytesToRead];
+        var buffer = new byte[stream.Length];
         var total = 0;
         while (total < buffer.Length)
         {
@@ -95,17 +89,7 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
         }
 
         var encoding = await DetectEncodingAsync(path, encodingName, cancellationToken);
-        var text = encoding.GetString(buffer, 0, total);
-        if (truncated)
-        {
-            var firstNewLine = text.IndexOf('\n');
-            if (firstNewLine >= 0)
-            {
-                text = text[(firstNewLine + 1)..];
-            }
-        }
-
-        return (text, total, truncated);
+        return encoding.GetString(buffer, 0, total);
     }
 
     private static async Task<Encoding> DetectEncodingAsync(string path, string? configuredName, CancellationToken cancellationToken)
@@ -238,6 +222,7 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
         var records = SplitRecords(text, layout);
         var parser = BuildLayoutParser(layout);
         var results = new List<StructuredLogEvent>(records.Count);
+        Console.WriteLine($"[probe] {Path.GetFileName(file)}: records={records.Count}");
         for (var index = 0; index < records.Count; index++)
         {
             var raw = records[index];
@@ -288,6 +273,11 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
                 if (level is not null) fields.TryAdd("level", level);
             }
 
+            DiagnoseEntry(file, raw, fields, level, message);
+            if (Path.GetFileName(file).StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[probe-entry] {file}: timestamp='{GetString(fields, "timestamp", "longdate", "date", "time") ?? "<null>"}' parsed={(timestamp?.ToString("yyyy-MM-dd HH:mm:ss.fff") ?? "<null>")} level='{(level ?? "<null>")} message='{(message ?? "<null>")[..Math.Min(40, (message ?? "<null>").Length)]}'");
+            }
             fields["_file"] = file;
             if (fields.ContainsKey("exception") && exception is null) fields["exception"] = null;
             var incomplete = truncated && index == 0;
@@ -296,6 +286,34 @@ public sealed partial class LocalNLogSourceAdapter : ILogSourceAdapter
         }
         return results;
     }
+
+    private static void DiagnoseEntry(string file, string raw, Dictionary<string, object?> fields, string? level, string? message)
+    {
+        var name = Path.GetFileName(file);
+        if (!name.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) return;
+        var prefixParts = new List<string>();
+        var dash = name.IndexOf('-');
+        prefixParts.Add(dash > 0 ? name[..dash] : name);
+        prefixParts.Add("inferred=" + InferLevelFromFileName(file));
+        foreach (var key in fields.Keys.Take(6)) prefixParts.Add(key + "=" + (fields[key] ?? "null"));
+        Console.WriteLine("[diag] " + name + " level=" + (level ?? "<null>") + " message=" + (message ?? "<null>")[..Math.Min(40, (message ?? "").Length)] + " | " + string.Join(", ", prefixParts));
+    }
+
+    private static long ExtractFileSortKey(string path)
+    {
+        var lastDate = FileDateRegex.Matches(path).Cast<System.Text.RegularExpressions.Match>()
+            .Select(match => match.Value)
+            .LastOrDefault();
+        if (lastDate is null) return 0;
+        return DateTime.TryParseExact(lastDate,
+            ["yyyy-MM-dd-HH", "yyyy-MM-dd", "yyyyMMddHH", "yyyyMMdd"],
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeLocal,
+            out var parsed) ? parsed.Ticks : 0;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex FileDateRegex =
+        new(@"\d{4}-\d{2}-\d{2}(?:[ T]\d{2})?", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static bool LooksLikeExceptionText(string? text)
     {

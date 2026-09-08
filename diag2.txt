@@ -1,0 +1,34 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+  AiDataGateway.Domain -> D:\WorkStation\DataGateway\src\AiDataGateway.Domain\bin\Debug\net10.0\AiDataGateway.Domain.dll
+  AiDataGateway.Monitoring -> D:\WorkStation\DataGateway\src\AiDataGateway.Monitoring\bin\Debug\net10.0\AiDataGateway.Monitoring.dll
+  AiDataGateway.Extensions.Abstractions -> D:\WorkStation\DataGateway\src\AiDataGateway.Extensions.Abstractions\bin\Debug\net10.0\AiDataGateway.Extensions.Abstractions.dll
+  LocalMonitorReportExtension -> D:\WorkStation\DataGateway\samples\LocalMonitorReportExtension\bin\Debug\net10.0\LocalMonitorReportExtension.dll
+  AiDataGateway.Application -> D:\WorkStation\DataGateway\src\AiDataGateway.Application\bin\Debug\net10.0\AiDataGateway.Application.dll
+  AiDataGateway.Infrastructure -> D:\WorkStation\DataGateway\src\AiDataGateway.Infrastructure\bin\Debug\net10.0\AiDataGateway.Infrastructure.dll
+  AiDataGateway.Api -> D:\WorkStation\DataGateway\src\AiDataGateway.Api\bin\Debug\net10.0\AiDataGateway.Api.dll
+  AiDataGateway.Tests -> D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll
+D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll (.NETCoreApp,Version=v10.0)的测试运行
+总共 1 个测试文件与指定模式相匹配。
+D:\WorkStation\DataGateway\tests\AiDataGateway.Tests\bin\Debug\net10.0\AiDataGateway.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.09]   Discovering: AiDataGateway.Tests
+[xUnit.net 00:00:00.13]   Discovered:  AiDataGateway.Tests
+[xUnit.net 00:00:00.15]   Starting:    AiDataGateway.Tests
+[xUnit.net 00:00:00.21]   Finished:    AiDataGateway.Tests
+  已通过 AiDataGateway.Tests.LocalAdapterDiagnostics.Diagnose_error_entries [30 ms]
+  标准输出消息:
+ events: 1
+ by file: ERROR-15.log=1 levels[Error]
+ by level: Error=1
+ ERROR entry time= file=D:\Logs\2026-09-08\ERROR-15.log
+   body: 2026-09-08 15:11:56.6516|[259][Module_Meta.API.FormRead][Exception]Session 已过期，请重新取得
+ 
+ null
+
+
+
+测试运行成功。
+测试总数: 1
+     通过数: 1
+总时间: 0.6942 秒
