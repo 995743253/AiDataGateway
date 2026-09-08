@@ -7,31 +7,27 @@ namespace AiDataGateway.Tests;
 public class LocalAdapterDiagnostics
 {
     [Fact]
-    public async Task Diagnose_folder_parse_writes_report()
+    public async Task Diagnose_folder_parse_produces_events()
     {
-        var adapter = new LocalNLogSourceAdapter();
-        var result = await adapter.QueryAsync(new LogSourceConnection(
-                LogSourceType.LocalNLog, "D:\\Logs", string.Empty, string.Empty, string.Empty, string.Empty),
-            new LogQueryOptions(FromUtc: null, ToUtc: null, Page: 1, PageSize: 2000));
-
-        var report = new System.Text.StringBuilder();
-        report.AppendLine("events: " + result.Items.Count);
-
-        var byFile = result.Items
-            .GroupBy(item => item.Properties.GetValueOrDefault("_file") as string ?? "?")
-            .Select(group => System.IO.Path.GetFileName(group.Key) + "=" + group.Count()
-                + " levels[" + string.Join(",", group.Select(item => item.Level ?? "null").Distinct()) + "]")
-            .OrderBy(item => item);
-        foreach (var entry in byFile) report.AppendLine("  file " + entry);
-
-        foreach (var item in result.Items.Take(3))
+        var endpoint = "D:\\Logs";
+        if (!Directory.Exists(endpoint))
         {
-            report.AppendLine("== level=" + (item.Level ?? "<null>")
-                + " time=" + item.TimestampUtc?.ToString("yyyy-MM-dd HH:mm:ss.fff"));
-            report.AppendLine("   message: " + (item.Message ?? "<null>")[..Math.Min(110, (item.Message ?? "<null>").Length)]);
-            report.AppendLine("   exception: " + (item.Exception ?? "<null>")[..Math.Min(80, (item.Exception ?? "<null>").Length)]);
+            // CI runners and other machines may not have this folder; the test
+            // only validates parsing when the sample logs are available.
+            return;
         }
 
-        System.IO.File.WriteAllText("D:\\WorkStation\\DataGateway\\diag-report.txt", report.ToString());
+        var adapter = new LocalNLogSourceAdapter();
+        var result = await adapter.QueryAsync(new LogSourceConnection(
+                LogSourceType.LocalNLog, endpoint, string.Empty, string.Empty, string.Empty, string.Empty),
+            new LogQueryOptions(FromUtc: null, ToUtc: null, Page: 1, PageSize: 2000));
+
+        Assert.True(result.Items.Count > 0, "Expected at least one parsed log entry.");
+
+        var errorEntries = result.Items.Where(item => item.Level == "Error").ToList();
+        Assert.True(errorEntries.Count > 0, "Expected at least one Error-level entry in the test log folder.");
+
+        var debugEntries = result.Items.Where(item => item.Level == "Debug").ToList();
+        Assert.True(debugEntries.Count > 0, "Expected at least one Debug-level entry.");
     }
 }
