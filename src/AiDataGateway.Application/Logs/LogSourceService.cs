@@ -129,7 +129,7 @@ public sealed class LogSourceService(
             var result = await adapterFactory.Get(source.Type).QueryAsync(ToConnection(source), options, cancellationToken);
             foreach (var item in result.Items.OrderBy(value => value.TimestampUtc ?? DateTimeOffset.MinValue))
             {
-                if (seen.Add(item.Id)) yield return item;
+                if (seen.Add(item.Id)) yield return WithExtractedSql(item);
             }
 
             if (seen.Count > 5_000) seen.Clear();
@@ -192,6 +192,7 @@ public sealed class LogSourceService(
         try
         {
             var result = await adapterFactory.Get(source.Type).QueryAsync(ToConnection(source), options, cancellationToken);
+            var items = result.Items.Select(WithExtractedSql).ToArray();
             await auditWriter.WriteAsync(actor, "log.query", "success", detail: JsonSerializer.Serialize(new
             {
                 projectCode = project?.Code,
@@ -205,7 +206,7 @@ public sealed class LogSourceService(
                 propertyName,
                 resultCount = result.Items.Count
             }), cancellationToken: cancellationToken);
-            return new LogQueryView(source.Id, source.Key, source.Name, project?.Code ?? string.Empty, result.Items,
+            return new LogQueryView(source.Id, source.Key, source.Name, project?.Code ?? string.Empty, items,
                 result.Page, result.PageSize, result.Total, result.IsPartial, result.Warning);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -226,6 +227,9 @@ public sealed class LogSourceService(
             throw;
         }
     }
+
+    private static StructuredLogEvent WithExtractedSql(StructuredLogEvent item) =>
+        string.IsNullOrEmpty(item.Sql) ? item with { Sql = LogSqlTextExtractor.Extract(item) } : item;
 
     private LogSourceConnection ToConnection(LogSourceDefinition source) => new(
         source.Type,

@@ -83,4 +83,5 @@ public sealed record LogSqlDataSourceView(
 public sealed record LogSqlQueryRequest(
     Guid ProjectId,
     Guid DataSourceId,
-    string Sql);
+    string Sql,
+    IReadOnlyList<string?>? Parameters = null);

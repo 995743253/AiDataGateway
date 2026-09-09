@@ -370,10 +370,19 @@ button { font: inherit; }
 .log-detail-tabs > .el-tabs__content { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .log-detail-tabs > .el-tabs__content > .el-tab-pane { height: 100%; min-height: 0; overflow: hidden; }
 .detail-tab-page { display: grid; align-content: start; gap: 18px; height: 100%; min-height: 0; overflow: auto; }
-.sql-trace-page { grid-template-rows: auto auto minmax(130px, .7fr) minmax(170px, 1fr); overflow: hidden; }
-.sql-trace-toolbar { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) auto auto; align-items: center; gap: 12px; }
-.sql-preview { width: 100%; height: 100%; max-height: none; }
-.sql-result { min-height: 0; }
+.sql-trace-page { grid-template-rows: auto auto auto minmax(130px, .7fr) minmax(170px, 1fr); overflow: hidden; }
+.sql-trace-toolbar { grid-row: 1; display: grid; grid-template-columns: minmax(160px, 1.2fr) minmax(200px, 1.4fr) auto auto auto; align-items: center; gap: 12px; }
+.sql-trace-page > .el-alert { grid-row: 2; }
+.sql-param-panel { grid-row: 3; display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; background: var(--el-fill-color-lighter); }
+.sql-param-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sql-param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px 16px; }
+.sql-param-row { display: flex; align-items: center; gap: 8px; }
+.sql-param-label { min-width: 34px; text-align: right; font-family: Consolas, "Courier New", monospace; font-weight: 600; color: var(--el-color-warning); }
+.sql-param-json-actions { display: flex; align-items: center; gap: 10px; }
+.sql-param-json-error { color: var(--el-color-danger); font-size: 12px; }
+.sql-preview { grid-row: 4; width: 100%; height: 100%; max-height: none; }
+.sql-result { grid-row: 5; min-height: 0; }
+.sql-cell { color: var(--el-color-warning); font-size: 12px; }
 .raw-log-detail { max-height: none; height: 100%; }
 .query-result-table { width: 100%; }
 .query-result-table .cell { font-family: Consolas, "Courier New", monospace; }

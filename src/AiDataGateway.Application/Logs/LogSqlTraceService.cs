@@ -60,6 +60,23 @@ public sealed class LogSqlTraceService(
         if (!dataSourceIds.Contains(request.DataSourceId))
             throw new InvalidOperationException("The selected data source is not linked to this project.");
 
-        return await queries.ExecuteReadAsync(request.DataSourceId, request.Sql, actor, cancellationToken);
+        var sql = request.Sql;
+        var placeholderCount = LogSqlParameterSubstitutor.CountPlaceholders(request.Sql);
+        if (placeholderCount > 0)
+        {
+            if (request.Parameters is null || request.Parameters.Count != placeholderCount)
+            {
+                throw new ArgumentException(
+                    $"SQL 包含 {placeholderCount} 个 \"?\" 占位符，但提供了 {request.Parameters?.Count ?? 0} 个参数。");
+            }
+
+            sql = LogSqlParameterSubstitutor.Substitute(request.Sql, request.Parameters);
+        }
+        else if (request.Parameters is { Count: > 0 })
+        {
+            throw new ArgumentException("SQL 中不包含 \"?\" 占位符，无需提供参数。");
+        }
+
+        return await queries.ExecuteReadAsync(request.DataSourceId, sql, actor, cancellationToken);
     }
 }

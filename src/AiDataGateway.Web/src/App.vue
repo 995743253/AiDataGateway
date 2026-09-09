@@ -220,6 +220,7 @@
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
               <el-table-column v-if="selectedApplicationLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
               <el-table-column label="消息" min-width="360"><template #default="s"><span class="cell-ellipsis">{{ s.row.message || '—' }}</span></template></el-table-column>
+              <el-table-column label="SQL" min-width="200"><template #default="s"><span v-if="extractLogSql(s.row)" class="cell-ellipsis monospace sql-cell" :title="extractLogSql(s.row)">{{ extractLogSql(s.row) }}</span><span v-else>—</span></template></el-table-column>
               <el-table-column label="解析" width="100"><template #default="s"><el-tag v-if="s.row.incomplete" type="warning">不完整</el-tag><el-tag v-else type="success" effect="plain">结构化</el-tag></template></el-table-column>
               <el-table-column label="操作" width="150"><template #default="s"><el-button v-if="extractLogSql(s.row)" size="small" link type="warning" @click="openApplicationLog(s.row, 'sql')">查看 SQL</el-button><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
@@ -245,6 +246,7 @@
               <el-table-column prop="level" label="级别" width="110"><template #default="s"><el-tag :type="logLevelType(s.row.level)">{{ s.row.level || '未知' }}</el-tag></template></el-table-column>
               <el-table-column v-if="selectedRealtimeLogSource?.type === 2" label="Topic" width="130"><template #default="s"><el-tag v-if="topicOf(s.row)" effect="plain" size="small">{{ topicOf(s.row) }}</el-tag><span v-else>—</span></template></el-table-column>
               <el-table-column label="消息" min-width="420"><template #default="s"><span class="cell-ellipsis">{{ s.row.message || '—' }}</span></template></el-table-column>
+              <el-table-column label="SQL" min-width="200"><template #default="s"><span v-if="extractLogSql(s.row)" class="cell-ellipsis monospace sql-cell" :title="extractLogSql(s.row)">{{ extractLogSql(s.row) }}</span><span v-else>—</span></template></el-table-column>
               <el-table-column label="操作" width="150"><template #default="s"><el-button v-if="extractLogSql(s.row)" size="small" link type="warning" @click="openApplicationLog(s.row, 'sql')">查看 SQL</el-button><el-button size="small" link type="primary" @click="openApplicationLog(s.row)">完整数据</el-button></template></el-table-column>
             </el-table>
             <el-empty v-if="!realtimeLogs.length" :description="realtimeLogConnected ? '连接正常，正在等待新日志…' : realtimeLogConnecting ? '正在建立实时连接…' : '请选择日志源并点击“开始接收”'" />
@@ -640,14 +642,35 @@
           <el-tab-pane label="结构化属性" name="properties">
             <div class="detail-tab-page fixed-list-page"><el-table :data="pagedApplicationLogProperties" stripe border height="100%" class="page-table"><el-table-column prop="key" label="字段" min-width="180" /><el-table-column label="值" min-width="500"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis monospace">{{ formatCell(s.row.value) }}</span><el-button v-if="isLongCell(s.row.value) || detectStructuredValue(s.row.value)" link type="primary" size="small" @click="openPropertyValueViewer(s.row)">查看</el-button></div></template></el-table-column></el-table><el-pagination v-if="applicationLogProperties.length > detailPageSize" class="pagination-panel element-pagination compact-pagination" v-model:current-page="applicationLogPropertyPage" :page-size="detailPageSize" :total="applicationLogProperties.length" layout="total, prev, pager, next" background /></div>
           </el-tab-pane>
-          <el-tab-pane v-if="selectedApplicationLogSql" label="SQL 分析" name="sql">
-            <div class="detail-tab-page sql-trace-page">
-              <div class="sql-trace-toolbar"><el-select v-model="logSqlProjectId" placeholder="选择关联项目" filterable @change="logSqlProjectChanged"><el-option v-for="project in logSqlProjects" :key="project.id" :value="project.id" :label="`${project.code} / ${project.name}`" /></el-select><el-select v-model="logSqlDataSourceId" placeholder="选择项目数据源" filterable><el-option v-for="source in logSqlDataSources" :key="source.id" :value="source.id" :label="`${source.key} / ${source.name}（${source.provider}）`" /></el-select><el-tag :type="selectedApplicationLogSqlIsReadOnly ? 'success' : 'warning'" effect="plain">{{ selectedApplicationLogSqlIsReadOnly ? '只读 SQL' : '仅格式化预览' }}</el-tag><el-button type="primary" :disabled="!canExecuteSelectedLogSql" :loading="logSqlLoading" @click="executeSelectedLogSql">尝试只读执行</el-button></div>
-              <el-alert title="只允许执行 SELECT 等只读语句；仍会经过网关的 SQL 安全检查、表黑名单和最大返回行数限制。数据源仅来自该日志源关联项目。" type="info" :closable="false" show-icon />
-              <pre class="beautify-viewer sql-preview" v-html="selectedApplicationLogSqlHtml"></pre>
-              <div v-if="logSqlResult" class="sql-result fixed-list-page"><el-table :data="pagedLogSqlRows" stripe border height="100%" class="page-table"><el-table-column v-for="column in logSqlResult.columns" :key="column" :label="column" min-width="150"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis monospace">{{ formatCell(s.row[column]) }}</span><el-button v-if="isLongCell(s.row[column])" link type="primary" @click="openTextViewer(column, s.row[column])">查看</el-button></div></template></el-table-column></el-table><el-pagination class="pagination-panel element-pagination compact-pagination" v-model:current-page="logSqlResultPage" :page-size="detailPageSize" :total="logSqlResult.rows.length" layout="total, prev, pager, next" background /></div>
-            </div>
-          </el-tab-pane>
+            <el-tab-pane v-if="selectedApplicationLogSql" label="SQL 分析" name="sql">
+              <div class="detail-tab-page sql-trace-page">
+                <div class="sql-trace-toolbar"><el-select v-model="logSqlProjectId" placeholder="选择关联项目" filterable @change="logSqlProjectChanged"><el-option v-for="project in logSqlProjects" :key="project.id" :value="project.id" :label="`${project.code} / ${project.name}`" /></el-select><el-select v-model="logSqlDataSourceId" placeholder="选择项目数据源" filterable><el-option v-for="source in logSqlDataSources" :key="source.id" :value="source.id" :label="`${source.key} / ${source.name}（${source.provider}）`" /></el-select><el-tag :type="selectedApplicationLogSqlIsReadOnly ? 'success' : 'warning'" effect="plain">{{ selectedApplicationLogSqlIsReadOnly ? '只读 SQL' : '仅格式化预览' }}</el-tag><el-tag v-if="logSqlPlaceholderCount > 0" type="warning" effect="plain">参数化 · {{ logSqlPlaceholderCount }} 个 ?</el-tag><el-button type="primary" :disabled="!canExecuteSelectedLogSql" :loading="logSqlLoading" @click="executeSelectedLogSql">尝试只读执行</el-button></div>
+                <el-alert title="只允许执行 SELECT 等只读语句；仍会经过网关的 SQL 安全检查、表黑名单和最大返回行数限制。数据源仅来自该日志源关联项目。" type="info" :closable="false" show-icon />
+                <template v-if="logSqlPlaceholderCount > 0">
+                  <div class="sql-param-panel">
+                    <div class="sql-param-header">
+                      <strong>查询参数</strong>
+                      <el-radio-group v-model="logSqlJsonMode" size="small">
+                        <el-radio-button :value="false">逐个填写</el-radio-button>
+                        <el-radio-button :value="true">JSON 一次填入</el-radio-button>
+                      </el-radio-group>
+                    </div>
+                    <template v-if="!logSqlJsonMode">
+                      <div class="sql-param-grid">
+                        <div v-for="row in logSqlParameterRows" :key="row.index" class="sql-param-row"><span class="sql-param-label">?{{ row.index }}</span><el-input v-model="logSqlParameters[row.index - 1]" size="small" clearable placeholder="留空=空串；填 null=NULL；数字自动识别" /></div>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <el-input v-model="logSqlJsonText" type="textarea" :rows="4" class="monospace" placeholder='按位置数组填写，如 ["三友", 42]；键值对象也支持，如 {"1": "三友"} 表示第 1 个 ? 的值' />
+                      <div class="sql-param-json-actions"><el-button size="small" @click="applyLogSqlJson">应用到参数</el-button><span v-if="logSqlJsonError" class="sql-param-json-error">{{ logSqlJsonError }}</span></div>
+                    </template>
+                  </div>
+                  <pre class="beautify-viewer sql-preview" v-html="selectedApplicationLogSqlHtml"></pre>
+                </template>
+                <pre v-else class="beautify-viewer sql-preview" v-html="selectedApplicationLogSqlHtml"></pre>
+                <div v-if="logSqlResult" class="sql-result fixed-list-page"><el-table :data="pagedLogSqlRows" stripe border height="100%" class="page-table"><el-table-column v-for="column in logSqlResult.columns" :key="column" :label="column" min-width="150"><template #default="s"><div class="cell-with-action"><span class="cell-ellipsis monospace">{{ formatCell(s.row[column]) }}</span><el-button v-if="isLongCell(s.row[column])" link type="primary" @click="openTextViewer(column, s.row[column])">查看</el-button></div></template></el-table-column></el-table><el-pagination class="pagination-panel element-pagination compact-pagination" v-model:current-page="logSqlResultPage" :page-size="detailPageSize" :total="logSqlResult.rows.length" layout="total, prev, pager, next" background /></div>
+              </div>
+            </el-tab-pane>
           <el-tab-pane label="原始记录" name="raw"><div class="detail-tab-page"><pre class="log-detail raw-log-detail">{{ selectedApplicationLog.rawText || '—' }}</pre></div></el-tab-pane>
         </el-tabs>
         <template #footer><el-button @click="applicationLogDialog=false">关闭</el-button></template>
@@ -790,7 +813,7 @@ export default {
     selectedMonitorTargetId: '', monitorSection: 'overview', monitorLoading: false, metricSamplePage: 1, metricSamplePageSize: 20, metricSampleTotal: 0, metricTrendMode: 'recent', metricTrendKey: 'cpu.percent', metricTrendKeys: storedTrendKeys(), metricTrendSourceCount: 0, metricHistoryRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], metricHoverPoint: null, metricChartDialog: false, metricChartMaximized: false, expandedMetric: null,
     applicationLogSourceId: '', applicationLogQueryMode: 'simple', applicationLogQuery: '', applicationLogSearchText: '', applicationLogPropertyName: '', applicationLogPropertyValue: '', applicationLogTopic: '', applicationLogLevel: '', applicationLogRange: [new Date(Date.now() - 24 * 60 * 60 * 1000), new Date()], applicationLogPage: 1, applicationLogPageSize: 50, applicationLogTotal: 0, applicationLogPartial: false, applicationLogWarning: null, applicationLogsLoading: false,
     realtimeLogs: [], realtimeLogPage: 1, realtimeLogPageSize: 50, realtimeLogSourceId: '', realtimeLogSearchText: '', realtimeLogPropertyName: '', realtimeLogPropertyValue: '', realtimeLogTopic: '', realtimeLogLevel: '', realtimeLogEventSource: null, realtimeLogConnected: false, realtimeLogConnecting: false, realtimeLogAttempt: 0, realtimeLogError: null,
-    applicationLogDialog: false, selectedApplicationLog: null, selectedApplicationLogSourceId: '', applicationLogDetailTab: 'overview', applicationLogPropertyPage: 1, logDetailMaximized: false, logSqlProjects: [], logSqlProjectId: '', logSqlDataSourceId: '', logSqlResult: null, logSqlResultPage: 1, logSqlLoading: false, approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' }, toolboxHooks: [], toolboxDeliveries: [], toolboxDeliveryHook: null, toolboxDeliveryDialog: false, toolboxDeliveryMaximized: false, toolboxHookDialog: false, editingToolboxHook: null, toolboxHookForm: { name: '', description: '' }, xmlTool: { input: '', output: '', error: '' }, jsonTool: { input: '', output: '', error: '' }, caseTool: { input: '', output: '' }, base64Tool: { input: '', output: '', error: '' }, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
+    applicationLogDialog: false, selectedApplicationLog: null, selectedApplicationLogSourceId: '', applicationLogDetailTab: 'overview', applicationLogPropertyPage: 1, logDetailMaximized: false, logSqlProjects: [], logSqlProjectId: '', logSqlDataSourceId: '', logSqlResult: null, logSqlResultPage: 1, logSqlLoading: false, logSqlParameters: [], logSqlJsonMode: false, logSqlJsonText: '', logSqlJsonError: '', approvalMaximized: false, auditLogMaximized: false, propertyViewerDialog: false, propertyViewer: { key: '', kind: null, text: '', pretty: '' }, toolboxHooks: [], toolboxDeliveries: [], toolboxDeliveryHook: null, toolboxDeliveryDialog: false, toolboxDeliveryMaximized: false, toolboxHookDialog: false, editingToolboxHook: null, toolboxHookForm: { name: '', description: '' }, xmlTool: { input: '', output: '', error: '' }, jsonTool: { input: '', output: '', error: '' }, caseTool: { input: '', output: '' }, base64Tool: { input: '', output: '', error: '' }, propertyViewer: { key: '', kind: null, text: '', pretty: '' },
     approvalDialog: false, selectedApproval: null, reviewComment: '', logDialog: false, selectedLog: null, selectedLogRowPage: 1, detailPageSize: 20,
     userDialog: false, editingUser: null, newUser: { userName: '', email: '', displayName: '', password: '', roles: ['Developer'], enabled: true },
     clientDialog: false, editingClient: null, clientForm: { displayName: '', scopes: [] },
@@ -935,9 +958,49 @@ export default {
     selectedApplicationLogSql () { return this.extractLogSql(this.selectedApplicationLog) },
     selectedApplicationLogSqlHtml () { return this.highlightSql(this.formatSql(this.selectedApplicationLogSql)) },
     selectedApplicationLogSqlIsReadOnly () { return /^\s*(select|with)\b/i.test(this.selectedApplicationLogSql) },
+    logSqlPlaceholderCount () { return this.countSqlPlaceholders(this.selectedApplicationLogSql) },
+    logSqlParameterRows () { return this.logSqlParameters.map((value, index) => ({ index: index + 1, value })) },
     selectedLogSqlProject () { return this.logSqlProjects.find(item => item.id === this.logSqlProjectId) },
     logSqlDataSources () { return this.selectedLogSqlProject?.dataSources || [] },
-    canExecuteSelectedLogSql () { return this.canOperate && this.selectedApplicationLogSqlIsReadOnly && !!this.logSqlProjectId && !!this.logSqlDataSourceId },
+    canExecuteSelectedLogSql () { return this.canOperate && this.selectedApplicationLogSqlIsReadOnly && !!this.logSqlProjectId && !!this.logSqlDataSourceId && this.logSqlParameters.length === this.logSqlPlaceholderCount },
+    countSqlPlaceholders (sql) {
+      if (!sql) return 0
+      let count = 0
+      let inString = false
+      for (let index = 0; index < sql.length; index++) {
+        const current = sql[index]
+        if (current === '\'') {
+          if (inString && sql[index + 1] === '\'') index++
+          else inString = !inString
+          continue
+        }
+        if (!inString && current === '?') count++
+      }
+      return count
+    },
+    applyLogSqlJson () {
+      this.logSqlJsonError = ''
+      let parsed
+      try { parsed = JSON.parse(this.logSqlJsonText) } catch (e) { this.logSqlJsonError = 'JSON 解析失败：' + e.message; return }
+      const total = this.logSqlPlaceholderCount
+      if (Array.isArray(parsed)) {
+        if (parsed.length !== total) { this.logSqlJsonError = `数组长度 ${parsed.length} 与占位符数量 ${total} 不一致`; return }
+        this.logSqlParameters = parsed.map(item => item === null || item === undefined ? '' : String(item))
+      } else if (parsed && typeof parsed === 'object') {
+        const next = new Array(total).fill('')
+        let matched = 0
+        for (const [key, value] of Object.entries(parsed)) {
+          const position = /^\d+$/.test(key) ? Number(key) : -1
+          if (position >= 1 && position <= total) { next[position - 1] = value === null ? '' : String(value); matched++ }
+        }
+        if (matched === 0) { this.logSqlJsonError = '对象键必须是 1 起始的占位符序号，如 {"1": "值"}'; return }
+        this.logSqlParameters = next
+      } else {
+        this.logSqlJsonError = 'JSON 必须是数组或对象'
+        return
+      }
+      ElMessage.success('已应用到参数')
+    },
     pagedLogSqlRows () { return this.paginate(this.logSqlResult?.rows || [], this.logSqlResultPage, this.detailPageSize) },
     propertyViewerHtml () {
       const text = this.propertyViewer.text || ''
@@ -1637,6 +1700,7 @@ export default {
     },
     extractLogSql (row) {
       if (!row) return ''
+      if (row.sql) return String(row.sql).trim()
       const properties = row.properties || {}
       const priorityKeys = ['sql', 'query', 'commandtext', 'command_text', 'statement', 'databasecommand', 'database_command']
       for (const [key, value] of Object.entries(properties)) {
@@ -1698,6 +1762,9 @@ export default {
       this.selectedApplicationLogSourceId = this.activeTab === 'realtimelogs' ? this.realtimeLogSourceId : this.applicationLogSourceId
       this.applicationLogPropertyPage = 1
       this.applicationLogDetailTab = tab === 'sql' && this.extractLogSql(row) ? 'sql' : tab
+      const placeholderCount = this.countSqlPlaceholders(this.extractLogSql(row))
+      this.logSqlParameters = new Array(placeholderCount).fill('')
+      this.logSqlJsonMode = false; this.logSqlJsonText = ''; this.logSqlJsonError = ''
       this.logSqlProjects = []; this.logSqlProjectId = ''; this.logSqlDataSourceId = ''; this.logSqlResult = null; this.logSqlResultPage = 1
       this.applicationLogDialog = true
       if (this.extractLogSql(row)) await this.loadLogSqlProjects()
@@ -1713,9 +1780,14 @@ export default {
     logSqlProjectChanged () { this.logSqlDataSourceId = this.logSqlDataSources.length === 1 ? this.logSqlDataSources[0].id : ''; this.logSqlResult = null; this.logSqlResultPage = 1 },
     async executeSelectedLogSql () {
       if (!this.canExecuteSelectedLogSql) return
+      if (this.logSqlParameters.some(value => value === '')) {
+        try { await this.$confirm('存在未填写的参数（将按空字符串处理），是否继续？', '提示', { type: 'warning' }) } catch (_) { return }
+      }
       this.logSqlLoading = true; this.logSqlResult = null; this.logSqlResultPage = 1
       try {
-        this.logSqlResult = (await axios.post(`/api/logs/${this.selectedApplicationLogSourceId}/sql/query`, { projectId: this.logSqlProjectId, dataSourceId: this.logSqlDataSourceId, sql: this.selectedApplicationLogSql })).data
+        const payload = { projectId: this.logSqlProjectId, dataSourceId: this.logSqlDataSourceId, sql: this.selectedApplicationLogSql }
+        if (this.logSqlPlaceholderCount > 0) payload.parameters = this.logSqlParameters
+        this.logSqlResult = (await axios.post(`/api/logs/${this.selectedApplicationLogSourceId}/sql/query`, payload)).data
         ElMessage.success(`查询完成，返回 ${this.logSqlResult.rows.length} 行${this.logSqlResult.truncated ? '（已按数据源上限截断）' : ''}`)
       } catch (e) { this.error(e) } finally { this.logSqlLoading = false }
     },

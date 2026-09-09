@@ -399,7 +399,8 @@ public sealed class GatewayHostTests
             await File.WriteAllTextAsync(applicationLogPath,
                 $"{applicationLogTime:yyyy-MM-dd HH:mm:ss.ffff}|Info|Sample|started|\n" +
                 $"{applicationLogTime.AddSeconds(1):yyyy-MM-dd HH:mm:ss.ffff}|Error|Sample|request failed\ncontinued message|System.InvalidOperationException: broken\n" +
-                $"{applicationLogTime.AddSeconds(2):yyyy-MM-dd HH:mm:ss.ffff}|Warning|Sample||");
+                $"{applicationLogTime.AddSeconds(2):yyyy-MM-dd HH:mm:ss.ffff}|Warning|Sample||\n" +
+                $"{applicationLogTime.AddSeconds(3):yyyy-MM-dd HH:mm:ss.ffff}|Error|Sample|Failed to load users: SELECT Id, Name FROM Users WHERE Age > ? AND City = ?|");
             var createLogSource = await client.PostAsJsonAsync("/api/admin/log-sources", new
             {
                 key = "sample-nlog",
@@ -520,6 +521,21 @@ public sealed class GatewayHostTests
             Assert.Contains("continued message", applicationLog.GetProperty("message").GetString());
             Assert.Contains("InvalidOperationException", applicationLog.GetProperty("exception").GetString());
 
+            var sqlTraceLogsResponse = await client.PostAsJsonAsync("/api/logs/query", new
+            {
+                logSourceId,
+                query = "Failed to load users",
+                page = 1,
+                pageSize = 20
+            });
+            var sqlTraceLogs = await sqlTraceLogsResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(sqlTraceLogsResponse.IsSuccessStatusCode, sqlTraceLogs.ToString());
+            var sqlTraceLog = Assert.Single(sqlTraceLogs.GetProperty("items").EnumerateArray());
+            var extractedSql = sqlTraceLog.GetProperty("sql").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(extractedSql));
+            Assert.StartsWith("SELECT Id, Name FROM Users", extractedSql, StringComparison.OrdinalIgnoreCase);
+            Assert.EndsWith("City = ?", extractedSql, StringComparison.OrdinalIgnoreCase);
+
             var logSqlProjectsResponse = await client.GetAsync($"/api/logs/{logSourceId}/sql/projects");
             var logSqlProjects = await logSqlProjectsResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.True(logSqlProjectsResponse.IsSuccessStatusCode, logSqlProjects.ToString());
@@ -543,6 +559,26 @@ public sealed class GatewayHostTests
                 sql = "select 1 as value"
             });
             Assert.Equal(HttpStatusCode.BadRequest, unlinkedLogSqlQuery.StatusCode);
+
+            var parameterizedLogSqlResponse = await client.PostAsJsonAsync($"/api/logs/{logSourceId}/sql/query", new
+            {
+                projectId = project.GetProperty("id").GetGuid(),
+                dataSourceId,
+                sql = "select ? + ? as sum",
+                parameters = new[] { "20", "22" }
+            });
+            var parameterizedLogSql = await parameterizedLogSqlResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(parameterizedLogSqlResponse.IsSuccessStatusCode, parameterizedLogSql.ToString());
+            Assert.Equal(42, parameterizedLogSql.GetProperty("rows")[0].GetProperty("sum").GetInt64());
+
+            var mismatchedParameterLogSql = await client.PostAsJsonAsync($"/api/logs/{logSourceId}/sql/query", new
+            {
+                projectId = project.GetProperty("id").GetGuid(),
+                dataSourceId,
+                sql = "select ? as one",
+                parameters = new[] { "1", "2" }
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, mismatchedParameterLogSql.StatusCode);
 
             using (var streamTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
             using (var streamRequest = new HttpRequestMessage(HttpMethod.Get,

@@ -30,7 +30,8 @@ public sealed record StructuredLogEvent(
     IReadOnlyDictionary<string, object?> Properties,
     string RawText,
     bool Incomplete = false,
-    string? ParseWarning = null);
+    string? ParseWarning = null,
+    string? Sql = null);
 
 public sealed record LogQueryResult(
     IReadOnlyList<StructuredLogEvent> Items,
