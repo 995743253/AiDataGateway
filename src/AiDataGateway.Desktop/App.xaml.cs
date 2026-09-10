@@ -111,7 +111,7 @@ public partial class App : System.Windows.Application
                 }
             }
 
-            // Constructing the window validates that the obfuscator kept all BAML/XAML bindings intact.
+            // Constructing the window validates that compiled XAML/BAML bindings load correctly.
             window = new MainWindow(webHost.BaseAddress, storagePath, false, _ => Task.FromResult<string?>(null));
             window.DisposeForReleaseSmokeTest();
             window = null;

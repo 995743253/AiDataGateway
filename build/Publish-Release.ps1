@@ -12,8 +12,6 @@ $applicationDirectory = Join-Path $releaseRoot "AiDataGateway-v$Version-win-x64"
 $agentDirectory = Join-Path $releaseRoot "AiDataGateway-MonitorAgent-v$Version-win-x64"
 $installerPublishDirectory = Join-Path $releaseRoot "installer-publish"
 $payloadPath = Join-Path $repositoryRoot "src/AiDataGateway.Installer/Payload/AiDataGateway-payload.zip"
-$obfuscationRoot = Join-Path $repositoryRoot "artifacts/obfuscation-maps/v$Version"
-$protectionScript = Join-Path $repositoryRoot "build/Protect-DotNetArtifacts.ps1"
 
 if ($releaseRoot -notlike "$repositoryRoot\artifacts\*") {
     throw "OutputDirectory must be located under the repository artifacts directory."
@@ -37,8 +35,6 @@ finally {
 
 dotnet restore (Join-Path $repositoryRoot "AiDataGateway.sln")
 if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE." }
-dotnet tool restore
-if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed with exit code $LASTEXITCODE." }
 dotnet test (Join-Path $repositoryRoot "AiDataGateway.sln") -c Release --no-restore -p:Version=$Version
 if ($LASTEXITCODE -ne 0) { throw "dotnet test failed with exit code $LASTEXITCODE." }
 dotnet publish (Join-Path $repositoryRoot "src/AiDataGateway.Desktop/AiDataGateway.Desktop.csproj") `
@@ -50,28 +46,10 @@ dotnet publish (Join-Path $repositoryRoot "src/AiDataGateway.MonitorAgent/AiData
     -p:DebugType=None -p:DebugSymbols=false -o $agentDirectory
 if ($LASTEXITCODE -ne 0) { throw "monitor agent publish failed with exit code $LASTEXITCODE." }
 
-# Protect first-party implementation assemblies before they enter either ZIP or the installer.
-# The public extension contract stays unobfuscated so independently built enterprise modules remain compatible.
-& $protectionScript -InputDirectory $applicationDirectory `
-    -MappingDirectory (Join-Path $obfuscationRoot "desktop") `
-    -KeepPublicApi `
-    -AssemblyNames @(
-        "AiDataGateway.Desktop.dll",
-        "AiDataGateway.Application.dll",
-        "AiDataGateway.Domain.dll",
-        "AiDataGateway.Infrastructure.dll",
-        "AiDataGateway.Monitoring.dll"
-    )
-if ($LASTEXITCODE -ne 0) { throw "desktop artifact protection failed with exit code $LASTEXITCODE." }
-
-& $protectionScript -InputDirectory $agentDirectory `
-    -MappingDirectory (Join-Path $obfuscationRoot "monitor-agent") `
-    -KeepPublicApi `
-    -AssemblyNames @(
-        "AiDataGateway.MonitorAgent.dll",
-        "AiDataGateway.Monitoring.dll"
-    )
-if ($LASTEXITCODE -ne 0) { throw "monitor agent protection failed with exit code $LASTEXITCODE." }
+# Assemblies ship unobfuscated: the source is public, obfuscation added no
+# protection while corrupting compiler-generated classes (v1.0.0-v1.0.2) and
+# triggering antivirus false positives. Authenticode signing is the planned
+# integrity anchor once certificate procurement completes.
 
 $smokeErrorPath = Join-Path $applicationDirectory "release-smoke-error.txt"
 if (Test-Path -LiteralPath $smokeErrorPath) { Remove-Item -LiteralPath $smokeErrorPath -Force }
