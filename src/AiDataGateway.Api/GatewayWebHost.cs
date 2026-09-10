@@ -27,6 +27,9 @@ public sealed class GatewayWebHost : IAsyncDisposable
 
     public Uri BaseAddress { get; }
 
+    /// <summary>Root service provider, exposed so the release smoke test can drive real service pipelines.</summary>
+    public IServiceProvider Services => _application.Services;
+
     public static async Task<GatewayWebHost> StartAsync(GatewayHostOptions options, CancellationToken cancellationToken = default)
     {
         var webRoot = options.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");

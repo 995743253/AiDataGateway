@@ -61,7 +61,12 @@ try {
     Add-Variable "RenameFields" "false"
     Add-Variable "ReuseNames" "false"
     Add-Variable "UseUnicodeNames" "true"
-    Add-Variable "HideStrings" "true"
+    # HideStrings must stay off: with it enabled, Obfuscar's string encryption
+    # corrupts compiler-generated lambda classes (<>c) in .NET 10 assemblies —
+    # type load fails with "because the format is invalid" at runtime
+    # (reproduced on DataSourceDefinition.SetBlockedTables, missed by the
+    # smoke test until it started exercising data source creation).
+    Add-Variable "HideStrings" "false"
     Add-Variable "OptimizeMethods" "true"
     Add-Variable "SuppressIldasm" "true"
     Add-Variable "AnalyzeXaml" "true"

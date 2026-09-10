@@ -4,6 +4,9 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using AiDataGateway.Api;
+using AiDataGateway.Application.DataSources;
+using AiDataGateway.Domain.DataSources;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AiDataGateway.Desktop;
 
@@ -87,6 +90,26 @@ public partial class App : System.Windows.Application
             using var client = new HttpClient { BaseAddress = webHost.BaseAddress };
             using var response = client.GetAsync("/api/health").GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
+
+            // Exercise the data source save pipeline against the protected assemblies:
+            // Domain's blocked-table normalization runs through compiler-generated lambda
+            // classes (<>c) that string obfuscation previously corrupted — type load
+            // failed at runtime while the health check still passed.
+            using (var scope = webHost.Services.CreateScope())
+            {
+                var dataSourceService = scope.ServiceProvider.GetRequiredService<DataSourceService>();
+                var createdDataSource = dataSourceService.CreateAsync(new DataSourceUpsertRequest(
+                    "smoke-datasource", "Release Smoke", DatabaseProvider.Sqlite, "127.0.0.1", 1,
+                    Path.Combine(storagePath, "smoke.db"), "smoke", "smoke",
+                    DataSourceAccessMode.ReadOnly, BlockedTables: new[] { "smoke_secret", " dbo.users " }),
+                    "release-smoke").GetAwaiter().GetResult();
+                if (createdDataSource.BlockedTables.Count != 2 ||
+                    createdDataSource.BlockedTables[0] != "smoke_secret" ||
+                    createdDataSource.BlockedTables[1] != "dbo.users")
+                {
+                    throw new InvalidDataException("Blocked tables were not normalized and preserved on save.");
+                }
+            }
 
             // Constructing the window validates that the obfuscator kept all BAML/XAML bindings intact.
             window = new MainWindow(webHost.BaseAddress, storagePath, false, _ => Task.FromResult<string?>(null));
