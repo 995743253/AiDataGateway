@@ -22,7 +22,25 @@ namespace AiDataGateway.LocalLogViewer
             InitializeComponent();
             _viewModel = new MainViewModel();
             DataContext = _viewModel;
+
+            SourceInitialized += (_, _) =>
+            {
+                var handle = CustomWindowChrome.HookMinMaxInfo(this);
+                CustomWindowChrome.ApplyVisuals(handle);
+            };
+            StateChanged += (_, _) => UpdateMaximizeGlyph();
         }
+
+        private void UpdateMaximizeGlyph()
+        {
+            if (MaximizeButton != null) MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        }
+
+        private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+        private void OnMaximizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+        private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 
         private void BrowseLogDirectory_Click(object sender, RoutedEventArgs e)
         {
