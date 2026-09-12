@@ -1,0 +1,74 @@
+<UserControl x:Class="AiDataGateway.LocalLogViewer.Views.WorkspaceDocumentView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:AiDataGateway.LocalLogViewer.Models"
+             xmlns:viewModels="clr-namespace:AiDataGateway.LocalLogViewer.ViewModels"
+             Background="Transparent">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolVisibility" />
+        <Style x:Key="Label" TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource RegularTextBrush}"/><Setter Property="FontSize" Value="12"/><Setter Property="Margin" Value="0,4,0,0"/></Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="15"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/></Style>
+        <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="{StaticResource LightBorderBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Effect" Value="{StaticResource CardShadow}"/></Style>
+        <Style x:Key="LevelBadge" TargetType="Border">
+            <Setter Property="Background" Value="#ECF5FF"/><Setter Property="BorderBrush" Value="#B3D8FF"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="4"/><Setter Property="Padding" Value="7,2"/><Setter Property="HorizontalAlignment" Value="Left"/>
+            <Style.Triggers><DataTrigger Binding="{Binding Level}" Value="Error"><Setter Property="Background" Value="#FEF0F0"/><Setter Property="BorderBrush" Value="#FAB6B6"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Fatal"><Setter Property="Background" Value="#FDE2E2"/><Setter Property="BorderBrush" Value="#F56C6C"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Warn"><Setter Property="Background" Value="#FDF6EC"/><Setter Property="BorderBrush" Value="#F5DAB1"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Warning"><Setter Property="Background" Value="#FDF6EC"/><Setter Property="BorderBrush" Value="#F5DAB1"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Debug"><Setter Property="Background" Value="#F4F4F5"/><Setter Property="BorderBrush" Value="#D3D4D6"/></DataTrigger></Style.Triggers>
+        </Style>
+        <HierarchicalDataTemplate DataType="{x:Type models:StructuredNode}" ItemsSource="{Binding Children}"><StackPanel Orientation="Horizontal" Margin="1,4"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#3A4A5B"/><TextBlock Text="  "/><TextBlock Text="{Binding Value}" Foreground="{StaticResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis" MaxWidth="430"/></StackPanel></HierarchicalDataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- 每个日志详情标签都绑定自己的 Entry 与 StructuredNodes。 -->
+        <Grid Visibility="{Binding IsLogDetail, Converter={StaticResource BoolVisibility}}">
+            <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="10"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid><TextBlock Text="通过上方标签快速切换，点击 ↗ 可在独立窗口中查看" Foreground="{StaticResource SecondaryTextBrush}" FontSize="10" VerticalAlignment="Center"/><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><TextBlock Text="{Binding Entry.DisplayTime}" Foreground="{StaticResource SecondaryTextBrush}" Margin="0,0,12,0"/><Border Style="{StaticResource LevelBadge}" DataContext="{Binding Entry}"><TextBlock Text="{Binding Level}"/></Border></StackPanel></Grid>
+            <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="0.9*" MinWidth="260"/><ColumnDefinition Width="14"/><ColumnDefinition Width="1.4*" MinWidth="360"/></Grid.ColumnDefinitions>
+                <Border Style="{StaticResource Card}" Padding="0"><Grid><Grid.RowDefinitions><RowDefinition Height="56"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="0,0,0,1" Padding="16,0"><TextBlock Text="结构化字段" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/></Border><TreeView Grid.Row="1" ItemsSource="{Binding StructuredNodes}" BorderThickness="0" Padding="12" Background="White"/></Grid></Border>
+                <GridSplitter Grid.Column="1" Width="14" HorizontalAlignment="Stretch" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Background="Transparent" Cursor="SizeWE"><GridSplitter.Template><ControlTemplate TargetType="GridSplitter"><Border Background="Transparent"><Border Width="4" Height="42" CornerRadius="2" Background="#D8DEE8" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate></GridSplitter.Template></GridSplitter>
+                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0"><Grid><Grid.RowDefinitions><RowDefinition Height="56"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="0,0,0,1" Padding="16,0"><StackPanel VerticalAlignment="Center"><TextBlock Text="原始日志" Style="{StaticResource SectionTitle}"/><TextBlock Text="{Binding Entry.FilePath}" TextTrimming="CharacterEllipsis" Foreground="{StaticResource SecondaryTextBrush}" FontSize="9" Margin="0,3,0,0"/></StackPanel></Border><Border Grid.Row="1" Background="#F5F7FA" CornerRadius="5" Padding="12" Margin="14,14,14,0"><TextBlock Text="{Binding Entry.Message}" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/></Border><TextBox Grid.Row="2" Text="{Binding Entry.RawText}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" VerticalContentAlignment="Top" Margin="14"/></Grid></Border>
+            </Grid>
+        </Grid>
+
+        <!-- SQL 文档的参数、执行状态与结果均属于当前标签实例。 -->
+        <Grid Visibility="{Binding IsSql, Converter={StaticResource BoolVisibility}}">
+            <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="10"/><RowDefinition Height="2*" MinHeight="220"/><RowDefinition Height="14"/><RowDefinition Height="*" MinHeight="140"/></Grid.RowDefinitions>
+            <Grid>
+                <TextBlock Text="点击上方 SQL 标签中的 ↗ 可在独立窗口中查看" Foreground="{StaticResource SecondaryTextBrush}" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Border CornerRadius="11" Padding="10,4" Margin="0,0,8,0"><Border.Style><Style TargetType="Border"><Setter Property="Background" Value="#FDF6EC"/><Setter Property="BorderBrush" Value="#F5DAB1"/><Setter Property="BorderThickness" Value="1"/><Style.Triggers><DataTrigger Binding="{Binding Entry.SqlIsReadOnly}" Value="True"><Setter Property="Background" Value="#F0F9EB"/><Setter Property="BorderBrush" Value="#C2E7B0"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock FontSize="10"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="仅格式化，禁止执行"/><Setter Property="Foreground" Value="#B88230"/><Style.Triggers><DataTrigger Binding="{Binding Entry.SqlIsReadOnly}" Value="True"><Setter Property="Text" Value="只读 SQL"/><Setter Property="Foreground" Value="#529B2E"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></Border>
+                    <Border Background="#F4F4F5" CornerRadius="11" Padding="10,4"><TextBlock Text="{Binding SqlPlaceholderCount, StringFormat=参数占位符 · {0}}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="10"/></Border>
+                </StackPanel>
+            </Grid>
+            <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="1.45*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="0.75*"/></Grid.ColumnDefinitions>
+                <Border Style="{StaticResource Card}" Padding="0"><Grid><Grid.RowDefinitions><RowDefinition Height="54"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="0,0,0,1" Padding="16,0"><StackPanel VerticalAlignment="Center"><TextBlock Text="格式化 SQL" Style="{StaticResource SectionTitle}"/><TextBlock Text="从结构化属性或日志消息中自动提取" Foreground="{StaticResource SecondaryTextBrush}" FontSize="9" Margin="0,3,0,0"/></StackPanel></Border><TextBox Grid.Row="1" Text="{Binding Entry.FormattedSql}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12" VerticalContentAlignment="Top" Margin="14"/></Grid></Border>
+                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="0">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="54"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Border BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="0,0,0,1" Padding="16,0"><TextBlock Text="只读试查" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/></Border>
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="16,12">
+                                <TextBlock Style="{StaticResource Label}" Text="日志源关联数据库"/>
+                                <Border Background="#F5F7FA" BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="10,8" Margin="0,5,0,10"><TextBlock Text="{Binding SqlDatabaseName}" Foreground="{StaticResource RegularTextBrush}"/></Border>
+                                <StackPanel Visibility="{Binding HasSqlParameters, Converter={StaticResource BoolVisibility}}">
+                                    <DockPanel LastChildFill="False"><TextBlock Style="{StaticResource Label}" Text="查询参数"/><ComboBox ItemsSource="{Binding SqlParameterModes}" SelectedItem="{Binding SqlParameterMode}" Width="112" Margin="0,0,0,7" HorizontalAlignment="Right"/></DockPanel>
+                                    <ScrollViewer MaxHeight="142" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <ScrollViewer.Style><Style TargetType="ScrollViewer"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SqlParameterMode}" Value="逐项输入"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></ScrollViewer.Style>
+                                        <ItemsControl ItemsSource="{Binding SqlParameterInputs}">
+                                            <ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,0,0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="118"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Background="#F5F7FA" BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="1" CornerRadius="5,0,0,5" Padding="8,0"><TextBlock Text="{Binding Label}" VerticalAlignment="Center" Foreground="{StaticResource RegularTextBrush}" FontFamily="Consolas" FontSize="11" TextTrimming="CharacterEllipsis"/></Border><TextBox Grid.Column="1" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Margin="-1,0,0,0" MinHeight="34" Padding="9,6"/></Grid></DataTemplate></ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                    <TextBox Text="{Binding SqlParametersJson, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="124" VerticalContentAlignment="Top" FontFamily="Consolas" FontSize="11" VerticalScrollBarVisibility="Auto">
+                                        <TextBox.Style><Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Margin" Value="0,0,0,8"/><Style.Triggers><DataTrigger Binding="{Binding SqlParameterMode}" Value="JSON"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBox.Style>
+                                    </TextBox>
+                                </StackPanel>
+                                <TextBlock Text="使用真实数据库参数执行；仅允许单条 SELECT/WITH，最多返回 200 行。" Foreground="{StaticResource SecondaryTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,5,0,12"/>
+                                <Button Content="执行只读查询" Command="{Binding ExecuteSqlCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+            </Grid>
+            <GridSplitter Grid.Row="3" Height="14" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" Background="Transparent" Cursor="SizeNS"><GridSplitter.Template><ControlTemplate TargetType="GridSplitter"><Border Background="Transparent"><Border Width="46" Height="4" CornerRadius="2" Background="#D8DEE8" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate></GridSplitter.Template></GridSplitter>
+            <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0"><Grid><Grid.RowDefinitions><RowDefinition Height="54"/><RowDefinition Height="3"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="{StaticResource LightBorderBrush}" BorderThickness="0,0,0,1" Padding="16,0"><Grid><TextBlock Text="查询结果" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/><TextBlock Text="{Binding SqlResultSummary}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource SecondaryTextBrush}" FontSize="10"/></Grid></Border><ProgressBar Grid.Row="1" IsIndeterminate="True" Visibility="{Binding IsSqlBusy, Converter={StaticResource BoolVisibility}}" Foreground="{StaticResource PrimaryBrush}" Height="3" BorderThickness="0"/><DataGrid Grid.Row="2" ItemsSource="{Binding SqlResultView}" AutoGenerateColumns="True" IsReadOnly="True" EnableRowVirtualization="True" EnableColumnVirtualization="True"/></Grid></Border>
+        </Grid>
+    </Grid>
+</UserControl>
