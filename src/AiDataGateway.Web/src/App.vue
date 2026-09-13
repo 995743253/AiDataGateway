@@ -963,6 +963,37 @@ export default {
     selectedLogSqlProject () { return this.logSqlProjects.find(item => item.id === this.logSqlProjectId) },
     logSqlDataSources () { return this.selectedLogSqlProject?.dataSources || [] },
     canExecuteSelectedLogSql () { return this.canOperate && this.selectedApplicationLogSqlIsReadOnly && !!this.logSqlProjectId && !!this.logSqlDataSourceId && this.logSqlParameters.length === this.logSqlPlaceholderCount },
+    pagedLogSqlRows () { return this.paginate(this.logSqlResult?.rows || [], this.logSqlResultPage, this.detailPageSize) },
+    propertyViewerHtml () {
+      const text = this.propertyViewer.text || ''
+      if (this.propertyViewer.kind === 'json') {
+        try {
+          const pretty = JSON.stringify(JSON.parse(text), null, 2)
+          return this.escapeHtml(pretty).replace(/("(?:[^"\\]|\.)*")(\s*:)?|\b(true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g, match => {
+            let cls = 'token-number'
+            if (match.startsWith('"')) cls = match.endsWith(':') ? 'token-key' : 'token-string'
+            else if (match === 'true' || match === 'false') cls = 'token-boolean'
+            else if (match === 'null') cls = 'token-null'
+            return `<span class="${cls}">${match}</span>`
+          })
+        } catch (error) { return this.escapeHtml(text) }
+      }
+      if (this.propertyViewer.kind === 'sql') {
+        return this.highlightSql(this.formatSql(text))
+      }
+      return this.escapeHtml(text)
+    },
+    userInitials () { return (this.user?.displayName || this.user?.userName || 'U').trim().slice(0, 2).toUpperCase() },
+    selectedLogDetail () { return this.parseLogDetail(this.selectedLog?.detail) },
+    selectedLogColumns () {
+      if (Array.isArray(this.selectedLogDetail.columns) && this.selectedLogDetail.columns.length) return this.selectedLogDetail.columns
+      return Object.keys(this.selectedLogDetail.rows?.[0] || {})
+    },
+    pagedSelectedLogRows () { return this.paginate(this.selectedLogDetail.rows || [], this.selectedLogRowPage, this.detailPageSize) }
+  },
+  async created () { this.applyUiTheme(); this.initializeDesktopBridge(); await this.bootstrap() },
+  beforeUnmount () { this.disconnectEvents(); this.stopRealtimeLogStream(); this.disposeDesktopBridge() },
+  methods: {
     countSqlPlaceholders (sql) {
       if (!sql) return 0
       let count = 0
@@ -1001,37 +1032,6 @@ export default {
       }
       ElMessage.success('已应用到参数')
     },
-    pagedLogSqlRows () { return this.paginate(this.logSqlResult?.rows || [], this.logSqlResultPage, this.detailPageSize) },
-    propertyViewerHtml () {
-      const text = this.propertyViewer.text || ''
-      if (this.propertyViewer.kind === 'json') {
-        try {
-          const pretty = JSON.stringify(JSON.parse(text), null, 2)
-          return this.escapeHtml(pretty).replace(/("(?:[^"\\]|\.)*")(\s*:)?|\b(true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/g, match => {
-            let cls = 'token-number'
-            if (match.startsWith('"')) cls = match.endsWith(':') ? 'token-key' : 'token-string'
-            else if (match === 'true' || match === 'false') cls = 'token-boolean'
-            else if (match === 'null') cls = 'token-null'
-            return `<span class="${cls}">${match}</span>`
-          })
-        } catch (error) { return this.escapeHtml(text) }
-      }
-      if (this.propertyViewer.kind === 'sql') {
-        return this.highlightSql(this.formatSql(text))
-      }
-      return this.escapeHtml(text)
-    },
-    userInitials () { return (this.user?.displayName || this.user?.userName || 'U').trim().slice(0, 2).toUpperCase() },
-    selectedLogDetail () { return this.parseLogDetail(this.selectedLog?.detail) },
-    selectedLogColumns () {
-      if (Array.isArray(this.selectedLogDetail.columns) && this.selectedLogDetail.columns.length) return this.selectedLogDetail.columns
-      return Object.keys(this.selectedLogDetail.rows?.[0] || {})
-    },
-    pagedSelectedLogRows () { return this.paginate(this.selectedLogDetail.rows || [], this.selectedLogRowPage, this.detailPageSize) }
-  },
-  async created () { this.applyUiTheme(); this.initializeDesktopBridge(); await this.bootstrap() },
-  beforeUnmount () { this.disconnectEvents(); this.stopRealtimeLogStream(); this.disposeDesktopBridge() },
-  methods: {
     initializeDesktopBridge () {
       if (!window.chrome?.webview) return
       this.desktopSettings.available = true
