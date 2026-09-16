@@ -34,7 +34,7 @@
     .field textarea{min-height:88px;resize:vertical}
     .grow{flex:1}
     .table-wrap{overflow:auto;border-radius:12px}
-    .table{border-collapse:collapse;width:100%;min-width:1560px}
+    .table{border-collapse:collapse;width:100%;min-width:980px}
     .table th,.table td{padding:11px 14px;border-bottom:1px solid var(--bg-subtle);text-align:left;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .table th{font-size:12px;color:var(--text-soft);background:var(--bg-panel-soft);position:sticky;top:0}
     .table td{font-size:13px}
@@ -114,17 +114,24 @@
     async function loadSummary(){if(!projectCode())return;const r=await call('summarize_issues',{projectCode:projectCode()});const topWorkflow=r.workflowStatuses[0],open=r.resolution.find(x=>x.name==='否');const cards=[['blue','问题总数',r.total],['green','有 Q 单号',r.withTicket],['amber','最多变动状态',topWorkflow?`${topWorkflow.name} · ${topWorkflow.count}`:'暂无'],['red','未解决',open?.count||0]];$('#summary').innerHTML=cards.map(([tone,label,value])=>`<article class="card ${tone}"><span class="muted">${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></article>`).join('');const selected=$('#status').value;$('#status').innerHTML='<option value="">全部状态</option>'+r.statuses.filter(x=>x.name!=='未标记').map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)}（${x.count}）</option>`).join('');$('#status').value=selected;const wfSelected=$('#workflow').value;$('#workflow').innerHTML='<option value="">全部</option><option value="-">未标记</option>'+r.workflowStatuses.filter(x=>x.name!=='未标记').map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)}（${x.count}）</option>`).join('');$('#workflow').value=wfSelected}
     function statusOptions(field,current){const base=field==='workflowStatus'?WORKFLOW_OPTIONS:field==='resolved'?RESOLVED_OPTIONS:[];const values=[...base];if(current&&!values.some(v=>v===current))values.unshift(current);return values}
     async function inlineSave(index,field,value){const issue={...items[index],[field]:value};try{await call('save_issue',{projectCode:projectCode(),issue});if(field==='workflowStatus'&&value)toast(`${issue.ticketNumber||'问题单'} 变动状态：${value}（变动时间已记录）`);await load()}catch(error){toast(error.message,true);await load()}}
-    function startInlineEdit(cell){const field=cell.dataset.edit,type=cell.dataset.type||'select';const index=+cell.dataset.index;const issue=items[index];const current=issue[field]||'';let editor;let done=false;
-      const commit=()=>{if(done)return;done=true;const v=editor.value.trim();if(v!==(issue[field]||''))inlineSave(index,field,v);else load()};
-      const cancel=()=>{if(done)return;done=true;load()};
+    let activeEditor=null;
+    function closeActiveEditor(save){const state=activeEditor;activeEditor=null;if(!state)return;document.removeEventListener('mousedown',state.outside,true);if(save)return;renderRows()}
+    function startInlineEdit(pill){if(activeEditor){const same=activeEditor.pill===pill;closeActiveEditor(false);if(same)return}
+      const field=pill.dataset.edit,type=pill.dataset.type||'select';const index=+pill.dataset.index;const issue=items[index];const current=issue[field]||'';const cell=pill.parentElement;
+      let editor=null,finished=false;
+      const outside=e=>{if(activeEditor&&cell.contains(e.target))return;finish(false)};
+      const finish=save=>{if(finished)return;finished=true;document.removeEventListener('mousedown',outside,true);activeEditor=null;const value=editor?editor.value.trim():'';cell.textContent='';cell.append(pill);
+        if(save&&value!==(issue[field]||'')){inlineSave(index,field,value)}else{renderRows()}};
       if(type==='date'){editor=document.createElement('input');editor.type='date';editor.className='cell-editor'}
       else if(type==='list'){editor=document.createElement('input');editor.className='cell-editor';editor.setAttribute('list','testStatusOptions');editor.placeholder='输入或选择'}
-      else{editor=document.createElement('select');editor.className='cell-editor';if(type==='select'){editor.append(new Option(field==='workflowStatus'?'未标记':'—',''));statusOptions(field,current).forEach(o=>editor.append(new Option(o,o)))}}
-      editor.value=current;cell.textContent='';cell.append(editor);editor.focus();
-      editor.addEventListener('change',()=>{if(type==='list')return;commit()});
-      editor.addEventListener('keydown',e=>{if(e.key==='Enter')commit();if(e.key==='Escape')cancel()});
-      editor.addEventListener('blur',()=>{if(type==='list'&&!done)cancel();else if(type!=='list'&&!done)setTimeout(()=>{if(!done)cancel()},120)})}
-    async function load(){if(!projectCode())return;try{const result=await call('list_issues',{projectCode:projectCode(),keyword:$('#keyword').value.trim(),status:$('#status').value,workflowStatus:$('#workflow').value,page,pageSize});items=result.items;total=result.total;const i0=(page-1)*pageSize;
+      else{editor=document.createElement('select');editor.className='cell-editor';editor.append(new Option(field==='workflowStatus'?'未标记':'—',''));statusOptions(field,current).forEach(o=>editor.append(new Option(o,o)))}
+      editor.value=current;cell.textContent='';cell.append(editor);
+      if(type!=='list')editor.addEventListener('change',()=>finish(true));
+      editor.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();finish(true)}if(e.key==='Escape')finish(false)});
+      document.addEventListener('mousedown',outside,true);
+      activeEditor={pill,outside};
+      setTimeout(()=>{try{editor.focus()}catch{}})}
+    function renderRows(){const i0=(page-1)*pageSize;
       const cell=(content,title='')=>`<td${title?` title="${escapeHtml(title)}"`:''}>${content}</td>`;
       $('#rows').innerHTML=items.length?items.map((x,i)=>{const changed=localTime(x.workflowStatusChangedAtUtc);
         const pill=(field,value,cls)=>`<span class="pill ${cls} editable" data-edit="${field}" data-index="${i0+i}" title="点击修改">${escapeHtml(value||'未标记')}</span>`;
@@ -143,7 +150,8 @@
           cell(x.sourceUrl?'在线文档':x.sourceSheet?'导入':'手工')+
           cell(`<button data-action="detail" data-index="${i}">详情</button><button data-action="edit" data-index="${i}">编辑</button><button data-action="delete" data-index="${i}" class="danger">删除</button>`)
         +`</tr>`}).join(''):'<tr><td colspan="13" class="empty">没有符合条件的问题单</td></tr>';
-      $('#count').textContent=`共 ${total} 条`;renderPager();await loadSummary()}catch(error){toast(error.message,true)}}
+      $('#count').textContent=`共 ${total} 条`;renderPager()}
+    async function load(){if(!projectCode())return;try{const result=await call('list_issues',{projectCode:projectCode(),keyword:$('#keyword').value.trim(),status:$('#status').value,workflowStatus:$('#workflow').value,page,pageSize});items=result.items;total=result.total;renderRows();await loadSummary()}catch(error){toast(error.message,true)}}
     function renderPager(){const totalPages=Math.max(1,Math.ceil(total/pageSize));if(page>totalPages){page=totalPages}
       $('#prev').disabled=page<=1;$('#next').disabled=page>=totalPages;
       const marks=[];const push=v=>marks.push(v);
