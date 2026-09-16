@@ -185,6 +185,43 @@ public sealed class ProjectIssueExtensionTests
     }
 
     [Fact]
+    public async Task DailyReportWithoutProjectAggregatesAllProjects()
+    {
+        var module = new ProjectIssueModule();
+        var context = new TestContext();
+        var offset = TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.Now);
+        var today = DateTimeOffset.Now;
+        await context.Storage.WriteAsync("issues", JsonSerializer.SerializeToElement(new List<Issue>
+        {
+            new()
+            {
+                Id = "mes-today", ProjectCode = "mes", TicketNumber = "QTB311", CaseName = "MES 今日完成",
+                WorkflowStatus = "处理完成", WorkflowStatusChangedAtUtc = new DateTimeOffset(today.Date.AddHours(9), offset)
+            },
+            new()
+            {
+                Id = "wms-today", ProjectCode = "wms", TicketNumber = "QTB411", CaseName = "WMS 今日处理中",
+                WorkflowStatus = "处理中", WorkflowStatusChangedAtUtc = new DateTimeOffset(today.Date.AddHours(10), offset)
+            },
+            new()
+            {
+                Id = "wms-yesterday", ProjectCode = "wms", TicketNumber = "QTB412", CaseName = "WMS 昨日完成",
+                WorkflowStatus = "处理完成", WorkflowStatusChangedAtUtc = new DateTimeOffset(today.Date.AddDays(-1).AddHours(10), offset)
+            }
+        }));
+        var report = await module.InvokeAsync("daily_report", JsonSerializer.SerializeToElement(new { }), context, CancellationToken.None);
+        Assert.Equal("全部项目", report.GetProperty("scope").GetString());
+        Assert.Equal(2, report.GetProperty("total").GetInt32());
+        Assert.All(report.GetProperty("items").EnumerateArray(), entry => Assert.NotEqual("QTB412", entry.GetProperty("ticketNumber").GetString()));
+        Assert.Equal(2, report.GetProperty("byProject").GetArrayLength());
+        Assert.Contains(report.GetProperty("items").EnumerateArray().ToList(), entry => entry.GetProperty("projectName").GetString() == "WMS");
+        // 指定项目时仍只返回该项目。
+        var scoped = await module.InvokeAsync("daily_report", JsonSerializer.SerializeToElement(new { projectCode = "wms" }), context, CancellationToken.None);
+        Assert.Equal(1, scoped.GetProperty("total").GetInt32());
+        Assert.Equal("QTB411", scoped.GetProperty("items")[0].GetProperty("ticketNumber").GetString());
+    }
+
+    [Fact]
     public async Task UpdateIssueCreatesTicketWhenTicketNumberUnknown()
     {
         var module = new ProjectIssueModule();
@@ -217,7 +254,7 @@ public sealed class ProjectIssueExtensionTests
     private sealed class TestDatabase : IGatewayExtensionDatabase
     {
         public Task<IReadOnlyList<GatewayExtensionProject>> ListProjectsAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<GatewayExtensionProject>>([new GatewayExtensionProject("mes", "MES", [])]);
+            Task.FromResult<IReadOnlyList<GatewayExtensionProject>>([new GatewayExtensionProject("mes", "MES", []), new GatewayExtensionProject("wms", "WMS", [])]);
         public Task<GatewayExtensionQueryResult> QueryAsync(string projectCode, string dataSourceKey, string sql, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

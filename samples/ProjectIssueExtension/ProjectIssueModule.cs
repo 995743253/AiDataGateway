@@ -50,8 +50,8 @@ public sealed class ProjectIssueModule : IGatewayExtension
     });
     private static readonly JsonElement DailySchema = JsonSerializer.SerializeToElement(new
     {
-        type = "object", properties = new { projectCode = StringField("项目编号"), date = StringField("yyyy-MM-dd，默认当天（按服务器本地时区）") },
-        required = new[] { "projectCode" }, additionalProperties = false
+        type = "object", properties = new { projectCode = StringField("项目编号，留空则汇总所有启用项目"), date = StringField("yyyy-MM-dd，默认当天（按服务器本地时区）") },
+        additionalProperties = false
     });
 
     public GatewayExtensionDefinition Definition { get; } = new(
@@ -63,7 +63,7 @@ public sealed class ProjectIssueModule : IGatewayExtension
             new("list_issues", "按项目、状态、变动状态和关键词查询问题与 Q 单号。", ListSchema, GatewayExtensionCapability.DataSourceRead),
             new("get_issue", "读取问题单的完整字段、变动状态历史与来源。", IdSchema, GatewayExtensionCapability.DataSourceRead),
             new("summarize_issues", "汇总指定项目的问题单总数、测试状态、变动状态、类别及解决情况。", JsonSerializer.SerializeToElement(new { type = "object", properties = new { projectCode = StringField("项目编号") }, required = new[] { "projectCode" }, additionalProperties = false }), GatewayExtensionCapability.DataSourceRead),
-            new("daily_report", "归纳指定日期（默认当天）变动状态发生变化的问题单，用于生成日报。", DailySchema, GatewayExtensionCapability.DataSourceRead),
+            new("daily_report", "归纳指定日期（默认当天）变动状态发生变化的问题单；projectCode 留空时汇总所有启用项目，用于生成日报。", DailySchema, GatewayExtensionCapability.DataSourceRead),
             new("update_issue", "按单号提交表单维护问题单：更新测试状态、解决描述、变动状态等；单号不存在时自动新建。仅更新传入的字段。", UpdateSchema, GatewayExtensionCapability.DataSourceRead, ReadOnly: false, VisibleInUi: false),
             new("set_workflow_status", "按单号变动问题单的变动状态（如 未处理→处理完成）；状态实际变化时自动记录变动时间，供日报归纳。", WorkflowSchema, GatewayExtensionCapability.DataSourceRead, ReadOnly: false, VisibleInUi: false),
             new("save_issue", "人工新增或更新问题单。", SaveSchema, GatewayExtensionCapability.DataSourceRead, ReadOnly: false, VisibleInMcp: false),
@@ -76,6 +76,9 @@ public sealed class ProjectIssueModule : IGatewayExtension
         if (operation == "list_projects")
             return JsonSerializer.SerializeToElement(new { items = await context.Database.ListProjectsAsync(cancellationToken) }, Json);
 
+        if (operation == "daily_report")
+            return await DailyReportAsync(arguments, context, cancellationToken);
+
         var projectCode = Required(arguments, "projectCode");
         var projects = await context.Database.ListProjectsAsync(cancellationToken);
         if (!projects.Any(item => string.Equals(item.Code, projectCode, StringComparison.OrdinalIgnoreCase)))
@@ -86,7 +89,6 @@ public sealed class ProjectIssueModule : IGatewayExtension
             "list_issues" => await ListAsync(projectCode, arguments, context.Storage, cancellationToken),
             "get_issue" => await GetAsync(projectCode, Required(arguments, "id"), context.Storage, cancellationToken),
             "summarize_issues" => await SummarizeAsync(projectCode, context.Storage, cancellationToken),
-            "daily_report" => await DailyReportAsync(projectCode, arguments, context.Storage, cancellationToken),
             "update_issue" => await UpdateAsync(projectCode, arguments, context, cancellationToken),
             "set_workflow_status" => await SetWorkflowStatusAsync(projectCode, arguments, context, cancellationToken),
             "save_issue" => await SaveAsync(projectCode, arguments, context, cancellationToken),
@@ -137,28 +139,39 @@ public sealed class ProjectIssueModule : IGatewayExtension
         }, Json);
     }
 
-    private static async Task<JsonElement> DailyReportAsync(string projectCode, JsonElement args, IGatewayExtensionStorage storage, CancellationToken ct)
+    private static async Task<JsonElement> DailyReportAsync(JsonElement args, IGatewayExtensionContext context, CancellationToken ct)
     {
         var nowLocal = DateTimeOffset.Now;
         var (startLocal, dayText) = ParseDay(Optional(args, "date")) ?? (nowLocal.Date, nowLocal.Date.ToString("yyyy-MM-dd"));
         var offset = TimeZoneInfo.Local.GetUtcOffset(startLocal);
         var startUtc = new DateTimeOffset(startLocal, offset);
         var endUtc = startUtc.AddDays(1);
-        var changed = (await ReadAsync(storage, ct))
-            .Where(item => Same(item.ProjectCode, projectCode))
+        var projectCode = Optional(args, "projectCode")?.Trim() ?? "";
+        var projects = await context.Database.ListProjectsAsync(ct);
+        if (projectCode.Length > 0 && !projects.Any(item => Same(item.Code, projectCode)))
+            throw new KeyNotFoundException("项目不存在或未启用。");
+        string ProjectName(string code) => projects.FirstOrDefault(item => Same(item.Code, code))?.Name ?? code;
+        var changed = (await ReadAsync(context.Storage, ct))
+            .Where(item => projectCode.Length == 0 || Same(item.ProjectCode, projectCode))
             .Where(item => item.WorkflowStatusChangedAtUtc is { } changedAt && changedAt >= startUtc && changedAt < endUtc)
             .OrderBy(item => item.WorkflowStatusChangedAtUtc)
             .ToArray();
         var byStatus = changed.GroupBy(item => string.IsNullOrWhiteSpace(item.WorkflowStatus) ? "未标记" : item.WorkflowStatus.Trim(), StringComparer.OrdinalIgnoreCase)
             .Select(group => new SummaryBucket(group.Key, group.Count())).OrderByDescending(item => item.Count).ToArray();
+        var byProject = changed.GroupBy(item => item.ProjectCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new SummaryBucket(ProjectName(group.Key), group.Count())).OrderByDescending(item => item.Count).ToArray();
         var items = changed.Select(item => new
         {
+            item.ProjectCode, projectName = ProjectName(item.ProjectCode),
             item.Id, item.TicketNumber, item.CaseName, item.ProgramName, item.Category,
             item.TestStatus, item.Resolved, workflowStatus = item.WorkflowStatus,
             changedAtLocal = item.WorkflowStatusChangedAtUtc!.Value.ToOffset(offset).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
             item.SolutionNote, item.Description, item.Handler, item.Developer, item.UpdatedBy
         }).ToArray();
-        return JsonSerializer.SerializeToElement(new { date = dayText, total = changed.Length, byStatus, items }, Json);
+        return JsonSerializer.SerializeToElement(new
+        {
+            date = dayText, scope = projectCode.Length > 0 ? ProjectName(projectCode) : "全部项目", total = changed.Length, byStatus, byProject, items
+        }, Json);
     }
 
     private static async Task<JsonElement> UpdateAsync(string projectCode, JsonElement args, IGatewayExtensionContext context, CancellationToken ct)
