@@ -352,14 +352,14 @@ public sealed class GatewayExtensionManager : IDisposable
     {
         if (!File.Exists(_registryPath)) return [];
         await using var stream = File.OpenRead(_registryPath);
-        return (await JsonSerializer.DeserializeAsync<GatewayExtensionRegistry>(stream, JsonOptions, cancellationToken))?.Modules.ToList() ?? [];
+        return (await JsonSerializer.DeserializeAsync<GatewayExtensionRegistry>(stream, JsonOptions, cancellationToken).ConfigureAwait(false))?.Modules.ToList() ?? [];
     }
 
     private async Task WriteRegistryAsync(CancellationToken cancellationToken)
     {
         var temporary = _registryPath + ".tmp";
         await using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
-            await JsonSerializer.SerializeAsync(stream, new GatewayExtensionRegistry(_registry), JsonOptions, cancellationToken);
+            await JsonSerializer.SerializeAsync(stream, new GatewayExtensionRegistry(_registry), JsonOptions, cancellationToken).ConfigureAwait(false);
         File.Move(temporary, _registryPath, true);
     }
 
