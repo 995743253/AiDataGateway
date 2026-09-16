@@ -14,7 +14,13 @@ public sealed class ProjectIssueModule : IGatewayExtension
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly JsonElement ListSchema = JsonSerializer.SerializeToElement(new
     {
-        type = "object", properties = new { projectCode = StringField("项目编号"), keyword = StringField("单号、个案或程序关键词"), status = StringField("测试状态"), workflowStatus = StringField("变动状态（如 未处理/处理中/处理完成）"), page = new { type = "integer", minimum = 1 }, pageSize = new { type = "integer", minimum = 1, maximum = 200 } },
+        type = "object", properties = new {
+            projectCode = StringField("项目编号"), keyword = StringField("单号、个案或程序关键词"), status = StringField("测试状态"), workflowStatus = StringField("变动状态（如 未处理/处理中/处理完成）"),
+            sortBy = StringField("排序字段：ticketNumber/testStatus/workflowStatus/resolved/category/caseName/programName/owner/developer/raisedDate/completedDate/updatedAtUtc/changedAtUtc"),
+            sortDir = StringField("排序方向 asc/desc，默认 updatedAtUtc 倒序"),
+            filters = new { type = "object", description = "按列筛选：值为字符串按包含匹配，值为字符串数组按精确匹配任一", additionalProperties = true },
+            page = new { type = "integer", minimum = 1 }, pageSize = new { type = "integer", minimum = 1, maximum = 200 }
+        },
         required = new[] { "projectCode" }, additionalProperties = false
     });
     private static readonly JsonElement IdSchema = JsonSerializer.SerializeToElement(new
@@ -98,6 +104,16 @@ public sealed class ProjectIssueModule : IGatewayExtension
         };
     }
 
+    private static readonly Dictionary<string, Func<Issue, object?>> SortKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ticketNumber"] = item => item.TicketNumber, ["caseName"] = item => item.CaseName, ["programName"] = item => item.ProgramName,
+        ["category"] = item => item.Category, ["testStatus"] = item => item.TestStatus, ["resolved"] = item => item.Resolved,
+        ["workflowStatus"] = item => item.WorkflowStatus, ["owner"] = item => item.Owner, ["developer"] = item => item.Developer,
+        ["handler"] = item => item.Handler, ["raisedDate"] = item => item.RaisedDate, ["completedDate"] = item => item.CompletedDate,
+        ["description"] = item => item.Description, ["solutionNote"] = item => item.SolutionNote,
+        ["updatedAtUtc"] = item => item.UpdatedAtUtc, ["createdAtUtc"] = item => item.CreatedAtUtc, ["changedAtUtc"] = item => item.WorkflowStatusChangedAtUtc
+    };
+
     private static async Task<JsonElement> ListAsync(string projectCode, JsonElement args, IGatewayExtensionStorage storage, CancellationToken ct)
     {
         var all = await ReadAsync(storage, ct);
@@ -106,14 +122,50 @@ public sealed class ProjectIssueModule : IGatewayExtension
         var workflow = Optional(args, "workflowStatus")?.Trim();
         var page = Math.Max(1, Number(args, "page", 1));
         var size = Math.Clamp(Number(args, "pageSize", 30), 1, 200);
-        var query = all.Where(item => Same(item.ProjectCode, projectCode));
+        IEnumerable<Issue> query = all.Where(item => Same(item.ProjectCode, projectCode));
         if (!string.IsNullOrWhiteSpace(status)) query = query.Where(item => Same(item.TestStatus, status));
         if (workflow is { Length: > 0 }) query = workflow == "-" ? query.Where(item => string.IsNullOrWhiteSpace(item.WorkflowStatus)) : query.Where(item => Same(item.WorkflowStatus, workflow));
         if (!string.IsNullOrWhiteSpace(keyword)) query = query.Where(item =>
             new[] { item.TicketNumber, item.CaseName, item.ProgramName, item.Description, item.DevelopmentNote, item.Handler, item.Category, item.SolutionNote }
                 .Any(value => value?.Contains(keyword, StringComparison.OrdinalIgnoreCase) == true));
-        var ordered = query.OrderByDescending(item => item.UpdatedAtUtc).ToArray();
-        return JsonSerializer.SerializeToElement(new { total = ordered.Length, page, pageSize = size, items = ordered.Skip((page - 1) * size).Take(size) }, Json);
+        if (args.ValueKind == JsonValueKind.Object && args.TryGetProperty("filters", out var filtersElement) && filtersElement.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in filtersElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    var text = property.Value.GetString();
+                    if (string.IsNullOrWhiteSpace(text)) continue;
+                    query = query.Where(item => FieldMatches(item, property.Name, text, exact: false));
+                }
+                else if (property.Value.ValueKind == JsonValueKind.Array)
+                {
+                    var values = property.Value.EnumerateArray()
+                        .Where(item => item.ValueKind == JsonValueKind.String)
+                        .Select(item => item.GetString()?.Trim())
+                        .Where(item => !string.IsNullOrEmpty(item)).ToArray();
+                    if (values.Length == 0) continue;
+                    query = query.Where(item => values.Any(value => FieldMatches(item, property.Name, value!, exact: true)));
+                }
+            }
+        }
+        var sortBy = Optional(args, "sortBy")?.Trim();
+        var descending = !string.Equals(Optional(args, "sortDir")?.Trim(), "asc", StringComparison.OrdinalIgnoreCase);
+        var ordered = sortBy is { Length: > 0 } && SortKeys.TryGetValue(sortBy, out var sortKey)
+            ? (descending ? query.OrderByDescending(sortKey).ThenBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+                          : query.OrderBy(sortKey).ThenBy(item => item.Id, StringComparer.OrdinalIgnoreCase))
+            : query.OrderByDescending(item => item.UpdatedAtUtc).ThenBy(item => item.Id, StringComparer.OrdinalIgnoreCase);
+        var listed = ordered.ToArray();
+        return JsonSerializer.SerializeToElement(new { total = listed.Length, page, pageSize = size, items = listed.Skip((page - 1) * size).Take(size) }, Json);
+    }
+
+    private static bool FieldMatches(Issue item, string field, string value, bool exact)
+    {
+        if (!SortKeys.TryGetValue(field, out var key)) return true;
+        var actual = key(item)?.ToString();
+        if (string.IsNullOrWhiteSpace(actual)) return false;
+        return exact ? string.Equals(actual.Trim(), value.Trim(), StringComparison.OrdinalIgnoreCase)
+                     : actual.Contains(value.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<JsonElement> GetAsync(string projectCode, string id, IGatewayExtensionStorage storage, CancellationToken ct)

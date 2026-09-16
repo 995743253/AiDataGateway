@@ -224,6 +224,29 @@ public sealed class ProjectIssueExtensionTests
     }
 
     [Fact]
+    public async Task ListIssuesSupportsSortingAndColumnFilters()
+    {
+        var module = new ProjectIssueModule();
+        var context = new TestContext();
+        await context.Storage.WriteAsync("issues", JsonSerializer.SerializeToElement(new List<Issue>
+        {
+            new() { Id = "a", ProjectCode = "mes", TicketNumber = "QTB-A", CaseName = "工单新增", TestStatus = "已完成", WorkflowStatus = "处理完成", RaisedDate = "2026-09-01" },
+            new() { Id = "b", ProjectCode = "mes", TicketNumber = "QTB-B", CaseName = "备注传递", TestStatus = "开发中", WorkflowStatus = "处理中", RaisedDate = "2026-09-03" },
+            new() { Id = "c", ProjectCode = "mes", TicketNumber = "QTB-C", CaseName = "质量异常单", TestStatus = "已完成", WorkflowStatus = "未处理", RaisedDate = "2026-09-02" }
+        }));
+        var sorted = await module.InvokeAsync("list_issues", JsonSerializer.SerializeToElement(new { projectCode = "mes", sortBy = "raisedDate", sortDir = "asc" }), context, CancellationToken.None);
+        Assert.Equal("QTB-A", sorted.GetProperty("items")[0].GetProperty("ticketNumber").GetString());
+        Assert.Equal("QTB-B", sorted.GetProperty("items")[2].GetProperty("ticketNumber").GetString());
+        var filtered = await module.InvokeAsync("list_issues", JsonSerializer.SerializeToElement(new
+        {
+            projectCode = "mes",
+            filters = new { testStatus = new[] { "已完成" }, workflowStatus = "处理完成" }
+        }), context, CancellationToken.None);
+        Assert.Equal(1, filtered.GetProperty("total").GetInt32());
+        Assert.Equal("QTB-A", filtered.GetProperty("items")[0].GetProperty("ticketNumber").GetString());
+    }
+
+    [Fact]
     public async Task UpdateIssueCreatesTicketWhenTicketNumberUnknown()
     {
         var module = new ProjectIssueModule();
