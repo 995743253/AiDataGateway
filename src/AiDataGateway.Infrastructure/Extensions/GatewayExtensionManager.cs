@@ -79,7 +79,7 @@ public sealed class GatewayExtensionManager : IDisposable
         {
             Directory.CreateDirectory(staging);
             await ExtractPackageAsync(package, staging, cancellationToken);
-            var manifest = await ReadManifestAsync(staging, cancellationToken);
+            var manifest = ReadManifest(staging);
             ValidateManifest(manifest, staging);
 
             var installName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
@@ -271,7 +271,7 @@ public sealed class GatewayExtensionManager : IDisposable
         try
         {
             var installDirectory = ResolveInstallDirectory(entry);
-            var manifest = ReadManifestAsync(installDirectory, CancellationToken.None).GetAwaiter().GetResult();
+            var manifest = ReadManifest(installDirectory);
             ValidateManifest(manifest, installDirectory);
             var assemblyPath = Path.GetFullPath(Path.Combine(installDirectory, manifest.EntryAssembly));
             loadContext = new GatewayExtensionLoadContext(assemblyPath);
@@ -320,12 +320,12 @@ public sealed class GatewayExtensionManager : IDisposable
             throw new InvalidOperationException($"Package file '{relativePath}' is missing or outside the package.");
     }
 
-    private async Task<GatewayExtensionManifest> ReadManifestAsync(string directory, CancellationToken cancellationToken)
+    private static GatewayExtensionManifest ReadManifest(string directory)
     {
         var path = Path.Combine(directory, ManifestFileName);
         if (!File.Exists(path)) throw new InvalidOperationException($"Package root must contain {ManifestFileName}.");
-        await using var stream = File.OpenRead(path);
-        return await JsonSerializer.DeserializeAsync<GatewayExtensionManifest>(stream, JsonOptions, cancellationToken)
+        using var stream = File.OpenRead(path);
+        return JsonSerializer.Deserialize<GatewayExtensionManifest>(stream, JsonOptions)
             ?? throw new InvalidOperationException("Extension manifest is invalid.");
     }
 
