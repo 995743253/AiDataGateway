@@ -87,14 +87,34 @@ if (Test-Path -LiteralPath $samplesSource) {
     }
 }
 
-$samplePackageScript = Join-Path $repositoryRoot "scripts/package-local-monitor-report-extension.ps1"
-$samplePackagePath = Join-Path $releaseRoot "local-monitor-report-1.0.0.zip"
-if (Test-Path -LiteralPath $samplePackageScript) {
-    & $samplePackageScript -OutputPath "artifacts/release/local-monitor-report-1.0.0.zip"
-    if ($LASTEXITCODE -ne 0) { throw "sample extension packaging failed with exit code $LASTEXITCODE." }
-    $sampleHash = (Get-FileHash -LiteralPath $samplePackagePath -Algorithm SHA256).Hash
-    Set-Content -LiteralPath "$samplePackagePath.sha256" -Value "$sampleHash  $([System.IO.Path]::GetFileName($samplePackagePath))" -Encoding ascii
-}
+	$samplePackageScript = Join-Path $repositoryRoot "scripts/package-local-monitor-report-extension.ps1"
+	$samplePackagePath = Join-Path $releaseRoot "local-monitor-report-1.0.0.zip"
+	if (Test-Path -LiteralPath $samplePackageScript) {
+		& $samplePackageScript -OutputPath "artifacts/release/local-monitor-report-1.0.0.zip"
+		if ($LASTEXITCODE -ne 0) { throw "sample extension packaging failed with exit code $LASTEXITCODE." }
+		$sampleHash = (Get-FileHash -LiteralPath $samplePackagePath -Algorithm SHA256).Hash
+		Set-Content -LiteralPath "$samplePackagePath.sha256" -Value "$sampleHash  $([System.IO.Path]::GetFileName($samplePackagePath))" -Encoding ascii
+	}
+
+	# 项目问题单扩展：样例源码与打包好的扩展包随安装包分发，供企业扩展开发者参考
+	$issueSamplesSource = Join-Path $repositoryRoot "samples/ProjectIssueExtension"
+	$issueSamplesRelease = Join-Path $releaseRoot "samples/ProjectIssueExtension"
+	if (Test-Path -LiteralPath $issueSamplesSource) {
+		Copy-Item -LiteralPath $issueSamplesSource -Destination $issueSamplesRelease -Recurse -Force
+		foreach ($buildFolder in @("bin", "obj")) {
+			$issueSamplesBuildPath = Join-Path $issueSamplesRelease $buildFolder
+			if (Test-Path -LiteralPath $issueSamplesBuildPath) { Remove-Item -LiteralPath $issueSamplesBuildPath -Recurse -Force }
+		}
+	}
+
+	$issuePackageScript = Join-Path $repositoryRoot "scripts/package-project-issue-extension.ps1"
+	$issuePackagePath = Join-Path $releaseRoot "project-issue-tracker-1.1.0.zip"
+	if (Test-Path -LiteralPath $issuePackageScript) {
+		& $issuePackageScript -OutputPath "artifacts/release/project-issue-tracker-1.1.0.zip"
+		if ($LASTEXITCODE -ne 0) { throw "project issue extension packaging failed with exit code $LASTEXITCODE." }
+		$issueHash = (Get-FileHash -LiteralPath $issuePackagePath -Algorithm SHA256).Hash
+		Set-Content -LiteralPath "$issuePackagePath.sha256" -Value "$issueHash  $([System.IO.Path]::GetFileName($issuePackagePath))" -Encoding ascii
+	}
 
 New-Item -ItemType Directory -Path (Split-Path $payloadPath) -Force | Out-Null
 Copy-Item -LiteralPath $applicationZip -Destination $payloadPath -Force
