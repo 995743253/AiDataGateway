@@ -83,6 +83,7 @@ internal static class CustomModuleEndpoints
         var tool = module?.Tools.FirstOrDefault(item => item.VisibleInUi && string.Equals(item.Name, operation, StringComparison.Ordinal));
         if (tool is null) return Results.NotFound();
         if (!CanUse(context, tool.Capability)) return Results.Forbid();
+        if (!tool.ReadOnly && !context.User.IsInRole(GatewayRoles.Administrator)) return Results.Forbid();
         return Results.Ok(await manager.InvokeAsync(id, operation, arguments, GatewayPrincipal.Actor(context.User), true, cancellationToken));
     }
 

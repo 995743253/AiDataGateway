@@ -1,0 +1,7 @@
+{
+  "id": "project-issue-tracker",
+  "entryAssembly": "ProjectIssueExtension.dll",
+  "entryType": "ProjectIssueExtension.ProjectIssueModule",
+  "contractVersion": 1,
+  "enabled": true
+}

@@ -22,4 +22,5 @@ public sealed record GatewayExtensionToolView(
     System.Text.Json.JsonElement InputSchema,
     GatewayExtensionCapability Capability,
     bool VisibleInUi,
-    bool ReadOnly);
+    bool ReadOnly,
+    bool VisibleInMcp);

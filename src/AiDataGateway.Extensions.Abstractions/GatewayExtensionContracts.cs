@@ -26,6 +26,14 @@ public interface IGatewayExtensionContext
     IGatewayExtensionDatabase Database { get; }
     IGatewayExtensionLogs Logs { get; }
     IGatewayExtensionMonitoring Monitoring { get; }
+    IGatewayExtensionStorage Storage { get; }
+}
+
+/// <summary>Durable, extension-private JSON storage, kept outside versioned extension packages.</summary>
+public interface IGatewayExtensionStorage
+{
+    Task<JsonElement?> ReadAsync(string key, CancellationToken cancellationToken = default);
+    Task WriteAsync(string key, JsonElement value, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -83,7 +91,8 @@ public sealed record GatewayExtensionToolDefinition(
     JsonElement InputSchema,
     GatewayExtensionCapability Capability = GatewayExtensionCapability.None,
     bool VisibleInUi = true,
-    bool ReadOnly = true);
+    bool ReadOnly = true,
+    bool VisibleInMcp = true);
 
 [Flags]
 public enum GatewayExtensionCapability
