@@ -9,23 +9,25 @@
       --brand-navy:#0f2745;--brand-blue:#1769aa;--brand-blue-bright:#1e99cd;--brand-green:#1fb278;--brand-amber:#e6a23c;--brand-red:#d95c5c;
       --bg-page:#f3f6fa;--bg-panel:#ffffff;--bg-panel-soft:#f8fafc;--bg-subtle:#f7f9fc;--border:#e2e8f0;--border-strong:#d9e1ea;
       --text-strong:#172033;--text-title:#172b4d;--text-muted:#778399;--text-soft:#627087;--hover:#f3f7fb}
-    *{box-sizing:border-box}body{margin:0;padding:24px}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;padding:16px 24px 12px;display:flex;flex-direction:column;overflow:hidden}
     button,input,select,textarea{font:inherit;color:var(--text-strong)}
     button{cursor:pointer;border:1px solid var(--border-strong);background:white;border-radius:8px;padding:8px 15px;color:var(--text-soft);transition:border-color .15s,color .15s,background .15s}
     button:hover{border-color:var(--brand-blue-bright);color:var(--brand-blue)}
     .primary{background:var(--brand-blue);border-color:var(--brand-blue);color:white}
     .primary:hover{background:var(--brand-blue-bright);border-color:var(--brand-blue-bright);color:white}
     .danger{color:#c0564f}.danger:hover{border-color:#c0564f;color:#c0564f}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
-    .top h1{font-size:22px;margin:0 0 5px;color:var(--text-title)}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex:0 0 auto}
+    .top h1{font-size:20px;margin:0 0 3px;color:var(--text-title)}
     .muted{color:var(--text-muted);font-size:12px}
     .card{background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 18px rgba(15,39,69,.05)}
-    .filters{padding:18px;display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px}
-    .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
-    .summary .card{padding:14px 16px;min-width:0;border-left-width:3px}
+    .filters{padding:14px 18px;display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:12px;flex:0 0 auto}
+    .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px;flex:0 0 auto}
+    .summary .card{padding:12px 16px;min-width:0;border-left-width:3px}
     .summary .card.blue{border-left-color:var(--brand-blue)}.summary .card.green{border-left-color:var(--brand-green)}
     .summary .card.amber{border-left-color:var(--brand-amber)}.summary .card.red{border-left-color:var(--brand-red)}
-    .summary strong{display:block;margin-top:8px;font-size:20px;color:var(--text-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .summary strong{display:block;margin-top:6px;font-size:19px;color:var(--text-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .summary .muted{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .field{display:flex;flex-direction:column;gap:6px;min-width:150px}
     .field label{color:var(--text-soft);font-size:12px}
@@ -33,7 +35,10 @@
     .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--brand-blue-bright)}
     .field textarea{min-height:88px;resize:vertical}
     .grow{flex:1}
-    .table-wrap{overflow:auto;border-radius:12px;max-height:calc(100vh - 320px);min-height:220px}
+    .table-card{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+    .table-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);flex:0 0 auto}
+    .table-toolbar .toolbar-hints{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
+    .table-wrap{flex:1 1 auto;overflow:auto;min-height:96px}
     .table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%}
     .table th,.table td{padding:10px 12px;border-bottom:1px solid var(--bg-subtle);text-align:left;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .table th{font-size:12px;color:var(--text-soft);background:var(--bg-panel-soft);position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);user-select:none}
@@ -60,7 +65,7 @@
     .edit-cell{color:var(--text-title)}
     .cell-editor{width:100%;min-width:88px;min-height:28px;padding:3px 6px;border-radius:5px;border:1px solid var(--brand-blue-bright);font-size:12px;background:white;outline:none}
     .empty{padding:60px;text-align:center;color:var(--text-muted)}
-    .pager{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:12px 16px;flex-wrap:wrap}
+    .pager{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:10px 16px;flex-wrap:wrap;flex:0 0 auto;border-top:1px solid var(--border)}
     .pager .pgbtn{min-width:30px;height:30px;padding:0 6px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
     .pager .pgbtn.current{background:var(--brand-blue);border-color:var(--brand-blue);color:white;cursor:default}
     .pager .pgdots{border:none;background:none;padding:0 2px;color:var(--text-muted)}
@@ -93,12 +98,13 @@
     .pop input[type=text]{width:100%;border:1px solid var(--border-strong);border-radius:6px;padding:6px 8px;margin-bottom:8px;outline:none}
     .pop .pop-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:8px}
     .pop button{padding:4px 10px;font-size:12px;border-radius:6px}
+    .cols-pop{min-width:190px}
     .cols-pop label.opt{justify-content:space-between}
-    @media(max-width:700px){body{padding:12px}.top{align-items:flex-start;flex-direction:column}.form-grid{grid-template-columns:1fr}.span2{grid-column:span 1}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:700px){body{padding:12px;overflow:auto}.top{align-items:flex-start;flex-direction:column}.form-grid{grid-template-columns:1fr}.span2{grid-column:span 1}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.table-card{overflow:visible}}
   </style>
 </head>
 <body>
-  <header class="top"><div><h1>项目问题单</h1><div class="muted">集中管理 Q 单、个案、测试状态、变动状态与来源文档；日报归纳当天变动</div></div><div><button id="columnsButton">列设置</button> <button id="reportButton">当天日报</button> <button id="importButton">导入表格</button> <button id="newButton" class="primary">＋ 新建问题</button></div></header>
+  <header class="top"><div><h1>项目问题单</h1><div class="muted">集中管理 Q 单、个案、测试状态、变动状态与来源文档；日报归纳当天变动</div></div><div><button id="reportButton">当天日报</button> <button id="importButton">导入表格</button> <button id="newButton" class="primary">＋ 新建问题</button></div></header>
   <section class="card filters">
     <div class="field"><label>项目</label><select id="project" style="min-width:200px"></select></div>
     <div class="field grow"><label>搜索单号、个案、程序、说明或解决描述</label><input id="keyword" placeholder="输入关键词后按回车" /></div>
@@ -107,7 +113,7 @@
     <button id="searchButton" class="primary">查询</button>
   </section>
   <section id="summary" class="summary"></section>
-  <section class="card"><div class="table-wrap"><table class="table" id="grid"><colgroup id="cols"></colgroup><thead><tr id="headRow"></tr></thead><tbody id="rows"></tbody></table></div>
+  <section class="card table-card"><div class="table-toolbar"><div class="toolbar-hints"><span class="muted">问题列表</span><span id="toolbarHints" class="muted"></span></div><button id="columnsButton" title="勾选要在列表中显示的列">⚙ 显示列</button></div><div class="table-wrap"><table class="table" id="grid"><colgroup id="cols"></colgroup><thead><tr id="headRow"></tr></thead><tbody id="rows"></tbody></table></div>
   <div class="pager">
     <span id="count" class="muted"></span>
     <select id="pageSize" class="pgsizes" title="每页条数"><option value="15">15条/页</option><option value="30" selected>30条/页</option><option value="50">50条/页</option><option value="100">100条/页</option></select>
@@ -210,7 +216,7 @@
     function openColumnsPop(anchor){const pop=$('#columnsPop');closePops();pop.classList.add('open');
       $('#columnOptions').innerHTML=COLUMNS.filter(c=>!c.locked).map(column=>`<label class="opt"><span>${escapeHtml(column.label)}</span><input type="checkbox" data-key="${column.key}"${columnVisible(column.key)?' checked':''}/></label>`).join('');
       $('#columnOptions').querySelectorAll('input').forEach(box=>box.addEventListener('change',()=>{const key=box.dataset.key;columnState[key]={...columnState[key],visible:box.checked};saveColumnState();renderHead();renderRows()}));
-      const rect=anchor.getBoundingClientRect();pop.style.top=(rect.bottom+6)+'px';pop.style.left=Math.max(8,rect.left-140)+'px'}
+      const rect=anchor.getBoundingClientRect();pop.style.top=(rect.bottom+6)+'px';pop.style.left=Math.max(8,rect.right-pop.offsetWidth)+'px'}
     function renderRows(){const visible=COLUMNS.filter(c=>columnVisible(c.key));const i0=(page-1)*pageSize;
       const cell=(content,title='')=>`<td${title?` title="${escapeHtml(title)}"`:''}>${content}</td>`;
       $('#rows').innerHTML=items.length?items.map((x,i)=>{const changed=localTime(x.workflowStatusChangedAtUtc);
@@ -231,7 +237,9 @@
         cells.source=cell(x.sourceUrl?'在线文档':x.sourceSheet?'导入':'手工');
         cells.actions=cell(`<button data-action="detail" data-index="${i}">详情</button><button data-action="edit" data-index="${i}">编辑</button><button data-action="delete" data-index="${i}" class="danger">删除</button>`);
         return '<tr>'+visible.map(column=>cells[column.key]).join('')+'</tr>'}).join(''):'<tr><td colspan="13" class="empty">没有符合条件的问题单</td></tr>';
-      $('#count').textContent=`共 ${total} 条`;renderPager()}
+      $('#count').textContent=`共 ${total} 条`;
+      const hints=[];if(sort.key)hints.push(`排序：${COLUMNS.find(c=>c.key===sort.key)?.label||sort.key} ${sort.dir==='asc'?'升序':'降序'}`);const filterCount=Object.keys(activeFilters).length;if(filterCount)hints.push(`筛选 ${filterCount} 列`);$('#toolbarHints').textContent=hints.join(' · ');
+      renderPager()}
     async function load(){if(!projectCode())return;try{const args={projectCode:projectCode(),keyword:$('#keyword').value.trim(),status:$('#status').value,workflowStatus:$('#workflow').value,page,pageSize};const filters=buildFilters();if(filters)args.filters=filters;if(sort.key){args.sortBy=sort.key;args.sortDir=sort.dir}
       const result=await call('list_issues',args);items=result.items;total=result.total;renderHead();renderRows();await loadSummary()}catch(error){toast(error.message,true)}}
     function renderPager(){const totalPages=Math.max(1,Math.ceil(total/pageSize));if(page>totalPages){page=totalPages}
