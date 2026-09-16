@@ -35,10 +35,17 @@
     .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--brand-blue-bright)}
     .field textarea{min-height:88px;resize:vertical}
     .grow{flex:1}
-    .table-card{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+    .table-card{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
     .table-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);flex:0 0 auto}
     .table-toolbar .toolbar-hints{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
+    .table-card.loading .table-wrap{opacity:.5;pointer-events:none}
+    .table-card.loading .table-wrap::after{content:"正在加载…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;background:rgba(255,255,255,.6)}
     .table-wrap{flex:1 1 auto;overflow:auto;min-height:96px}
+    .table-wrap::-webkit-scrollbar{width:10px;height:10px}
+    .table-wrap::-webkit-scrollbar-thumb{background:#c9d4e0;border-radius:6px;border:2px solid var(--bg-panel)}
+    .table-wrap::-webkit-scrollbar-thumb:hover{background:#a9b9ca}
+    .table-wrap::-webkit-scrollbar-track{background:transparent}
+    .table-wrap::-webkit-scrollbar-corner{background:transparent}
     .table{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%}
     .table th,.table td{padding:10px 12px;border-bottom:1px solid var(--bg-subtle);text-align:left;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .table th{font-size:12px;color:var(--text-soft);background:var(--bg-panel-soft);position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);user-select:none}
@@ -76,7 +83,14 @@
     .overlay{position:fixed;inset:0;z-index:10;background:rgba(15,39,69,.45);display:none;align-items:center;justify-content:center;padding:20px}
     .overlay.open{display:flex}
     .dialog{width:min(840px,100%);max-height:92vh;overflow:auto;padding:24px;background:white;border-radius:14px;box-shadow:0 18px 50px rgba(20,34,62,.27)}
-    .dialog h2{margin:0 0 18px;font-size:19px;color:var(--text-title)}
+    .dialog h2{margin:0 0 18px;font-size:19px;color:var(--text-title);display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .dialog-close{cursor:pointer;color:var(--text-muted);font-size:22px;line-height:1;padding:0 4px;border-radius:6px}
+    .dialog-close:hover{color:var(--text-strong);background:var(--hover)}
+    .link-btn{border:none;background:none;padding:2px 6px;border-radius:5px;color:var(--brand-blue);font-size:12.5px}
+    .link-btn:hover{background:var(--hover);color:var(--brand-blue)}
+    .link-btn.danger{color:#c0564f}
+    .link-btn.danger:hover{background:#fdf0f0;color:#c0564f}
+    .empty-mark{width:54px;height:54px;border-radius:50%;background:var(--bg-subtle);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;color:#aab7c8;font-size:22px}
     .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
     .span2{grid-column:span 2}
     .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
@@ -122,10 +136,10 @@
   </div></section>
   <div id="columnsPop" class="pop cols-pop"><p class="pop-title">显示列<span class="muted">自动保存</span></p><div id="columnOptions"></div></div>
   <div id="filterPop" class="pop"></div>
-  <div id="editorOverlay" class="overlay"><div class="dialog"><h2 id="editorTitle">新建问题</h2><div id="editorFields" class="form-grid"></div><div class="actions"><button data-close="editorOverlay">取消</button><button id="saveButton" class="primary">保存问题</button></div></div></div>
-  <div id="importOverlay" class="overlay"><div class="dialog"><h2>导入问题单</h2><p class="hint">支持 .xlsx、.csv、.tsv（单文件不超过 5 MB）；也可在金山文档等在线表格中选中表头和数据区域，复制后粘贴到下方。需要登录的在线文档请先由用户导出或复制，不会绕过访问权限。表格可包含“变动状态”“解决描述”“提单日期”“完成日期”列；未填写变动状态的新记录不设变动时间。</p><div class="form-grid"><div class="field span2 filebox"><label>选择 Excel/CSV 文件</label><input id="importFile" type="file" accept=".xlsx,.csv,.tsv,.txt" /></div><div class="field span2"><label>或粘贴在线表格内容（含表头）</label><textarea id="importText" style="min-height:140px" placeholder="Q单编号&#9;测试状态&#9;变动状态&#9;提单日期&#9;完成日期&#10;QTB...&#9;已完成&#9;处理完成&#9;2026/9/1&#9;2026-09-12"></textarea></div><div class="field span2"><label>原始在线文档链接（可选，供追溯）</label><input id="sourceUrl" type="url" placeholder="https://www.kdocs.cn/l/..." /></div></div><div class="actions"><button data-close="importOverlay">取消</button><button id="importSubmit" class="primary">确认导入</button></div></div></div>
-  <div id="detailOverlay" class="overlay"><div class="dialog"><h2>问题详情</h2><dl id="detail" class="detail"></dl><div class="actions"><button data-close="detailOverlay">关闭</button></div></div></div>
-  <div id="reportOverlay" class="overlay"><div class="dialog"><h2>变动日报</h2><div class="report-bar"><span id="reportSummary" class="muted"></span><div><label class="muted" style="display:inline-flex;align-items:center;gap:5px;margin-right:8px" title="汇总所有启用项目的当天变动单据"><input id="reportAll" type="checkbox" checked />所有项目</label><input id="reportDate" type="date" style="margin-right:8px;border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px" /><button id="reportRefresh">刷新</button> <button id="reportCopy" class="primary">复制内容</button></div></div><textarea id="reportText" readonly></textarea><div class="actions"><button data-close="reportOverlay">关闭</button></div></div></div>
+  <div id="editorOverlay" class="overlay"><div class="dialog"><h2><span id="editorTitle">新建问题</span><span class="dialog-close" data-close="editorOverlay">×</span></h2><div id="editorFields" class="form-grid"></div><div class="actions"><button data-close="editorOverlay">取消</button><button id="saveButton" class="primary">保存问题</button></div></div></div>
+  <div id="importOverlay" class="overlay"><div class="dialog"><h2><span>导入问题单</span><span class="dialog-close" data-close="importOverlay">×</span></h2><p class="hint">支持 .xlsx、.csv、.tsv（单文件不超过 5 MB）；也可在金山文档等在线表格中选中表头和数据区域，复制后粘贴到下方。需要登录的在线文档请先由用户导出或复制，不会绕过访问权限。表格可包含“变动状态”“解决描述”“提单日期”“完成日期”列；未填写变动状态的新记录不设变动时间。</p><div class="form-grid"><div class="field span2 filebox"><label>选择 Excel/CSV 文件</label><input id="importFile" type="file" accept=".xlsx,.csv,.tsv,.txt" /></div><div class="field span2"><label>或粘贴在线表格内容（含表头）</label><textarea id="importText" style="min-height:140px" placeholder="Q单编号&#9;测试状态&#9;变动状态&#9;提单日期&#9;完成日期&#10;QTB...&#9;已完成&#9;处理完成&#9;2026/9/1&#9;2026-09-12"></textarea></div><div class="field span2"><label>原始在线文档链接（可选，供追溯）</label><input id="sourceUrl" type="url" placeholder="https://www.kdocs.cn/l/..." /></div></div><div class="actions"><button data-close="importOverlay">取消</button><button id="importSubmit" class="primary">确认导入</button></div></div></div>
+  <div id="detailOverlay" class="overlay"><div class="dialog"><h2><span>问题详情</span><span class="dialog-close" data-close="detailOverlay">×</span></h2><dl id="detail" class="detail"></dl><div class="actions"><button data-close="detailOverlay">关闭</button></div></div></div>
+  <div id="reportOverlay" class="overlay"><div class="dialog"><h2><span>变动日报</span><span class="dialog-close" data-close="reportOverlay">×</span></h2><div class="report-bar"><span id="reportSummary" class="muted"></span><div><label class="muted" style="display:inline-flex;align-items:center;gap:5px;margin-right:8px" title="汇总所有启用项目的当天变动单据"><input id="reportAll" type="checkbox" checked />所有项目</label><input id="reportDate" type="date" style="margin-right:8px;border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px" /><button id="reportRefresh">刷新</button> <button id="reportCopy" class="primary">复制内容</button></div></div><textarea id="reportText" readonly></textarea><div class="actions"><button data-close="reportOverlay">关闭</button></div></div></div>
   <script>
     const root='/api/custom-modules/project-issue-tracker/invoke/';const $=s=>document.querySelector(s);let page=1,pageSize=30,total=0,items=[],current=null,projects=[],knownTestStatuses=[];
     const WORKFLOW_OPTIONS=['未处理','处理中','处理完成'];const RESOLVED_OPTIONS=['是','否'];const TEST_STATUS_PRESETS=['待开发处理','开发完成','待复测','测试通过','已完成','已关闭'];
@@ -154,7 +168,7 @@
     async function call(name,args={}){const response=await fetch(root+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(args)});let body={};try{body=await response.json()}catch{}if(!response.ok)throw Error(body.message||body.detail||`调用失败（${response.status}）`);return body}
     const projectCode=()=>$('#project').value;
     const localTime=v=>v?new Date(v).toLocaleString('zh-CN',{hour12:false}):'';
-    const workflowClass=v=>{const s=(v||'').trim();if(!s)return 'none';if(/完成|关闭|解决/.test(s))return 'done';if(/处理中|进行|开发|待/.test(s))return 'doing';return ''};
+    const workflowClass=v=>{const s=(v||'').trim();if(!s)return 'none';if(/完成|关闭|解决|修复|通过/.test(s))return 'done';if(/处理中|进行|开发|待/.test(s))return 'doing';return ''};
     let sort={key:'',dir:'desc'};let activeFilters={};
     function buildFilters(){const filters={};for(const[key,value]of Object.entries(activeFilters)){if(value.values)filters[key]=value.values;else if(value.text)filters[key]=value.text}return Object.keys(filters).length?filters:undefined}
     function toast(message,error=false){document.querySelector('.toast')?.remove();const node=document.createElement('div');node.className='toast'+(error?' error':'');node.textContent=message;document.body.append(node);setTimeout(()=>node.remove(),4500)}
@@ -224,7 +238,7 @@
         const dateCell=field=>`<span class="edit-cell" data-edit="${field}" data-type="date" data-index="${i0+i}" title="点击修改">${escapeHtml(x[field]||'—')}</span>`;
         const cells={};
         cells.ticketNumber=cell(`<b>${escapeHtml(x.ticketNumber||'—')}</b>`,x.ticketNumber);
-        cells.testStatus=cell(pill('testStatus',x.testStatus,''));
+        cells.testStatus=cell(pill('testStatus',x.testStatus,workflowClass(x.testStatus)));
         cells.workflowStatus=cell(pill('workflowStatus',x.workflowStatus,workflowClass(x.workflowStatus)),changed?`变动时间 ${changed}`:'点击标记变动状态');
         cells.resolved=cell(pill('resolved',x.resolved,x.resolved==='是'?'done':x.resolved==='否'?'none':''));
         cells.category=cell(escapeHtml(x.category||'—'),x.category);
@@ -235,13 +249,13 @@
         cells.raisedDate=cell(dateCell('raisedDate'));
         cells.completedDate=cell(dateCell('completedDate'));
         cells.source=cell(x.sourceUrl?'在线文档':x.sourceSheet?'导入':'手工');
-        cells.actions=cell(`<button data-action="detail" data-index="${i}">详情</button><button data-action="edit" data-index="${i}">编辑</button><button data-action="delete" data-index="${i}" class="danger">删除</button>`);
-        return '<tr>'+visible.map(column=>cells[column.key]).join('')+'</tr>'}).join(''):'<tr><td colspan="13" class="empty">没有符合条件的问题单</td></tr>';
+        cells.actions=cell(`<span class="link-btn" data-action="detail" data-index="${i}">详情</span><span class="link-btn" data-action="edit" data-index="${i}">编辑</span><span class="link-btn danger" data-action="delete" data-index="${i}">删除</span>`);
+        return '<tr>'+visible.map(column=>cells[column.key]).join('')+'</tr>'}).join(''):`<tr><td colspan="${visible.length}" class="empty"><div class="empty-mark">≡</div>没有符合条件的问题单</td></tr>`;
       $('#count').textContent=`共 ${total} 条`;
       const hints=[];if(sort.key)hints.push(`排序：${COLUMNS.find(c=>c.key===sort.key)?.label||sort.key} ${sort.dir==='asc'?'升序':'降序'}`);const filterCount=Object.keys(activeFilters).length;if(filterCount)hints.push(`筛选 ${filterCount} 列`);$('#toolbarHints').textContent=hints.join(' · ');
       renderPager()}
-    async function load(){if(!projectCode())return;try{const args={projectCode:projectCode(),keyword:$('#keyword').value.trim(),status:$('#status').value,workflowStatus:$('#workflow').value,page,pageSize};const filters=buildFilters();if(filters)args.filters=filters;if(sort.key){args.sortBy=sort.key;args.sortDir=sort.dir}
-      const result=await call('list_issues',args);items=result.items;total=result.total;renderHead();renderRows();await loadSummary()}catch(error){toast(error.message,true)}}
+    async function load(){if(!projectCode())return;const card=document.querySelector('.table-card');card.classList.add('loading');try{const args={projectCode:projectCode(),keyword:$('#keyword').value.trim(),status:$('#status').value,workflowStatus:$('#workflow').value,page,pageSize};const filters=buildFilters();if(filters)args.filters=filters;if(sort.key){args.sortBy=sort.key;args.sortDir=sort.dir}
+      const result=await call('list_issues',args);items=result.items;total=result.total;renderHead();renderRows();await loadSummary()}catch(error){toast(error.message,true)}finally{card.classList.remove('loading')}}
     function renderPager(){const totalPages=Math.max(1,Math.ceil(total/pageSize));if(page>totalPages){page=totalPages}
       $('#prev').disabled=page<=1;$('#next').disabled=page>=totalPages;
       const marks=[];const push=v=>marks.push(v);
