@@ -61,7 +61,7 @@ public sealed class ProjectIssueModule : IGatewayExtension
     });
 
     public GatewayExtensionDefinition Definition { get; } = new(
-        "project-issue-tracker", "项目问题单", "1.2.0",
+        "project-issue-tracker", "项目问题单", "1.3.0",
         "按网关项目管理问题与 Q 单号；支持 Excel/CSV、在线表格复制粘贴和人工维护；AI 可按单号维护单据、变动变动状态并生成当天变动日报。",
         "项目问题单", "wwwroot/index.html",
         [

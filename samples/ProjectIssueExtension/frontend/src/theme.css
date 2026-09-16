@@ -1,0 +1,65 @@
+/* 与主程序一致的品牌色板，覆盖 Element Plus 默认主题 */
+:root {
+  --brand-navy: #0f2745;
+  --brand-blue: #1769aa;
+  --brand-blue-bright: #1e99cd;
+  --brand-green: #1fb278;
+  --brand-amber: #e6a23c;
+  --bg-page: #f3f6fa;
+  --text-strong: #172033;
+
+  --el-color-primary: #1769aa;
+  --el-color-primary-light-3: #4a8cbb;
+  --el-color-primary-light-5: #8bb4d4;
+  --el-color-primary-light-7: #bdd2e4;
+  --el-color-primary-light-8: #d6e3ee;
+  --el-color-primary-light-9: #ebf1f7;
+  --el-color-primary-dark-2: #125488;
+}
+
+html, body, #app { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: Inter, "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  color: #172033;
+  background: var(--bg-page);
+}
+
+/* 表格列宽拖拽手柄 */
+.issue-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+.issue-resizer:hover, .issue-resizer.dragging { background: var(--brand-blue-bright); opacity: .4; }
+.el-table th .cell { position: relative; }
+
+/* 行内状态标签可点击 */
+.cell-tag { cursor: pointer; }
+.cell-tag:hover { outline: 1px dashed var(--brand-blue-bright); outline-offset: 1px; }
+
+/* 统计卡片左侧色条 */
+.stat-card { border-left-width: 3px; border-left-style: solid; }
+.stat-card.blue { border-left-color: var(--brand-blue); }
+.stat-card.green { border-left-color: var(--brand-green); }
+.stat-card.amber { border-left-color: var(--brand-amber); }
+.stat-card.red { border-left-color: #d95c5c; }
+
+/* 表格滚动条 */
+.el-table__body-wrapper::-webkit-scrollbar { width: 10px; height: 10px; }
+.el-table__body-wrapper::-webkit-scrollbar-thumb { background: #c9d4e0; border-radius: 6px; border: 2px solid #fff; }
+.el-table__body-wrapper::-webkit-scrollbar-thumb:hover { background: #a9b9ca; }
+
+.project-list { max-height: 320px; overflow: auto; margin-top: 4px; }
+.project-list::-webkit-scrollbar { width: 8px; }
+.project-list::-webkit-scrollbar-thumb { background: #c9d4e0; border-radius: 5px; }
+.proj-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.proj-item:hover { background: #f3f7fb; }
+.proj-item.current { border-color: var(--brand-blue-bright); background: #eef5fb; }
+.proj-name { font-weight: 600; color: #172b4d; }
+.proj-item .check { color: var(--brand-blue); font-weight: 700; }

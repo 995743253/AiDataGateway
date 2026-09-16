@@ -1,17 +1,29 @@
 param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
-    [string]$OutputPath = "artifacts/extensions/project-issue-tracker-1.2.0.zip"
+    [string]$OutputPath = "artifacts/extensions/project-issue-tracker-1.3.0.zip"
 )
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repositoryRoot "samples/ProjectIssueExtension/ProjectIssueExtension.csproj"
+$frontendDir = Join-Path $repositoryRoot "samples/ProjectIssueExtension/frontend"
 $artifactsRoot = [IO.Path]::GetFullPath((Join-Path $repositoryRoot "artifacts"))
 $publishPath = [IO.Path]::GetFullPath((Join-Path $artifactsRoot ("project-issue-package-" + $PID)))
 $packagePath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputPath))
 if (-not $publishPath.StartsWith($artifactsRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Publish path must stay inside artifacts." }
 if (-not $packagePath.StartsWith($artifactsRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Package path must stay inside artifacts." }
+
+# 前端为 Vue3 + Element Plus 源码，打包前先构建到 wwwroot（产物随 ZIP 分发）
+if (Test-Path (Join-Path $frontendDir "package.json")) {
+    Push-Location $frontendDir
+    try {
+        npm install --no-audit --no-fund
+        if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE." }
+        npm run build
+        if ($LASTEXITCODE -ne 0) { throw "frontend build failed with exit code $LASTEXITCODE." }
+    } finally { Pop-Location }
+}
 
 dotnet publish $projectPath -c $Configuration -o $publishPath --no-self-contained --no-restore
 if ($LASTEXITCODE -ne 0) { throw "Extension build failed with exit code $LASTEXITCODE." }
