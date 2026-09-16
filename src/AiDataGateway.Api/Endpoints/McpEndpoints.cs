@@ -261,7 +261,7 @@ internal static class McpEndpoints
             annotations = new { readOnlyHint = true, destructiveHint = false }
         },
         .. extensions.List().Where(module => module.Enabled && module.Loaded)
-            .SelectMany(module => module.Tools.Where(tool => CustomModuleEndpoints.CanUse(context, tool.Capability)).Select(tool => (object)new
+             .SelectMany(module => module.Tools.Where(tool => tool.VisibleInMcp && CustomModuleEndpoints.CanUse(context, tool.Capability)).Select(tool => (object)new
             {
                 name = tool.PublicName,
                 description = $"[{module.Name}] {tool.Description}",

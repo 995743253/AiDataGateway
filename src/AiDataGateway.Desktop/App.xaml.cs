@@ -39,13 +39,25 @@ public partial class App : System.Windows.Application
         try
         {
             hostConfiguration = DesktopHostConfiguration.Load(AppContext.BaseDirectory);
-            webHost = GatewayWebHost.StartAsync(new GatewayHostOptions
+            // The blocking StartAsync wait below would deadlock with the WPF SynchronizationContext
+            // installed: any asynchronous step in the host startup chain posts its continuation back
+            // to the blocked dispatcher thread. Suspend the context for the duration instead.
+            var previousContext = SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(null);
+            try
             {
-                Port = 5127,
-                ListenAddress = hostConfiguration.ListenAddress,
-                StoragePath = hostConfiguration.StoragePath,
-                WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot")
-            }).GetAwaiter().GetResult();
+                webHost = GatewayWebHost.StartAsync(new GatewayHostOptions
+                {
+                    Port = 5127,
+                    ListenAddress = hostConfiguration.ListenAddress,
+                    StoragePath = hostConfiguration.StoragePath,
+                    WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot")
+                }).GetAwaiter().GetResult();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
         }
         catch (Exception exception)
         {

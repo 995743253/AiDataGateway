@@ -12,12 +12,14 @@ internal sealed class GatewayExtensionHostContext(
     ProjectService projects,
     QueryService queries,
     LogSourceService logs,
-    MonitoringService monitoring) : IGatewayExtensionContext
+    MonitoringService monitoring,
+    IGatewayExtensionStorage storage) : IGatewayExtensionContext
 {
     public string Actor { get; } = actor;
     public IGatewayExtensionDatabase Database { get; } = new ExtensionDatabase(capability, actor, projects, queries);
     public IGatewayExtensionLogs Logs { get; } = new ExtensionLogs(capability, actor, logs);
     public IGatewayExtensionMonitoring Monitoring { get; } = new ExtensionMonitoring(capability, monitoring);
+    public IGatewayExtensionStorage Storage { get; } = storage;
 
     private sealed class ExtensionDatabase(
         GatewayExtensionCapability capability,

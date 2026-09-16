@@ -182,12 +182,20 @@ public sealed class GatewayWebHost : IAsyncDisposable
             await context.Response.WriteAsync("<html><body><h2>AiDataGateway is running</h2><p>Build the Vue application to enable the management UI.</p></body></html>");
         });
 
-        await using (var scope = app.Services.CreateAsyncScope())
+        // ConfigureAwait(false) throughout this startup chain: the Desktop shell blocks the
+        // WPF UI thread on StartAsync, so continuations must never be posted back to its
+        // SynchronizationContext (deadlock otherwise, e.g. once an extension registry exists).
+        var scope = app.Services.CreateAsyncScope();
+        try
         {
-            await scope.ServiceProvider.GetRequiredService<GatewayDatabaseInitializer>().InitializeAsync(cancellationToken);
+            await scope.ServiceProvider.GetRequiredService<GatewayDatabaseInitializer>().InitializeAsync(cancellationToken).ConfigureAwait(false);
         }
-        await app.Services.GetRequiredService<GatewayExtensionManager>().InitializeAsync(cancellationToken);
-        await app.StartAsync(cancellationToken);
+        finally
+        {
+            await scope.DisposeAsync().ConfigureAwait(false);
+        }
+        await app.Services.GetRequiredService<GatewayExtensionManager>().InitializeAsync(cancellationToken).ConfigureAwait(false);
+        await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
         return new GatewayWebHost(app, baseAddress);
     }

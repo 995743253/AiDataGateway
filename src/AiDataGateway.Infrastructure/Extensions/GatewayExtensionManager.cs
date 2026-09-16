@@ -8,6 +8,7 @@ using AiDataGateway.Application.Projects;
 using AiDataGateway.Application.Sql;
 using AiDataGateway.Application.Logs;
 using AiDataGateway.Extensions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -67,7 +68,7 @@ public sealed class GatewayExtensionManager : IDisposable
     public GatewayExtensionToolView? FindTool(string publicName) => List()
         .Where(module => module.Enabled && module.Loaded)
         .SelectMany(module => module.Tools)
-        .FirstOrDefault(tool => string.Equals(tool.PublicName, publicName, StringComparison.Ordinal));
+        .FirstOrDefault(tool => tool.VisibleInMcp && string.Equals(tool.PublicName, publicName, StringComparison.Ordinal));
 
     public async Task<GatewayExtensionModuleView> InstallAsync(Stream package, string actor, CancellationToken cancellationToken = default)
     {
@@ -78,7 +79,7 @@ public sealed class GatewayExtensionManager : IDisposable
         {
             Directory.CreateDirectory(staging);
             await ExtractPackageAsync(package, staging, cancellationToken);
-            var manifest = await ReadManifestAsync(staging, cancellationToken);
+            var manifest = ReadManifest(staging);
             ValidateManifest(manifest, staging);
 
             var installName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
@@ -203,7 +204,8 @@ public sealed class GatewayExtensionManager : IDisposable
             scope.ServiceProvider.GetRequiredService<ProjectService>(),
             scope.ServiceProvider.GetRequiredService<QueryService>(),
             scope.ServiceProvider.GetRequiredService<LogSourceService>(),
-            scope.ServiceProvider.GetRequiredService<MonitoringService>());
+            scope.ServiceProvider.GetRequiredService<MonitoringService>(),
+            new GatewayExtensionFileStorage(_root, moduleId, scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>()));
         var audit = scope.ServiceProvider.GetRequiredService<IAuditWriter>();
         try
         {
@@ -225,6 +227,7 @@ public sealed class GatewayExtensionManager : IDisposable
         var module = List().FirstOrDefault(item => item.Enabled && item.Loaded && item.Tools.Any(tool => tool.PublicName == publicName))
             ?? throw new KeyNotFoundException("Extension MCP tool was not found.");
         var tool = module.Tools.First(item => item.PublicName == publicName);
+        if (!tool.VisibleInMcp) throw new InvalidOperationException("This extension operation is not available to MCP.");
         return await InvokeAsync(module.Id, tool.Name, arguments, actor, false, cancellationToken);
     }
 
@@ -268,7 +271,7 @@ public sealed class GatewayExtensionManager : IDisposable
         try
         {
             var installDirectory = ResolveInstallDirectory(entry);
-            var manifest = ReadManifestAsync(installDirectory, CancellationToken.None).GetAwaiter().GetResult();
+            var manifest = ReadManifest(installDirectory);
             ValidateManifest(manifest, installDirectory);
             var assemblyPath = Path.GetFullPath(Path.Combine(installDirectory, manifest.EntryAssembly));
             loadContext = new GatewayExtensionLoadContext(assemblyPath);
@@ -317,12 +320,12 @@ public sealed class GatewayExtensionManager : IDisposable
             throw new InvalidOperationException($"Package file '{relativePath}' is missing or outside the package.");
     }
 
-    private async Task<GatewayExtensionManifest> ReadManifestAsync(string directory, CancellationToken cancellationToken)
+    private static GatewayExtensionManifest ReadManifest(string directory)
     {
         var path = Path.Combine(directory, ManifestFileName);
         if (!File.Exists(path)) throw new InvalidOperationException($"Package root must contain {ManifestFileName}.");
-        await using var stream = File.OpenRead(path);
-        return await JsonSerializer.DeserializeAsync<GatewayExtensionManifest>(stream, JsonOptions, cancellationToken)
+        using var stream = File.OpenRead(path);
+        return JsonSerializer.Deserialize<GatewayExtensionManifest>(stream, JsonOptions)
             ?? throw new InvalidOperationException("Extension manifest is invalid.");
     }
 
@@ -349,14 +352,14 @@ public sealed class GatewayExtensionManager : IDisposable
     {
         if (!File.Exists(_registryPath)) return [];
         await using var stream = File.OpenRead(_registryPath);
-        return (await JsonSerializer.DeserializeAsync<GatewayExtensionRegistry>(stream, JsonOptions, cancellationToken))?.Modules.ToList() ?? [];
+        return (await JsonSerializer.DeserializeAsync<GatewayExtensionRegistry>(stream, JsonOptions, cancellationToken).ConfigureAwait(false))?.Modules.ToList() ?? [];
     }
 
     private async Task WriteRegistryAsync(CancellationToken cancellationToken)
     {
         var temporary = _registryPath + ".tmp";
         await using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
-            await JsonSerializer.SerializeAsync(stream, new GatewayExtensionRegistry(_registry), JsonOptions, cancellationToken);
+            await JsonSerializer.SerializeAsync(stream, new GatewayExtensionRegistry(_registry), JsonOptions, cancellationToken).ConfigureAwait(false);
         File.Move(temporary, _registryPath, true);
     }
 
@@ -364,7 +367,7 @@ public sealed class GatewayExtensionManager : IDisposable
     {
         var definition = runtime?.Instance?.Definition;
         var tools = definition?.Tools.Select(tool => new GatewayExtensionToolView(tool.Name, PublicToolName(entry.Id, tool.Name),
-            tool.Description, tool.InputSchema.Clone(), tool.Capability, tool.VisibleInUi, tool.ReadOnly)).ToArray() ?? [];
+            tool.Description, tool.InputSchema.Clone(), tool.Capability, tool.VisibleInUi, tool.ReadOnly, tool.VisibleInMcp)).ToArray() ?? [];
         return new GatewayExtensionModuleView(entry.Id, definition?.Name ?? entry.Id, definition?.Version ?? "—",
             definition?.Description ?? string.Empty, entry.Enabled, runtime?.Instance is not null, runtime?.LoadError,
             definition?.PageTitle, string.IsNullOrWhiteSpace(definition?.FrontendEntry) ? null : $"/custom-modules/{entry.Id}/ui/",
