@@ -5,10 +5,79 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>项目问题单</title>
   <style>
-    :root{font-family:"Microsoft YaHei UI",system-ui,sans-serif;color:#253247;background:#f4f6fa}*{box-sizing:border-box}body{margin:0;padding:24px}button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid #d5deea;background:white;border-radius:8px;padding:9px 15px;color:#35455c}button:hover{border-color:#409eff;color:#409eff}.primary{background:#409eff;border-color:#409eff;color:white}.primary:hover{background:#66b1ff;color:white}.danger{color:#d94d4d}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.top h1{font-size:24px;margin:0 0 5px}.muted{color:#8390a3;font-size:12px}.card{background:white;border:1px solid #e5eaf2;border-radius:12px;box-shadow:0 5px 20px #25324708}.filters{padding:18px;display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.summary .card{padding:15px 17px;min-width:0}.summary strong{display:block;margin-top:8px;font-size:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.summary .muted{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.field{display:flex;flex-direction:column;gap:6px;min-width:150px}.field label{color:#6e7e91;font-size:12px}.field input,.field select,.field textarea{border:1px solid #d7deea;border-radius:7px;background:white;padding:9px 11px;min-height:38px;color:#26354c;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#409eff}.field textarea{min-height:90px;resize:vertical}.grow{flex:1}.table-wrap{overflow:auto}.table{border-collapse:collapse;width:100%;min-width:1180px}.table th,.table td{padding:13px 16px;border-bottom:1px solid #edf0f5;text-align:left;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.table th{font-size:12px;color:#78879a;background:#fafbfe}.table td{font-size:13px}.table tr:hover td{background:#f8fbff}.pill{display:inline-block;border-radius:20px;background:#ecf5ff;color:#337ecc;padding:4px 9px;font-size:11px}.pill.done{background:#f0f9eb;color:#529b2e}.pill.doing{background:#fdf6ec;color:#b88230}.pill.none{background:#f4f4f5;color:#909399}.empty{padding:70px;text-align:center;color:#8a97a8}.pager{display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:12px 16px}.toast{position:fixed;top:20px;right:20px;z-index:30;background:#e7f7ec;color:#347749;padding:11px 16px;border-radius:8px;box-shadow:0 8px 24px #283d5620}.toast.error{background:#fff0f0;color:#bd3e3e}.overlay{position:fixed;inset:0;z-index:10;background:#17233d77;display:none;align-items:center;justify-content:center;padding:20px}.overlay.open{display:flex}.dialog{width:min(820px,100%);max-height:92vh;overflow:auto;padding:24px;background:white;border-radius:14px;box-shadow:0 18px 50px #14223e44}.dialog h2{margin:0 0 18px;font-size:19px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}.span2{grid-column:span 2}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.filebox{border:1px dashed #aabbd1;background:#f8fbff;border-radius:8px;padding:16px}.hint{font-size:12px;line-height:1.7;color:#78879a}.detail{display:grid;grid-template-columns:160px 1fr;gap:9px 16px;font-size:13px}.detail dt{color:#8492a4}.detail dd{margin:0;white-space:pre-wrap;word-break:break-word}.detail a{color:#337ecc}.history{margin:0;padding-left:16px;color:#5c6b7e}.history li{margin:3px 0}#reportText{width:100%;min-height:260px;border:1px solid #d7deea;border-radius:8px;padding:12px;font:13px/1.8 Consolas,"Microsoft YaHei UI",monospace;color:#26354c;white-space:pre-wrap}.report-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}@media(max-width:700px){body{padding:12px}.top{align-items:flex-start;flex-direction:column}.form-grid{grid-template-columns:1fr}.span2{grid-column:span 1}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    :root{font-family:Inter,"Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;color:#172033;background:#f3f6fa;
+      --brand-navy:#0f2745;--brand-blue:#1769aa;--brand-blue-bright:#1e99cd;--brand-green:#1fb278;--brand-amber:#e6a23c;--brand-red:#d95c5c;
+      --bg-page:#f3f6fa;--bg-panel:#ffffff;--bg-panel-soft:#f8fafc;--bg-subtle:#f7f9fc;--border:#e2e8f0;--border-strong:#d9e1ea;
+      --text-strong:#172033;--text-title:#172b4d;--text-muted:#778399;--text-soft:#627087;--hover:#f3f7fb}
+    *{box-sizing:border-box}body{margin:0;padding:24px}
+    button,input,select,textarea{font:inherit;color:var(--text-strong)}
+    button{cursor:pointer;border:1px solid var(--border-strong);background:white;border-radius:8px;padding:8px 15px;color:var(--text-soft);transition:border-color .15s,color .15s,background .15s}
+    button:hover{border-color:var(--brand-blue-bright);color:var(--brand-blue)}
+    .primary{background:var(--brand-blue);border-color:var(--brand-blue);color:white}
+    .primary:hover{background:var(--brand-blue-bright);border-color:var(--brand-blue-bright);color:white}
+    .danger{color:#c0564f}.danger:hover{border-color:#c0564f;color:#c0564f}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+    .top h1{font-size:22px;margin:0 0 5px;color:var(--text-title)}
+    .muted{color:var(--text-muted);font-size:12px}
+    .card{background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 18px rgba(15,39,69,.05)}
+    .filters{padding:18px;display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px}
+    .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+    .summary .card{padding:14px 16px;min-width:0;border-left-width:3px}
+    .summary .card.blue{border-left-color:var(--brand-blue)}.summary .card.green{border-left-color:var(--brand-green)}
+    .summary .card.amber{border-left-color:var(--brand-amber)}.summary .card.red{border-left-color:var(--brand-red)}
+    .summary strong{display:block;margin-top:8px;font-size:20px;color:var(--text-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .summary .muted{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:150px}
+    .field label{color:var(--text-soft);font-size:12px}
+    .field input,.field select,.field textarea{border:1px solid var(--border-strong);border-radius:7px;background:white;padding:8px 11px;min-height:36px;outline:none}
+    .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--brand-blue-bright)}
+    .field textarea{min-height:88px;resize:vertical}
+    .grow{flex:1}
+    .table-wrap{overflow:auto;border-radius:12px}
+    .table{border-collapse:collapse;width:100%;min-width:1560px}
+    .table th,.table td{padding:11px 14px;border-bottom:1px solid var(--bg-subtle);text-align:left;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .table th{font-size:12px;color:var(--text-soft);background:var(--bg-panel-soft);position:sticky;top:0}
+    .table td{font-size:13px}
+    .table tr:hover td{background:var(--hover)}
+    .pill{display:inline-block;border-radius:20px;padding:3px 10px;font-size:11px;background:#e8f1f9;color:var(--brand-blue)}
+    .pill.done{background:#e6f6ef;color:#177d55}
+    .pill.doing{background:#faf1e0;color:#a06a1c}
+    .pill.none{background:#eef1f5;color:#8b97a8}
+    .pill.editable,.edit-cell{cursor:pointer}
+    .pill.editable:hover,.edit-cell:hover{outline:1px dashed var(--brand-blue-bright);outline-offset:1px}
+    .edit-cell{color:var(--text-title)}
+    .cell-editor{min-height:28px;padding:3px 6px;border-radius:5px;border:1px solid var(--brand-blue-bright);font-size:12px;background:white;outline:none}
+    .empty{padding:60px;text-align:center;color:var(--text-muted)}
+    .pager{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:12px 16px;flex-wrap:wrap}
+    .pager .pgbtn{min-width:30px;height:30px;padding:0 6px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+    .pager .pgbtn.current{background:var(--brand-blue);border-color:var(--brand-blue);color:white;cursor:default}
+    .pager .pgdots{border:none;background:none;padding:0 2px;color:var(--text-muted)}
+    .pager select.pgsizes{height:30px;border:1px solid var(--border-strong);border-radius:6px;padding:0 6px;background:white}
+    .pager input.pgjump{width:44px;height:30px;border:1px solid var(--border-strong);border-radius:6px;padding:0 6px;text-align:center}
+    .toast{position:fixed;top:20px;right:20px;z-index:30;background:#e7f7ec;color:#2c7a52;padding:11px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(40,61,86,.12)}
+    .toast.error{background:#fff0f0;color:#bd3e3e}
+    .overlay{position:fixed;inset:0;z-index:10;background:rgba(15,39,69,.45);display:none;align-items:center;justify-content:center;padding:20px}
+    .overlay.open{display:flex}
+    .dialog{width:min(840px,100%);max-height:92vh;overflow:auto;padding:24px;background:white;border-radius:14px;box-shadow:0 18px 50px rgba(20,34,62,.27)}
+    .dialog h2{margin:0 0 18px;font-size:19px;color:var(--text-title)}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+    .span2{grid-column:span 2}
+    .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+    .filebox{border:1px dashed #a9bcd3;background:var(--bg-subtle);border-radius:8px;padding:16px}
+    .hint{font-size:12px;line-height:1.7;color:var(--text-soft)}
+    .detail{display:grid;grid-template-columns:160px 1fr;gap:9px 16px;font-size:13px}
+    .detail dt{color:var(--text-muted)}
+    .detail dd{margin:0;white-space:pre-wrap;word-break:break-word}
+    .detail a{color:var(--brand-blue)}
+    .history{margin:0;padding-left:16px;color:#5c6b7e}
+    .history li{margin:3px 0}
+    #reportText{width:100%;min-height:260px;border:1px solid var(--border-strong);border-radius:8px;padding:12px;font:13px/1.8 Consolas,"Microsoft YaHei UI",monospace;color:var(--text-title);white-space:pre-wrap}
+    .report-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap}
+    @media(max-width:700px){body{padding:12px}.top{align-items:flex-start;flex-direction:column}.form-grid{grid-template-columns:1fr}.span2{grid-column:span 1}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body>
+  <datalist id="testStatusOptions"><option value="待开发处理"/><option value="开发完成"/><option value="待复测"/><option value="测试通过"/><option value="已完成"/><option value="已关闭"/></datalist>
   <header class="top"><div><h1>项目问题单</h1><div class="muted">集中管理 Q 单、个案、测试状态、变动状态与来源文档；日报归纳当天变动</div></div><div><button id="reportButton">当天日报</button> <button id="importButton">导入表格</button> <button id="newButton" class="primary">＋ 新建问题</button></div></header>
   <section class="card filters">
     <div class="field"><label>项目</label><select id="project" style="min-width:210px"></select></div>
@@ -18,13 +87,22 @@
     <button id="searchButton" class="primary">查询</button>
   </section>
   <section id="summary" class="summary"></section>
-  <section class="card"><div class="table-wrap"><table class="table"><thead><tr><th>Q 单编号</th><th>测试状态</th><th>变动状态</th><th>是否解决</th><th>类别</th><th>个案书名</th><th>程序名称</th><th>问题处理人</th><th>来源</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div><div class="pager"><span id="count" class="muted"></span><button id="prev">上一页</button><span id="pageText"></span><button id="next">下一页</button></div></section>
+  <section class="card"><div class="table-wrap"><table class="table"><thead><tr>
+    <th>Q 单编号</th><th>测试状态</th><th>变动状态</th><th>是否解决</th><th>类别</th><th>个案书名</th><th>程序名称</th><th>负责顾问</th><th>开发人员</th><th>提单日</th><th>完成日</th><th>来源</th><th>操作</th>
+  </tr></thead><tbody id="rows"></tbody></table></div>
+  <div class="pager">
+    <span id="count" class="muted"></span>
+    <select id="pageSize" class="pgsizes" title="每页条数"><option value="15">15条/页</option><option value="30" selected>30条/页</option><option value="50">50条/页</option><option value="100">100条/页</option></select>
+    <button id="prev" class="pgbtn">‹</button><span id="pages"></span><button id="next" class="pgbtn">›</button>
+    <span class="muted">前往</span><input id="jump" class="pgjump" /><span class="muted">页</span>
+  </div></section>
   <div id="editorOverlay" class="overlay"><div class="dialog"><h2 id="editorTitle">新建问题</h2><div id="editorFields" class="form-grid"></div><div class="actions"><button data-close="editorOverlay">取消</button><button id="saveButton" class="primary">保存问题</button></div></div></div>
-  <div id="importOverlay" class="overlay"><div class="dialog"><h2>导入问题单</h2><p class="hint">支持 .xlsx、.csv、.tsv（单文件不超过 5 MB）；也可在金山文档等在线表格中选中表头和数据区域，复制后粘贴到下方。需要登录的在线文档请先由用户导出或复制，不会绕过访问权限。表格可包含“变动状态”“解决描述”列；未填写变动状态的新记录不设变动时间。</p><div class="form-grid"><div class="field span2 filebox"><label>选择 Excel/CSV 文件</label><input id="importFile" type="file" accept=".xlsx,.csv,.tsv,.txt" /></div><div class="field span2"><label>或粘贴在线表格内容（含表头）</label><textarea id="importText" style="min-height:140px" placeholder="Q单编号&#9;测试状态&#9;变动状态&#9;个案书名&#10;QTB...&#9;已完成&#9;处理完成&#9;..."></textarea></div><div class="field span2"><label>原始在线文档链接（可选，供追溯）</label><input id="sourceUrl" type="url" placeholder="https://www.kdocs.cn/l/..." /></div></div><div class="actions"><button data-close="importOverlay">取消</button><button id="importSubmit" class="primary">确认导入</button></div></div></div>
+  <div id="importOverlay" class="overlay"><div class="dialog"><h2>导入问题单</h2><p class="hint">支持 .xlsx、.csv、.tsv（单文件不超过 5 MB）；也可在金山文档等在线表格中选中表头和数据区域，复制后粘贴到下方。需要登录的在线文档请先由用户导出或复制，不会绕过访问权限。表格可包含“变动状态”“解决描述”“提单日期”“完成日期”列；未填写变动状态的新记录不设变动时间。</p><div class="form-grid"><div class="field span2 filebox"><label>选择 Excel/CSV 文件</label><input id="importFile" type="file" accept=".xlsx,.csv,.tsv,.txt" /></div><div class="field span2"><label>或粘贴在线表格内容（含表头）</label><textarea id="importText" style="min-height:140px" placeholder="Q单编号&#9;测试状态&#9;变动状态&#9;提单日期&#9;完成日期&#10;QTB...&#9;已完成&#9;处理完成&#9;2026/9/1&#9;2026/9/12"></textarea></div><div class="field span2"><label>原始在线文档链接（可选，供追溯）</label><input id="sourceUrl" type="url" placeholder="https://www.kdocs.cn/l/..." /></div></div><div class="actions"><button data-close="importOverlay">取消</button><button id="importSubmit" class="primary">确认导入</button></div></div></div>
   <div id="detailOverlay" class="overlay"><div class="dialog"><h2>问题详情</h2><dl id="detail" class="detail"></dl><div class="actions"><button data-close="detailOverlay">关闭</button></div></div></div>
-  <div id="reportOverlay" class="overlay"><div class="dialog"><h2>变动日报</h2><div class="report-bar"><span id="reportSummary" class="muted"></span><div><label class="muted" style="display:inline-flex;align-items:center;gap:5px;margin-right:8px" title="汇总所有启用项目的当天变动单据"><input id="reportAll" type="checkbox" checked />所有项目</label><input id="reportDate" type="date" style="margin-right:8px;border:1px solid #d7deea;border-radius:7px;padding:8px 10px" /><button id="reportRefresh">刷新</button> <button id="reportCopy" class="primary">复制内容</button></div></div><textarea id="reportText" readonly></textarea><div class="actions"><button data-close="reportOverlay">关闭</button></div></div></div>
+  <div id="reportOverlay" class="overlay"><div class="dialog"><h2>变动日报</h2><div class="report-bar"><span id="reportSummary" class="muted"></span><div><label class="muted" style="display:inline-flex;align-items:center;gap:5px;margin-right:8px" title="汇总所有启用项目的当天变动单据"><input id="reportAll" type="checkbox" checked />所有项目</label><input id="reportDate" type="date" style="margin-right:8px;border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px" /><button id="reportRefresh">刷新</button> <button id="reportCopy" class="primary">复制内容</button></div></div><textarea id="reportText" readonly></textarea><div class="actions"><button data-close="reportOverlay">关闭</button></div></div></div>
   <script>
-    const root='/api/custom-modules/project-issue-tracker/invoke/';const $=s=>document.querySelector(s);let page=1,total=0,items=[],current=null,projects=[];
+    const root='/api/custom-modules/project-issue-tracker/invoke/';const $=s=>document.querySelector(s);let page=1,pageSize=30,total=0,items=[],current=null,projects=[];
+    const WORKFLOW_OPTIONS=['未处理','处理中','处理完成'];const RESOLVED_OPTIONS=['是','否'];
     const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     async function call(name,args={}){const response=await fetch(root+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(args)});let body={};try{body=await response.json()}catch{}if(!response.ok)throw Error(body.message||body.detail||`调用失败（${response.status}）`);return body}
     const projectCode=()=>$('#project').value;
@@ -32,17 +110,80 @@
     const workflowClass=v=>{const s=(v||'').trim();if(!s)return 'none';if(/完成|关闭|解决/.test(s))return 'done';if(/处理中|进行|开发|待/.test(s))return 'doing';return ''};
     function toast(message,error=false){document.querySelector('.toast')?.remove();const node=document.createElement('div');node.className='toast'+(error?' error':'');node.textContent=message;document.body.append(node);setTimeout(()=>node.remove(),4500)}
     function open(id){$('#'+id).classList.add('open')}function close(id){$('#'+id).classList.remove('open')}
-    async function loadProjects(){try{const result=await call('list_projects');projects=result.items;$('#project').innerHTML=projects.map(p=>`<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)}（${escapeHtml(p.code)}）</option>`).join('');if(projects.length)await load();else $('#rows').innerHTML='<tr><td colspan="10" class="empty">暂无已启用项目，请先在主系统创建项目。</td></tr>'}catch(error){toast(error.message,true)}}
-    async function loadSummary(){if(!projectCode())return;const r=await call('summarize_issues',{projectCode:projectCode()});const topWorkflow=r.workflowStatuses[0],open=r.resolution.find(x=>x.name==='否');const cards=[['问题总数',r.total],['有 Q 单号',r.withTicket],['最多变动状态',topWorkflow?`${topWorkflow.name} · ${topWorkflow.count}`:'暂无'],['未解决',open?.count||0]];$('#summary').innerHTML=cards.map(([label,value])=>`<article class="card"><span class="muted">${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></article>`).join('');const selected=$('#status').value;$('#status').innerHTML='<option value="">全部状态</option>'+r.statuses.filter(x=>x.name!=='未标记').map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)}（${x.count}）</option>`).join('');$('#status').value=selected;const wfSelected=$('#workflow').value;$('#workflow').innerHTML='<option value="">全部</option><option value="-">未标记</option>'+r.workflowStatuses.filter(x=>x.name!=='未标记').map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)}（${x.count}）</option>`).join('');$('#workflow').value=wfSelected}
-    async function load(){if(!projectCode())return;try{const result=await call('list_issues',{projectCode:projectCode(),keyword:$('#keyword').value.trim(),status:$('#status').value,workflowStatus:$('#workflow').value,page,pageSize:30});items=result.items;total=result.total;$('#rows').innerHTML=items.length?items.map((x,i)=>{const changed=localTime(x.workflowStatusChangedAtUtc);return `<tr><td title="${escapeHtml(x.ticketNumber)}">${escapeHtml(x.ticketNumber||'—')}</td><td><span class="pill">${escapeHtml(x.testStatus||'未标记')}</span></td><td><span class="pill ${workflowClass(x.workflowStatus)}" title="${escapeHtml(changed?`变动时间 ${changed}`:'尚未变动')}">${escapeHtml(x.workflowStatus||'未标记')}</span></td><td>${escapeHtml(x.resolved||'—')}</td><td>${escapeHtml(x.category||'—')}</td><td title="${escapeHtml(x.caseName)}">${escapeHtml(x.caseName||'—')}</td><td title="${escapeHtml(x.programName)}">${escapeHtml(x.programName||'—')}</td><td>${escapeHtml(x.handler||'—')}</td><td>${x.sourceUrl?'在线文档':x.sourceSheet?'导入':'手工'}</td><td><button data-action="detail" data-index="${i}">详情</button><button data-action="edit" data-index="${i}">编辑</button><button data-action="delete" data-index="${i}" class="danger">删除</button></td></tr>`}).join(''):'<tr><td colspan="10" class="empty">没有符合条件的问题单</td></tr>';$('#count').textContent=`共 ${total} 条`;$('#pageText').textContent=`第 ${page} / ${Math.max(1,Math.ceil(total/30))} 页`;$('#prev').disabled=page<=1;$('#next').disabled=page*30>=total;await loadSummary()}catch(error){toast(error.message,true)}}
-    const fields=[['ticketNumber','Q 单编号'],['testStatus','测试状态'],['workflowStatus','变动状态（如 处理完成）'],['resolved','是否解决'],['category','类别'],['caseName','个案书名'],['programName','程序名称'],['handler','问题处理人'],['owner','负责顾问'],['developer','开发人员'],['description','问题描述 / 开发说明',true],['solutionNote','解决描述',true],['developmentNote','开发备注',true],['remark','备注',true],['sourceUrl','来源文档链接']];
-    function edit(issue=null){current=issue;$('#editorTitle').textContent=issue?'编辑问题':'新建问题';$('#editorFields').innerHTML=fields.map(([key,label,multiline])=>`<div class="field ${multiline?'span2':''}"><label>${label}</label>${multiline?`<textarea data-field="${key}">${escapeHtml(issue?.[key]||'')}</textarea>`:`<input data-field="${key}" value="${escapeHtml(issue?.[key]||'')}" />`}</div>`).join('');open('editorOverlay')}
+    async function loadProjects(){try{const result=await call('list_projects');projects=result.items;$('#project').innerHTML=projects.map(p=>`<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)}（${escapeHtml(p.code)}）</option>`).join('');if(projects.length)await load();else $('#rows').innerHTML='<tr><td colspan="13" class="empty">暂无已启用项目，请先在主系统创建项目。</td></tr>'}catch(error){toast(error.message,true)}}
+    async function loadSummary(){if(!projectCode())return;const r=await call('summarize_issues',{projectCode:projectCode()});const topWorkflow=r.workflowStatuses[0],open=r.resolution.find(x=>x.name==='否');const cards=[['blue','问题总数',r.total],['green','有 Q 单号',r.withTicket],['amber','最多变动状态',topWorkflow?`${topWorkflow.name} · ${topWorkflow.count}`:'暂无'],['red','未解决',open?.count||0]];$('#summary').innerHTML=cards.map(([tone,label,value])=>`<article class="card ${tone}"><span class="muted">${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></article>`).join('');const selected=$('#status').value;$('#status').innerHTML='<option value="">全部状态</option>'+r.statuses.filter(x=>x.name!=='未标记').map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)}（${x.count}）</option>`).join('');$('#status').value=selected;const wfSelected=$('#workflow').value;$('#workflow').innerHTML='<option value="">全部</option><option value="-">未标记</option>'+r.workflowStatuses.filter(x=>x.name!=='未标记').map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)}（${x.count}）</option>`).join('');$('#workflow').value=wfSelected}
+    function statusOptions(field,current){const base=field==='workflowStatus'?WORKFLOW_OPTIONS:field==='resolved'?RESOLVED_OPTIONS:[];const values=[...base];if(current&&!values.some(v=>v===current))values.unshift(current);return values}
+    async function inlineSave(index,field,value){const issue={...items[index],[field]:value};try{await call('save_issue',{projectCode:projectCode(),issue});if(field==='workflowStatus'&&value)toast(`${issue.ticketNumber||'问题单'} 变动状态：${value}（变动时间已记录）`);await load()}catch(error){toast(error.message,true);await load()}}
+    function startInlineEdit(cell){const field=cell.dataset.edit,type=cell.dataset.type||'select';const index=+cell.dataset.index;const issue=items[index];const current=issue[field]||'';let editor;let done=false;
+      const commit=()=>{if(done)return;done=true;const v=editor.value.trim();if(v!==(issue[field]||''))inlineSave(index,field,v);else load()};
+      const cancel=()=>{if(done)return;done=true;load()};
+      if(type==='date'){editor=document.createElement('input');editor.type='date';editor.className='cell-editor'}
+      else if(type==='list'){editor=document.createElement('input');editor.className='cell-editor';editor.setAttribute('list','testStatusOptions');editor.placeholder='输入或选择'}
+      else{editor=document.createElement('select');editor.className='cell-editor';if(type==='select'){editor.append(new Option(field==='workflowStatus'?'未标记':'—',''));statusOptions(field,current).forEach(o=>editor.append(new Option(o,o)))}}
+      editor.value=current;cell.textContent='';cell.append(editor);editor.focus();
+      editor.addEventListener('change',()=>{if(type==='list')return;commit()});
+      editor.addEventListener('keydown',e=>{if(e.key==='Enter')commit();if(e.key==='Escape')cancel()});
+      editor.addEventListener('blur',()=>{if(type==='list'&&!done)cancel();else if(type!=='list'&&!done)setTimeout(()=>{if(!done)cancel()},120)})}
+    async function load(){if(!projectCode())return;try{const result=await call('list_issues',{projectCode:projectCode(),keyword:$('#keyword').value.trim(),status:$('#status').value,workflowStatus:$('#workflow').value,page,pageSize});items=result.items;total=result.total;const i0=(page-1)*pageSize;
+      const cell=(content,title='')=>`<td${title?` title="${escapeHtml(title)}"`:''}>${content}</td>`;
+      $('#rows').innerHTML=items.length?items.map((x,i)=>{const changed=localTime(x.workflowStatusChangedAtUtc);
+        const pill=(field,value,cls)=>`<span class="pill ${cls} editable" data-edit="${field}" data-index="${i0+i}" title="点击修改">${escapeHtml(value||'未标记')}</span>`;
+        const dateCell=field=>`<span class="edit-cell" data-edit="${field}" data-type="date" data-index="${i0+i}" title="点击修改">${escapeHtml(x[field]||'—')}</span>`;
+        return `<tr>`+
+          cell(`<b>${escapeHtml(x.ticketNumber||'—')}</b>`,x.ticketNumber)+
+          cell(pill('testStatus',x.testStatus,''))+
+          cell(pill('workflowStatus',x.workflowStatus,workflowClass(x.workflowStatus)),changed?`变动时间 ${changed}`:'点击标记变动状态')+
+          cell(pill('resolved',x.resolved,x.resolved==='是'?'done':x.resolved==='否'?'none':''))+
+          cell(escapeHtml(x.category||'—'),x.category)+
+          cell(escapeHtml(x.caseName||'—'),x.caseName)+
+          cell(escapeHtml(x.programName||'—'),x.programName)+
+          cell(escapeHtml(x.owner||'—'),x.owner)+
+          cell(escapeHtml(x.developer||'—'),x.developer)+
+          cell(dateCell('raisedDate'))+cell(dateCell('completedDate'))+
+          cell(x.sourceUrl?'在线文档':x.sourceSheet?'导入':'手工')+
+          cell(`<button data-action="detail" data-index="${i}">详情</button><button data-action="edit" data-index="${i}">编辑</button><button data-action="delete" data-index="${i}" class="danger">删除</button>`)
+        +`</tr>`}).join(''):'<tr><td colspan="13" class="empty">没有符合条件的问题单</td></tr>';
+      $('#count').textContent=`共 ${total} 条`;renderPager();await loadSummary()}catch(error){toast(error.message,true)}}
+    function renderPager(){const totalPages=Math.max(1,Math.ceil(total/pageSize));if(page>totalPages){page=totalPages}
+      $('#prev').disabled=page<=1;$('#next').disabled=page>=totalPages;
+      const marks=[];const push=v=>marks.push(v);
+      if(totalPages<=7){for(let p=1;p<=totalPages;p++)push(p)}
+      else{push(1);if(page>3)push('…l');for(let p=Math.max(2,page-1);p<=Math.min(totalPages-1,page+1);p++)push(p);if(page<totalPages-2)push('…r');push(totalPages)}
+      $('#pages').innerHTML=marks.map(m=>m==='…l'||m==='…r'?'<span class="pgdots">•••</span>':`<button class="pgbtn${m===page?' current':''}" data-page="${m}">${m}</button>`).join('');
+      $('#pages').querySelectorAll('[data-page]').forEach(btn=>btn.onclick=()=>{page=+btn.dataset.page;load()})}
+    const fields=[
+      ['ticketNumber','Q 单编号'],['caseName','个案书名'],['programName','程序名称'],['category','类别'],
+      ['testStatus','测试状态','list:testStatusOptions'],
+      ['workflowStatus','变动状态','options:未处理,处理中,处理完成'],
+      ['resolved','是否解决','options:是,否'],
+      ['raisedDate','提单日','date'],['completedDate','完成日','date'],
+      ['owner','负责顾问'],['developer','开发人员'],['handler','问题处理人'],
+      ['description','问题描述 / 开发说明','area'],['solutionNote','解决描述','area'],['developmentNote','开发备注','area'],['remark','备注','area'],
+      ['sourceUrl','来源文档链接']];
+    function edit(issue=null){current=issue;$('#editorTitle').textContent=issue?'编辑问题':'新建问题';$('#editorFields').innerHTML=fields.map(([key,label,kind])=>{
+      const value=issue?.[key]||'';let input;
+      if(kind==='area')input=`<textarea data-field="${key}">${escapeHtml(value)}</textarea>`;
+      else if(kind==='date')input=`<input data-field="${key}" type="date" value="${escapeHtml(value)}" />`;
+      else if(kind?.startsWith('options:')){const opts=kind.slice(8).split(',');input=`<select data-field="${key}"><option value="未标记"></option>${opts.map(o=>`<option${o===value?' selected':''}>${o}</option>`).join('')}</select>`;return `<div class="field"><label>${label}</label>${input}</div>`}
+      else if(kind?.startsWith('list:')){input=`<input data-field="${key}" list="${kind.slice(5)}" value="${escapeHtml(value)}" />`}
+      else input=`<input data-field="${key}" value="${escapeHtml(value)}" />`;
+      return `<div class="field"><label>${label}</label>${input}</div>`}).join('');open('editorOverlay')}
     async function save(){const issue=current?{...current}:{};document.querySelectorAll('[data-field]').forEach(node=>issue[node.dataset.field]=node.value.trim());try{const result=await call('save_issue',{projectCode:projectCode(),issue});close('editorOverlay');toast(`已保存 ${result.ticketNumber||result.caseName||'问题单'}${result.workflowStatusChangedAtUtc?'（变动状态时间已记录）':''}`);await load()}catch(error){toast(error.message,true)}}
-    function detail(issue){const labels={ticketNumber:'Q 单编号',testStatus:'测试状态',resolved:'是否解决',category:'类别',caseName:'个案书名',programName:'程序名称',handler:'问题处理人',owner:'负责顾问',developer:'开发人员',description:'问题描述',solutionNote:'解决描述',developmentNote:'开发说明',remark:'备注',sourceFileName:'来源文件',sourceSheet:'来源工作表',sourceRow:'来源行号',updatedBy:'最后修改人',updatedAtUtc:'更新时间'};const rows=Object.entries(labels).map(([key,label])=>`<dt>${label}</dt><dd>${escapeHtml(issue[key]||'—')}</dd>`);rows.push(`<dt>变动状态</dt><dd>${escapeHtml(issue.workflowStatus||'未标记')}</dd>`);rows.push(`<dt>变动状态时间</dt><dd>${escapeHtml(localTime(issue.workflowStatusChangedAtUtc)||'—')}</dd>`);const history=(issue.workflowHistory||[]).map(step=>`<li>${escapeHtml(localTime(step.atUtc))} · ${escapeHtml(step.by||'—')}：${escapeHtml(step.from||'（空）')} → ${escapeHtml(step.to||'（空）')}</li>`).join('');if(history)rows.push('<dt>变动记录</dt><dd><ul class="history">'+history+'</ul></dd>');if(issue.sourceUrl?.startsWith('https://'))rows.push('<dt>来源链接</dt><dd><a href="'+escapeHtml(issue.sourceUrl)+'" target="_blank" rel="noopener noreferrer">打开原始文档</a></dd>');rows.push(...Object.entries(issue.extraFields||{}).map(([key,value])=>`<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`));$('#detail').innerHTML=rows.join('');open('detailOverlay')}
+    function detail(issue){const labels={ticketNumber:'Q 单编号',testStatus:'测试状态',resolved:'是否解决',category:'类别',caseName:'个案书名',programName:'程序名称',owner:'负责顾问',developer:'开发人员',handler:'问题处理人',description:'问题描述',solutionNote:'解决描述',developmentNote:'开发说明',remark:'备注',raisedDate:'提单日',completedDate:'完成日',sourceFileName:'来源文件',sourceSheet:'来源工作表',sourceRow:'来源行号',updatedBy:'最后修改人',updatedAtUtc:'更新时间'};const rows=Object.entries(labels).map(([key,label])=>`<dt>${label}</dt><dd>${escapeHtml(issue[key]||'—')}</dd>`);rows.push(`<dt>变动状态</dt><dd>${escapeHtml(issue.workflowStatus||'未标记')}</dd>`);rows.push(`<dt>变动状态时间</dt><dd>${escapeHtml(localTime(issue.workflowStatusChangedAtUtc)||'—')}</dd>`);const history=(issue.workflowHistory||[]).map(step=>`<li>${escapeHtml(localTime(step.atUtc))} · ${escapeHtml(step.by||'—')}：${escapeHtml(step.from||'（空）')} → ${escapeHtml(step.to||'（空）')}</li>`).join('');if(history)rows.push('<dt>变动记录</dt><dd><ul class="history">'+history+'</ul></dd>');if(issue.sourceUrl?.startsWith('https://'))rows.push('<dt>来源链接</dt><dd><a href="'+escapeHtml(issue.sourceUrl)+'" target="_blank" rel="noopener noreferrer">打开原始文档</a></dd>');rows.push(...Object.entries(issue.extraFields||{}).map(([key,value])=>`<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`));$('#detail').innerHTML=rows.join('');open('detailOverlay')}
     async function importData(){const file=$('#importFile').files[0],text=$('#importText').value.trim(),sourceUrl=$('#sourceUrl').value.trim();if(!file&&!text){toast('请选择文件或粘贴表格内容',true);return}if(file&&file.size>5*1024*1024){toast('文件不能超过 5 MB',true);return}try{const args={projectCode:projectCode(),sourceUrl};if(file){args.fileName=file.name;args.base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file)})}else{args.fileName='在线文档粘贴.tsv';args.text=text}$('#importSubmit').disabled=true;const result=await call('import_issues',args);close('importOverlay');toast(`解析 ${result.parsed} 条，新增 ${result.created} 条，更新 ${result.updated} 条，跳过 ${result.skipped} 行`);page=1;await load()}catch(error){toast(error.message,true)}finally{$('#importSubmit').disabled=false}}
-    async function buildReport(){const args={date:$('#reportDate').value};const allProjects=$('#reportAll').checked;if(!allProjects)args.projectCode=projectCode();const r=await call('daily_report',args);const statusLine=r.byStatus.map(x=>`${x.name} ${x.count} 条`).join('，');const projectLine=r.byProject.length>1?r.byProject.map(x=>`${x.name} ${x.count} 条`).join('，'):'';$('#reportSummary').textContent=`${r.date} · ${r.scope} 共 ${r.total} 条变动${statusLine?'（'+statusLine+'）':''}`;const lines=[`【${r.date}】${r.scope}问题单变动日报（${r.total} 条）`];if(projectLine)lines.push(`项目分布：${projectLine}`);if(r.total===0)lines.push('当天无变动状态变化的问题单。');r.items.forEach((x,i)=>{const title=allProjects?`[${x.projectName}] `:'';lines.push(`${i+1}. ${title}${x.ticketNumber||'（无单号）'}｜${x.caseName||x.programName||''}`);lines.push(`   变动：${x.workflowStatus||'（空）'}（${x.changedAtLocal}，${x.updatedBy||'—'}）`);if(x.solutionNote)lines.push(`   解决：${x.solutionNote}`);if(x.description)lines.push(`   问题：${x.description}`)});$('#reportText').value=lines.join('\n')}
+    async function buildReport(){const args={date:$('#reportDate').value};const allProjects=$('#reportAll').checked;if(!allProjects)args.projectCode=projectCode();const r=await call('daily_report',args);const statusLine=r.byStatus.map(x=>`${x.name} ${x.count} 条`).join('，');const projectLine=r.byProject.length>1?r.byProject.map(x=>`${x.name} ${x.count} 条`).join('，'):'';$('#reportSummary').textContent=`${r.date} · ${r.scope} 共 ${r.total} 条变动${statusLine?'（'+statusLine+'）':''}`;const lines=[`【${r.date}】${r.scope}问题单变动日报（${r.total} 条）`];if(projectLine)lines.push(`项目分布：${projectLine}`);if(r.total===0)lines.push('当天无变动状态变化的问题单。');r.items.forEach((x,i)=>{const title=allProjects?`[${x.projectName}] `:'';lines.push(`${i+1}. ${title}${x.ticketNumber||'（无单号）'}｜${x.caseName||x.programName||''}`);lines.push(`   变动状态：${x.workflowStatus||'（空）'}（${x.changedAtLocal}）`);if(x.solutionNote)lines.push(`   解决描述：${x.solutionNote}`)});$('#reportText').value=lines.join('\n')}
     async function openReport(){$('#reportDate').value=new Date().toLocaleDateString('sv-SE');try{await buildReport();open('reportOverlay')}catch(error){toast(error.message,true)}}
-    $('#project').addEventListener('change',()=>{page=1;load()});$('#searchButton').onclick=()=>{page=1;load()};$('#keyword').addEventListener('keydown',e=>{if(e.key==='Enter'){page=1;load()}});$('#status').onchange=()=>{page=1;load()};$('#workflow').onchange=()=>{page=1;load()};$('#prev').onclick=()=>{page--;load()};$('#next').onclick=()=>{page++;load()};$('#newButton').onclick=()=>edit();$('#saveButton').onclick=save;$('#importButton').onclick=()=>open('importOverlay');$('#importSubmit').onclick=importData;$('#reportButton').onclick=openReport;$('#reportRefresh').onclick=()=>buildReport().catch(error=>toast(error.message,true));$('#reportCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#reportText').value);toast('日报内容已复制')}catch{ $('#reportText').select();document.execCommand('copy');toast('日报内容已复制')}};document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>close(button.dataset.close));$('#rows').addEventListener('click',async event=>{const button=event.target.closest('[data-action]');if(!button)return;const issue=items[Number(button.dataset.index)];if(button.dataset.action==='detail')detail(issue);if(button.dataset.action==='edit')edit(issue);if(button.dataset.action==='delete'&&confirm(`确定删除 ${issue.ticketNumber||issue.caseName||'此问题单'}？`)){try{await call('delete_issue',{projectCode:projectCode(),id:issue.id});toast('已删除');await load()}catch(error){toast(error.message,true)}}});loadProjects();
+    $('#project').addEventListener('change',()=>{page=1;load()});$('#searchButton').onclick=()=>{page=1;load()};$('#keyword').addEventListener('keydown',e=>{if(e.key==='Enter'){page=1;load()}});
+    $('#status').onchange=()=>{page=1;load()};$('#workflow').onchange=()=>{page=1;load()};
+    $('#pageSize').onchange=()=>{pageSize=+$('#pageSize').value;page=1;load()};
+    $('#prev').onclick=()=>{if(page>1){page--;load()}};$('#next').onclick=()=>{if(page<Math.max(1,Math.ceil(total/pageSize))){page++;load()}};
+    $('#jump').addEventListener('keydown',e=>{if(e.key!=='Enter')return;const target=+$('#jump').value;if(target>=1&&target<=Math.max(1,Math.ceil(total/pageSize))){page=target;load()}else toast(`请输入 1 - ${Math.max(1,Math.ceil(total/pageSize))} 之间的页码`,true)});
+    $('#rows').addEventListener('click',event=>{const editable=event.target.closest('[data-edit]');if(editable){startInlineEdit(editable);return}
+      const button=event.target.closest('[data-action]');if(!button)return;const issue=items[Number(button.dataset.index)];if(button.dataset.action==='detail')detail(issue);if(button.dataset.action==='edit')edit(issue);
+      if(button.dataset.action==='delete'&&confirm(`确定删除 ${issue.ticketNumber||issue.caseName||'此问题单'}？`)){call('delete_issue',{projectCode:projectCode(),id:issue.id}).then(()=>{toast('已删除');load()}).catch(error=>toast(error.message,true))}});
+    $('#newButton').onclick=()=>edit();$('#saveButton').onclick=save;$('#importButton').onclick=()=>open('importOverlay');$('#importSubmit').onclick=importData;$('#reportButton').onclick=openReport;$('#reportRefresh').onclick=()=>buildReport().catch(error=>toast(error.message,true));
+    $('#reportCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#reportText').value);toast('日报内容已复制')}catch{$('#reportText').select();document.execCommand('copy');toast('日报内容已复制')}};
+    document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>close(button.dataset.close));loadProjects();
   </script>
 </body>
 </html>

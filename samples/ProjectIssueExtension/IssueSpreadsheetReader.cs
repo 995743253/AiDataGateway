@@ -26,7 +26,9 @@ public static class IssueSpreadsheetReader
         ["Developer"] = ["开发人员", "开发人", "Developer"],
         ["Remark"] = ["备注", "备注说明", "Remark"],
         ["SolutionNote"] = ["解决描述", "解决说明", "解决方案", "SolutionNote"],
-        ["WorkflowStatus"] = ["变动状态", "日报状态", "WorkflowStatus"]
+        ["WorkflowStatus"] = ["变动状态", "日报状态", "WorkflowStatus"],
+        ["RaisedDate"] = ["提单日期", "提单日", "提出日期", "RaisedDate"],
+        ["CompletedDate"] = ["完成日期", "完成日", "解决日期", "完工日期", "CompletedDate"]
     };
 
     public static List<(string Sheet, int Row, Dictionary<string, string> Cells)> ReadXlsx(byte[] bytes)
@@ -110,6 +112,7 @@ public static class IssueSpreadsheetReader
             TestStatus = Pick("TestStatus"), Resolved = Pick("Resolved"), Category = Pick("Category"), Handler = Pick("Handler"),
             DevelopmentNote = Pick("DevelopmentNote"), Owner = Pick("Owner"), Developer = Pick("Developer"), Remark = Pick("Remark"),
             SolutionNote = Pick("SolutionNote"), WorkflowStatus = Pick("WorkflowStatus"),
+            RaisedDate = Pick("RaisedDate"), CompletedDate = Pick("CompletedDate"),
             SourceUrl = sourceUrl, SourceFileName = fileName, SourceSheet = sheet, SourceRow = row,
             ExtraFields = cells.Where(item => !known.Contains(item.Key) && !string.IsNullOrWhiteSpace(item.Value))
                 .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase),

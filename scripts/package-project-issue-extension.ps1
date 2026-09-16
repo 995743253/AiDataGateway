@@ -1,7 +1,7 @@
 param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
-    [string]$OutputPath = "artifacts/extensions/project-issue-tracker-1.1.0.zip"
+    [string]$OutputPath = "artifacts/extensions/project-issue-tracker-1.2.0.zip"
 )
 
 $ErrorActionPreference = "Stop"

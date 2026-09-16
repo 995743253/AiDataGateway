@@ -30,11 +30,13 @@ public sealed class ProjectIssueExtensionTests
     [Fact]
     public void ParsesWorkflowAndSolutionColumnsWhenPresent()
     {
-        const string text = "Q单编号\t测试状态\t变动状态\t解决描述\t个案书名\nQTB100\t已修复\t处理完成\t已修复并回归通过\t工单新增";
+        const string text = "Q单编号\t测试状态\t变动状态\t解决描述\t提单日期\t完成日期\t个案书名\nQTB100\t已修复\t处理完成\t已修复并回归通过\t2026/9/1\t2026-09-12\t工单新增";
         var rows = IssueSpreadsheetReader.ReadText(text, "导入.tsv");
         var issue = IssueSpreadsheetReader.ToIssue("mes", rows[0].Cells, "导入.tsv", rows[0].Sheet, rows[0].Row, "", "tester", DateTimeOffset.UtcNow);
         Assert.Equal("处理完成", issue.WorkflowStatus);
         Assert.Equal("已修复并回归通过", issue.SolutionNote);
+        Assert.Equal("2026/9/1", issue.RaisedDate);
+        Assert.Equal("2026-09-12", issue.CompletedDate);
     }
 
     [Fact]

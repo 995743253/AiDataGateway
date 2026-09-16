@@ -55,7 +55,7 @@ public sealed class ProjectIssueModule : IGatewayExtension
     });
 
     public GatewayExtensionDefinition Definition { get; } = new(
-        "project-issue-tracker", "项目问题单", "1.1.0",
+        "project-issue-tracker", "项目问题单", "1.2.0",
         "按网关项目管理问题与 Q 单号；支持 Excel/CSV、在线表格复制粘贴和人工维护；AI 可按单号维护单据、变动变动状态并生成当天变动日报。",
         "项目问题单", "wwwroot/index.html",
         [
@@ -166,7 +166,7 @@ public sealed class ProjectIssueModule : IGatewayExtension
             item.Id, item.TicketNumber, item.CaseName, item.ProgramName, item.Category,
             item.TestStatus, item.Resolved, workflowStatus = item.WorkflowStatus,
             changedAtLocal = item.WorkflowStatusChangedAtUtc!.Value.ToOffset(offset).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
-            item.SolutionNote, item.Description, item.Handler, item.Developer, item.UpdatedBy
+            item.SolutionNote, item.Description, item.RaisedDate, item.CompletedDate
         }).ToArray();
         return JsonSerializer.SerializeToElement(new
         {
@@ -466,6 +466,8 @@ public sealed class Issue
     public string WorkflowStatus { get; set; } = "";
     public DateTimeOffset? WorkflowStatusChangedAtUtc { get; set; }
     public List<WorkflowTransition> WorkflowHistory { get; set; } = [];
+    public string RaisedDate { get; set; } = "";
+    public string CompletedDate { get; set; } = "";
     public string SourceUrl { get; set; } = "";
     public string SourceFileName { get; set; } = "";
     public string SourceSheet { get; set; } = "";
