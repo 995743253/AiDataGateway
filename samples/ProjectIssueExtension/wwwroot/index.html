@@ -114,20 +114,21 @@
     .pop button{padding:4px 10px;font-size:12px;border-radius:6px}
     .cols-pop{min-width:190px}
     .cols-pop label.opt{justify-content:space-between}
+    .collapsed{display:none!important}
+    .top-actions{display:flex;align-items:center;gap:8px}
     @media(max-width:700px){body{padding:12px;overflow:auto}.top{align-items:flex-start;flex-direction:column}.form-grid{grid-template-columns:1fr}.span2{grid-column:span 1}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.table-card{overflow:visible}}
   </style>
 </head>
 <body>
-  <header class="top"><div><h1>项目问题单</h1><div class="muted">集中管理 Q 单、个案、测试状态、变动状态与来源文档；日报归纳当天变动</div></div><div><button id="reportButton">当天日报</button> <button id="importButton">导入表格</button> <button id="newButton" class="primary">＋ 新建问题</button></div></header>
-  <section class="card filters">
+  <header class="top"><div><h1>项目问题单</h1><div class="muted">集中管理 Q 单、个案、测试状态、变动状态与来源文档；日报归纳当天变动</div></div><div class="top-actions"><button id="toggleSummary" title="显示/隐藏统计卡片">统计</button><button id="toggleFilters" title="显示/隐藏筛选条件">筛选</button><button id="reportButton">当天日报</button><button id="importButton">导入表格</button><button id="newButton" class="primary">＋ 新建问题</button></div></header>
+  <section id="filtersCard" class="card filters">
     <div class="field"><label>项目</label><select id="project" style="min-width:200px"></select></div>
     <div class="field grow"><label>搜索单号、个案、程序、说明或解决描述</label><input id="keyword" placeholder="输入关键词后按回车" /></div>
     <div class="field"><label>测试状态</label><select id="status"><option value="">全部状态</option></select></div>
     <div class="field"><label>变动状态</label><select id="workflow"><option value="">全部</option><option value="-">未标记</option></select></div>
     <button id="searchButton" class="primary">查询</button>
   </section>
-  <section id="summary" class="summary"></section>
-  <section class="card table-card"><div class="table-toolbar"><div class="toolbar-hints"><span class="muted">问题列表</span><span id="toolbarHints" class="muted"></span></div><button id="columnsButton" title="勾选要在列表中显示的列">⚙ 显示列</button></div><div class="table-wrap"><table class="table" id="grid"><colgroup id="cols"></colgroup><thead><tr id="headRow"></tr></thead><tbody id="rows"></tbody></table></div>
+  <section id="summary" class="summary"></section>  <section class="card table-card"><div class="table-toolbar"><div class="toolbar-hints"><span class="muted">问题列表</span><span id="toolbarHints" class="muted"></span></div><button id="columnsButton" title="勾选要在列表中显示的列">⚙ 显示列</button></div><div class="table-wrap"><table class="table" id="grid"><colgroup id="cols"></colgroup><thead><tr id="headRow"></tr></thead><tbody id="rows"></tbody></table></div>
   <div class="pager">
     <span id="count" class="muted"></span>
     <select id="pageSize" class="pgsizes" title="每页条数"><option value="15">15条/页</option><option value="30" selected>30条/页</option><option value="50">50条/页</option><option value="100">100条/页</option></select>
@@ -158,12 +159,17 @@
       {key:'source',label:'来源',width:76},
       {key:'actions',label:'操作',width:172,locked:true}
     ];
-    const STORE_KEY='project_issue_columns_v1';
-    let columnState={};
+    const STORE_KEY='project_issue_columns_v1';const LAYOUT_KEY='project_issue_layout_v1';
+    let columnState={};let layoutState={filtersHidden:false,summaryHidden:false};
     try{columnState=JSON.parse(localStorage.getItem(STORE_KEY)||'{}')}catch{columnState={}}
+    try{Object.assign(layoutState,JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}'))}catch{}
     const columnVisible=key=>key==='actions'||columnState[key]?.visible!==false;
     const columnWidth=key=>columnState[key]?.width||COLUMNS.find(c=>c.key===key)?.width||110;
     function saveColumnState(){const slim={};COLUMNS.forEach(c=>{if(columnState[c.key])slim[c.key]=columnState[c.key]});try{localStorage.setItem(STORE_KEY,JSON.stringify(slim))}catch{}}
+    function applyLayout(){$('#filtersCard').classList.toggle('collapsed',!!layoutState.filtersHidden);$('#summary').classList.toggle('collapsed',!!layoutState.summaryHidden);$('#toggleFilters').textContent=layoutState.filtersHidden?'展开筛选':'收起筛选';$('#toggleSummary').textContent=layoutState.summaryHidden?'展开统计':'收起统计'}
+    function saveLayout(){try{localStorage.setItem(LAYOUT_KEY,JSON.stringify(layoutState))}catch{}}
+    $('#toggleFilters').onclick=()=>{layoutState.filtersHidden=!layoutState.filtersHidden;saveLayout();applyLayout()};
+    $('#toggleSummary').onclick=()=>{layoutState.summaryHidden=!layoutState.summaryHidden;saveLayout();applyLayout()};
     const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     async function call(name,args={}){const response=await fetch(root+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(args)});let body={};try{body=await response.json()}catch{}if(!response.ok)throw Error(body.message||body.detail||`调用失败（${response.status}）`);return body}
     const projectCode=()=>$('#project').value;
@@ -296,7 +302,7 @@
       if(button.dataset.action==='delete'&&confirm(`确定删除 ${issue.ticketNumber||issue.caseName||'此问题单'}？`)){call('delete_issue',{projectCode:projectCode(),id:issue.id}).then(()=>{toast('已删除');load()}).catch(error=>toast(error.message,true))}});
     $('#newButton').onclick=()=>edit();$('#saveButton').onclick=save;$('#importButton').onclick=()=>open('importOverlay');$('#importSubmit').onclick=importData;$('#reportButton').onclick=openReport;$('#reportRefresh').onclick=()=>buildReport().catch(error=>toast(error.message,true));
     $('#reportCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#reportText').value);toast('日报内容已复制')}catch{$('#reportText').select();document.execCommand('copy');toast('日报内容已复制')}};
-    document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>close(button.dataset.close));loadProjects();
+    document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>close(button.dataset.close));applyLayout();loadProjects();
   </script>
 </body>
 </html>
