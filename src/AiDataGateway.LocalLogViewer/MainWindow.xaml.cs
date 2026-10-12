@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -25,6 +25,7 @@ namespace AiDataGateway.LocalLogViewer
 
             SourceInitialized += (_, _) =>
             {
+                CustomWindowChrome.EnsureFitsWorkingArea(this);
                 var handle = CustomWindowChrome.HookMinMaxInfo(this);
                 CustomWindowChrome.ApplyVisuals(handle);
             };
@@ -34,6 +35,42 @@ namespace AiDataGateway.LocalLogViewer
         private void UpdateMaximizeGlyph()
         {
             if (MaximizeButton != null) MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        }
+
+        private bool _logListFullScreen;
+        private GridLength _filterHeight, _filterSplitterHeight;
+        private double _filterMin;
+
+        private void ToggleLogListFullScreen_Click(object sender, RoutedEventArgs e) => SetLogListFullScreen(!_logListFullScreen);
+
+        // 全屏仅收起查询控件组：侧边栏、标题栏、状态栏保持可见，确保任何子页面都有返回入口。
+        private void SetLogListFullScreen(bool full)
+        {
+            if (full)
+            {
+                _filterHeight = FilterRow.Height; _filterMin = FilterRow.MinHeight; _filterSplitterHeight = FilterSplitterRow.Height;
+                FilterRow.Height = new GridLength(0); FilterRow.MinHeight = 0;
+                FilterSplitterRow.Height = new GridLength(0);
+            }
+            else
+            {
+                FilterRow.Height = _filterHeight; FilterRow.MinHeight = _filterMin;
+                FilterSplitterRow.Height = _filterSplitterHeight;
+            }
+            _logListFullScreen = full;
+            FullScreenToggle.Content = full ? "退出全屏" : "全屏";
+        }
+
+        private void OnWindowKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (_logListFullScreen && e.Key == System.Windows.Input.Key.Escape) SetLogListFullScreen(false);
+        }
+
+        private void LogEntriesGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var command = _viewModel?.OpenLogDetailCommand;
+            if (command == null || LogEntriesGrid.CurrentItem == null || !command.CanExecute(LogEntriesGrid.CurrentItem)) return;
+            command.Execute(LogEntriesGrid.CurrentItem);
         }
 
         private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -154,6 +191,14 @@ namespace AiDataGateway.LocalLogViewer
 
         internal bool VerifyWorkspaceDetachRoundTrip()
         {
+            // Regression: 应用日志 navigation must restore the workspace page from a
+            // configuration page even though the selected workspace tab never changed.
+            // (Run before the detach round-trip; verified independently of it.)
+            _viewModel.NavigateLogConfigurationCommand.Execute(null);
+            if (_viewModel.CurrentPage != "log-configuration") throw new InvalidOperationException("配置页导航失败。");
+            _viewModel.NavigateLogsCommand.Execute(null);
+            if (_viewModel.CurrentPage != "logs") throw new InvalidOperationException("应用日志导航恢复失败。");
+
             var first = new LogEntry { Timestamp = DateTime.Now.AddSeconds(-1), Level = "Info", Message = "第一条日志详情", RawText = "第一条日志详情" };
             var second = new LogEntry { Timestamp = DateTime.Now, Level = "Info", Message = "第二条日志详情", RawText = "第二条日志详情" };
             _viewModel.OpenLogDetailCommand.Execute(first);
@@ -168,7 +213,25 @@ namespace AiDataGateway.LocalLogViewer
             var frame = new DispatcherFrame();
             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => frame.Continue = false));
             Dispatcher.PushFrame(frame);
-            return _viewModel.WorkspaceTabs.Contains(tab) && _viewModel.SelectedWorkspaceTab == tab && ReferenceEquals(tab.Entry, second);
+            var roundTripOk = _viewModel.WorkspaceTabs.Contains(tab) && _viewModel.SelectedWorkspaceTab == tab && ReferenceEquals(tab.Entry, second);
+            if (!roundTripOk)
+            {
+                var actual = "key=" + _viewModel.SelectedWorkspaceTab?.Key + ", page=" + _viewModel.CurrentPage
+                    + ", tabs=" + string.Join(",", _viewModel.WorkspaceTabs.Select(item => item.Key))
+                    + " || trace: " + string.Join(" | ", ViewModels.MainViewModel.NavigationTrace);
+                if (!_viewModel.WorkspaceTabs.Contains(tab)) throw new InvalidOperationException("分离后工作区标签未回收。 " + actual);
+                if (_viewModel.SelectedWorkspaceTab != tab) throw new InvalidOperationException("分离回收后选中标签不正确。 " + actual);
+                throw new InvalidOperationException("分离回收标签内容不正确。 " + actual);
+            }
+
+            // Regression: 应用日志 navigation must restore the workspace page from a
+            // configuration page even though the selected workspace tab never changed.
+            _viewModel.NavigateLogConfigurationCommand.Execute(null);
+            if (_viewModel.CurrentPage != "log-configuration") throw new InvalidOperationException("配置页导航失败。");
+            _viewModel.NavigateLogsCommand.Execute(null);
+            if (_viewModel.CurrentPage != "logs") throw new InvalidOperationException("应用日志导航恢复失败。");
+            return true;
+            return true;
         }
 
         protected override void OnClosing(CancelEventArgs e)

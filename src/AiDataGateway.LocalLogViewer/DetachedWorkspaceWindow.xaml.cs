@@ -20,6 +20,7 @@ namespace AiDataGateway.LocalLogViewer
 
             SourceInitialized += (_, _) =>
             {
+                CustomWindowChrome.EnsureFitsWorkingArea(this);
                 var handle = CustomWindowChrome.HookMinMaxInfo(this);
                 CustomWindowChrome.ApplyVisuals(handle);
             };

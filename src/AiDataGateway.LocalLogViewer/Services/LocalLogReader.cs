@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -21,6 +21,9 @@ namespace AiDataGateway.LocalLogViewer.Services
         private static readonly Regex DateInPathRegex = new Regex(@"(?<!\d)(?:\d{4}-\d{2}-\d{2}(?:[-_ ]\d{2})?|\d{8}(?:\d{2})?)(?!\d)", RegexOptions.Compiled);
         private static readonly Regex TimestampStartRegex = new Regex(@"^\s*\[?\d{4}[-/]\d{2}[-/]\d{2}[ T]", RegexOptions.Compiled);
         private static readonly Regex CommonEnvelopeRegex = new Regex(@"\A(?<timestamp>\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\s*\|\s*(?<level>Trace|Debug|Info|Information|Warn|Warning|Error|Fatal)(?:\[(?<threadid>[^\]\r\n]*)\])?(?<body>[\s\S]*)\z", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        // sMES 服务日志默认格式（参考 MESLogTool V0.4）：时间|级别[线程ID][服务全名][版本] 内容（级别与方括号间可有可无管道）
+        private static readonly Regex BracketEnvelopeRegex = new Regex(@"^\s*(?<time>\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\s*\|\s*(?<level>[^|\r\n]*?)\s*\|?(?<brackets>(?:\[[^\[\]\r\n]+\])+)\s*(?<content>[\s\S]*)\z", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex MesBracketRegex = new Regex(@"\[([^\[\]]+)\]", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex BracketPrefixRegex = new Regex(@"^\s*(?:\[(?<value>[^\]\r\n]{1,300})\]\s*)+", RegexOptions.Compiled);
         private static readonly Regex StackFunctionRegex = new Regex(@"(?:\bat\s+|在\s*)(?<value>[A-Za-z_][A-Za-z0-9_`.+<>]*(?:::[A-Za-z_][A-Za-z0-9_`.+<>]*)?)\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly string[] KnownLevels = { "Trace", "Debug", "Info", "Information", "Warn", "Warning", "Error", "Fatal" };
@@ -233,21 +236,25 @@ namespace AiDataGateway.LocalLogViewer.Services
             var results = new List<LogEntry>();
             foreach (var record in records)
             {
-                IDictionary<string, object> fields = parser.Parse(record);
-                if (fields.Count == 0 || PollutedLevel(fields)) fields = ParseCommonEnvelope(record);
-                if (fields.Count == 0) fields["message"] = record;
-                foreach (var key in fields.Keys.ToArray())
+                IDictionary<string, object> fields = TryParseMesStyle(record);
+                if (fields == null)
                 {
-                    var original = fields[key];
-                    var normalized = _structuredValues.Normalize(original);
-                    if (string.Equals(key, "message", StringComparison.OrdinalIgnoreCase) && !(normalized is string))
+                    fields = parser.Parse(record);
+                    if (fields.Count == 0 || PollutedLevel(fields)) fields = ParseCommonEnvelope(record);
+                    if (fields.Count == 0) fields["message"] = record;
+                    foreach (var key in fields.Keys.ToArray())
                     {
-                        fields["_messageJson"] = normalized;
-                        fields[key] = original;
+                        var original = fields[key];
+                        var normalized = _structuredValues.Normalize(original);
+                        if (string.Equals(key, "message", StringComparison.OrdinalIgnoreCase) && !(normalized is string))
+                        {
+                            fields["_messageJson"] = normalized;
+                            fields[key] = original;
+                        }
+                        else fields[key] = normalized;
                     }
-                    else fields[key] = normalized;
+                    if (!fields.ContainsKey("level")) fields["level"] = InferLevel(file);
                 }
-                if (!fields.ContainsKey("level")) fields["level"] = InferLevel(file);
                 results.Add(FromFields(fields, record, file));
             }
             return results;
@@ -267,7 +274,7 @@ namespace AiDataGateway.LocalLogViewer.Services
             {
                 Id = EventId(file + "\n" + raw),
                 Timestamp = ParseTimestamp(StringValue(Get(fields, "timestamp", "longdate", "date", "time", "@t", "Timestamp"))),
-                Level = StringValue(Get(fields, "level", "Level", "@l")) ?? InferLevel(file) ?? "Info",
+                Level = CanonicalLevel(StringValue(Get(fields, "level", "Level", "@l"))) ?? InferLevel(file) ?? "Info",
                 Message = message,
                 Exception = StringValue(Get(fields, "exception", "Exception", "@x")),
                 FunctionName = functionName,
@@ -277,10 +284,86 @@ namespace AiDataGateway.LocalLogViewer.Services
             };
         }
 
+        /// <summary>默认解析 sMES 服务日志（与 MESLogTool V0.4 一致）：时间|级别|[线程ID][服务全名][版本] 内容。</summary>
+        /// <summary>默认解析 sMES 服务日志（与 MESLogTool V0.4 一致）：时间|级别[线程ID][服务全名][版本] 内容。
+        /// 服务全名含点时拆出服务类型/模块/服务名；正文以方括号开头时，取其中的具体调用位置为打印函数。</summary>
+        private static IDictionary<string, object> TryParseMesStyle(string record)
+        {
+            if (string.IsNullOrEmpty(record) || record.TrimStart().StartsWith("{")) return null;
+            var match = BracketEnvelopeRegex.Match(record);
+            if (!match.Success) return null;
+            var brackets = MesBracketRegex.Matches(match.Groups["brackets"].Value);
+            if (brackets.Count == 0) return null;
+            var fields = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            fields["timestamp"] = match.Groups["time"].Value;
+            fields["level"] = match.Groups["level"].Value;
+            fields["message"] = match.Groups["content"].Value.TrimStart();
+            var first = brackets[0].Groups[1].Value;
+            if (int.TryParse(first, out var threadId)) fields["threadid"] = threadId;
+            if (brackets.Count >= 2)
+            {
+                var fullName = brackets[1].Groups[1].Value;
+                fields["servicesfullname"] = fullName;
+                var parts = fullName.Split('.');
+                if (parts.Length >= 1) fields["servicestype"] = parts[0];
+                if (parts.Length >= 2) fields["moduletype"] = parts[1];
+                fields["servicename"] = parts.Length >= 3 ? parts[2] : fullName;
+                if (brackets.Count > 2) fields["version"] = brackets[2].Groups[1].Value;
+            }
+            // 打印函数：收集整行所有方括号段，排除线程 ID 段（首段纯数字）、服务全名段及其后的版本段
+            // （版本内容可能含字母，不能靠内容判断，只能按位置排除），取剩余最后一个含字母的段；
+            // 没有剩余段时回退为服务全名。
+            var envelopeValues = new List<string>();
+            foreach (Match bracket in brackets) envelopeValues.Add(bracket.Groups[1].Value);
+            var allValues = new List<string>();
+            foreach (Match bracket in MesBracketRegex.Matches(record)) allValues.Add(bracket.Groups[1].Value);
+            var skip = new HashSet<int>();
+            if (allValues.Count > 0 && allValues[0].All(char.IsDigit)) skip.Add(0);
+            if (allValues.Count > 1) skip.Add(1);
+            if (allValues.Count > 2) skip.Add(2);
+            string function = null;
+            for (var index = allValues.Count - 1; index >= 0; index--)
+            {
+                if (skip.Contains(index)) continue;
+                if (allValues[index].Any(char.IsLetter) && (allValues[index].Contains(".") || allValues[index].Contains("::") || allValues[index].Contains("(")))
+                { function = allValues[index]; break; }
+            }
+            if (string.IsNullOrWhiteSpace(function) && allValues.Count > 1) function = allValues[1];
+            if (!string.IsNullOrWhiteSpace(function)) fields["function"] = function;
+            fields["message"] = fields["message"].ToString().TrimEnd('|');
+            return fields;
+        }
+
+        private static void TestMesStyleDefaultParsing(string root)
+        {
+            var mesLogs = Path.Combine(root, "MesLogs");
+            Directory.CreateDirectory(mesLogs);
+            File.WriteAllText(Path.Combine(mesLogs, "APP_2026-09-20.log"),
+                "2026/09/20 11:30:00.123|Error|[4398][SMES_EAI.Methods.PlotCheckOutValidate][2.1.0] 缓存失效[TableMeta]-[123]\r\n" +
+                "2026/09/20 11:30:01.456|Info|[4399][SMES_EAI.Services.OrderService][2.1.0] order synced\r\n" +
+                "2026/09/20 15:24:12.5231|TRACE[353][ServicesCUS.Module_CUS.CUS_machine_working_info_get] [3.2.2.NEW.2021090201] The SqlServer temporary table is deleted successfully, the table name is TEMP_S_202609201524122335808|\r\n");
+            var result = new LocalLogReader().ReadAsync(new LogProfile
+            {
+                Name = "MES",
+                RootDirectory = mesLogs,
+                FilePattern = "*.log",
+                MaximumReadMegabytesPerFile = 10
+            }, new DateTime(2026, 9, 20), new DateTime(2026, 9, 21), "All", string.Empty, CancellationToken.None).GetAwaiter().GetResult();
+            if (result.Items.Count != 3) throw new InvalidOperationException("MES default parsing count mismatch: " + result.Items.Count);
+            var first = result.Items.Single(item => item.Level == "Error");
+            if (first.FunctionName != "SMES_EAI.Methods.PlotCheckOutValidate") throw new InvalidOperationException("MES 打印函数提取失败: " + first.FunctionName);
+            if (!first.Message.Contains("[TableMeta]")) throw new InvalidOperationException("MES 消息内容提取失败。");
+            if (!first.Properties.ContainsKey("threadid") || !first.Properties.ContainsKey("moduletype")) throw new InvalidOperationException("MES 线程/模块属性缺失。");
+            var legacy = result.Items.Single(item => item.Level == "Info");
+            if (legacy.FunctionName != "SMES_EAI.Services.OrderService") throw new InvalidOperationException("MES Info 行打印函数提取失败。");
+            var trace = result.Items.Single(item => item.Level == "Trace");
+            if (trace.FunctionName != "ServicesCUS.Module_CUS.CUS_machine_working_info_get") throw new InvalidOperationException("含字母版本段的 Trace 行打印函数提取失败: " + trace.FunctionName);
+            if (!trace.Message.Contains("The SqlServer temporary table") || trace.Message.EndsWith("|")) throw new InvalidOperationException("Trace 行消息内容提取不正确: " + trace.Message);
+        }
         private static string FindFunctionName(IDictionary<string, object> properties)
         {
             if (properties == null) return null;
-            var preferredNames = new[] { "callsite", "caller", "membername", "method", "function", "actionname", "sourcecontext", "logger", "loggername", "categoryname" };
+            var preferredNames = new[] { "callsite", "caller", "membername", "method", "function", "servicesfullname", "servicename", "actionname", "sourcecontext", "logger", "loggername", "categoryname" };
             foreach (var preferredName in preferredNames)
             {
                 var value = FindNamedValue(properties, preferredName, 0);
@@ -436,6 +519,11 @@ namespace AiDataGateway.LocalLogViewer.Services
         private static DateTime? ParseTimestamp(string value) { DateTime result; return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out result) ? result : (DateTime?)null; }
         private static bool LooksLikeJson(string value) { var text = (value ?? string.Empty).TrimStart(); return text.StartsWith("{") || text.StartsWith("["); }
         private static string InferLevel(string file) { var name = Path.GetFileName(file); return KnownLevels.FirstOrDefault(level => name.StartsWith(level, StringComparison.OrdinalIgnoreCase)); }
+        private static string CanonicalLevel(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            return KnownLevels.FirstOrDefault(level => string.Equals(level, value.Trim(), StringComparison.OrdinalIgnoreCase)) ?? value.Trim();
+        }
         private static bool PollutedLevel(IDictionary<string, object> fields) { var level = StringValue(Get(fields, "level")); return level != null && !KnownLevels.Any(item => string.Equals(item, level.Trim(), StringComparison.OrdinalIgnoreCase)); }
         private static bool EqualName(XElement element, string name) { return string.Equals(element.Name.LocalName, name, StringComparison.OrdinalIgnoreCase); }
         private static string Attribute(XElement element, string name) { var item = element.Attributes().FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, name.Contains(":") ? name.Substring(name.IndexOf(':') + 1) : name, StringComparison.OrdinalIgnoreCase)); return item == null ? null : item.Value; }

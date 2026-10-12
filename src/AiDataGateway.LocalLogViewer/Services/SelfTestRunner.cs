@@ -76,7 +76,7 @@ namespace AiDataGateway.LocalLogViewer.Services
             }, new DateTime(2026, 3, 6), new DateTime(2026, 3, 6), "全部", string.Empty, CancellationToken.None).GetAwaiter().GetResult();
             if (legacyResult.Items.Count != 2) throw new InvalidOperationException("现有日志格式解析数量不正确。");
             if (!legacyResult.Items.Any(item => item.FunctionName == "ServicesSTD.Module_WIP.warehouse_fail_eaiqueue_info_get")) throw new InvalidOperationException("消息前缀中的服务函数未被识别。");
-            if (!legacyResult.Items.Any(item => item.FunctionName == "warehouse_fail_eaiqueue_info_get.warehouse_fail_eaiqueue_info_get_utility.GetLight")) throw new InvalidOperationException("消息前缀中的具体打印函数未被识别。");
+            if (!legacyResult.Items.Any(item => item.FunctionName == "warehouse_fail_eaiqueue_info_get.warehouse_fail_eaiqueue_info_get_utility.GetLight")) throw new InvalidOperationException("消息前缀中的具体打印函数未被识别，实际: " + string.Join(" | ", legacyResult.Items.Select(i => i.FunctionName)));
             var recentResult = new LocalLogReader().ReadRecentAsync(new LogProfile
             {
                 Name = "最近日志",

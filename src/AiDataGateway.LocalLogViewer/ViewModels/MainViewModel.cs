@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
@@ -137,6 +137,7 @@ namespace AiDataGateway.LocalLogViewer.ViewModels
         public ObservableCollection<WorkspaceTabItem> WorkspaceTabs { get; }
         public ObservableCollection<string> Levels { get; }
         public ObservableCollection<string> FunctionNames { get; }
+        public static System.Collections.Generic.List<string> NavigationTrace { get; } = new System.Collections.Generic.List<string>();
         public ObservableCollection<RecentRangeOption> RecentRanges { get; }
         public ObservableCollection<ProviderOption> Providers { get; }
         public int PageSizeValue => PageSize;
@@ -227,6 +228,7 @@ namespace AiDataGateway.LocalLogViewer.ViewModels
             set
             {
                 if (!Set(ref _currentPage, value)) return;
+                NavigationTrace.Add("CurrentPage → " + value);
                 OnPropertyChanged(nameof(IsLogsPage));
                 OnPropertyChanged(nameof(IsLogsNavigationActive));
                 OnPropertyChanged(nameof(IsLogDetailPage));
@@ -248,6 +250,7 @@ namespace AiDataGateway.LocalLogViewer.ViewModels
             set
             {
                 if (!Set(ref _selectedWorkspaceTab, value) || value == null) return;
+                NavigationTrace.Add("SelectedWorkspaceTab → " + value.Key);
                 CurrentPage = value.PageKey;
                 if (value.Entry != null) SelectedLogEntry = value.Entry;
             }
@@ -372,9 +375,14 @@ namespace AiDataGateway.LocalLogViewer.ViewModels
 
         private void SelectWorkspaceTab(string key)
         {
+            NavigationTrace.Add("SelectWS → " + key);
             var tab = WorkspaceTabs.FirstOrDefault(item => item.Key == key);
-            if (tab != null) SelectedWorkspaceTab = tab;
-            else CurrentPage = key;
+            if (tab == null) { CurrentPage = key; return; }
+            // Re-selecting the already-selected tab must still restore its page:
+            // navigating to a configuration page only changes CurrentPage, so a
+            // reference-equality short circuit here would leave the user stranded.
+            if (ReferenceEquals(_selectedWorkspaceTab, tab)) CurrentPage = tab.PageKey;
+            else SelectedWorkspaceTab = tab;
         }
 
         private void CloseWorkspaceTab(WorkspaceTabItem tab)
@@ -386,8 +394,9 @@ namespace AiDataGateway.LocalLogViewer.ViewModels
 
         public bool DetachWorkspaceTab(WorkspaceTabItem tab)
         {
-            if (tab == null || tab.IsPermanent || !WorkspaceTabs.Contains(tab)) return false;
+            if (tab == null || tab.IsPermanent) return false;
             WorkspaceTabs.Remove(tab);
+            NavigationTrace.Add("DetachRemoved → " + tab.Key);
             SelectWorkspaceTab("logs");
             return true;
         }
@@ -396,6 +405,7 @@ namespace AiDataGateway.LocalLogViewer.ViewModels
         {
             if (tab == null || tab.IsPermanent) return;
             if (!WorkspaceTabs.Contains(tab)) WorkspaceTabs.Add(tab);
+            NavigationTrace.Add("Attach → " + tab.Key);
             SelectedWorkspaceTab = tab;
         }
 

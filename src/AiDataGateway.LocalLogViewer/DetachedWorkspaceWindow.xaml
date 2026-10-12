@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:views="clr-namespace:AiDataGateway.LocalLogViewer.Views"
-        Title="日志详情" Width="1250" Height="760" MinWidth="900" MinHeight="600"
+        Title="日志详情" Width="1250" Height="760" MinWidth="760" MinHeight="520"
         WindowStartupLocation="Manual" WindowStyle="None" ResizeMode="CanResize" Background="{StaticResource PageBrush}" Icon="Assets/gateway-app.ico">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="36" ResizeBorderThickness="5" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False" />

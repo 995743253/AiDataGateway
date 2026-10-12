@@ -36,18 +36,39 @@ internal static class CustomWindowChrome
             return;
         }
 
-        var monitorInfo = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        var monitorInfo = new MonitorInfo { Size = Marshal.SizeOf(typeof(MonitorInfo)) };
         if (!GetMonitorInfo(monitor, ref monitorInfo))
         {
             return;
         }
 
-        var minMaxInfo = Marshal.PtrToStructure<MinMaxInfo>(minMaxInfoPointer);
+        var minMaxInfo = (MinMaxInfo)Marshal.PtrToStructure(minMaxInfoPointer, typeof(MinMaxInfo));
         minMaxInfo.MaxPosition.X = monitorInfo.WorkArea.Left - monitorInfo.MonitorArea.Left;
         minMaxInfo.MaxPosition.Y = monitorInfo.WorkArea.Top - monitorInfo.MonitorArea.Top;
         minMaxInfo.MaxSize.X = monitorInfo.WorkArea.Right - monitorInfo.WorkArea.Left;
         minMaxInfo.MaxSize.Y = monitorInfo.WorkArea.Bottom - monitorInfo.WorkArea.Top;
         Marshal.StructureToPtr(minMaxInfo, minMaxInfoPointer, false);
+    }
+
+    /// <summary>按当前屏幕工作区收敛窗口尺寸：小屏或高缩放屏直接最大化，其余等比收缩并居中。</summary>
+    public static void EnsureFitsWorkingArea(Window window)
+    {
+        var area = SystemParameters.WorkArea;
+        if (area.Width <= 0 || area.Height <= 0)
+        {
+            return;
+        }
+
+        if (area.Width < 1300 || area.Height < 800)
+        {
+            window.WindowState = WindowState.Maximized;
+            return;
+        }
+
+        window.Width = Math.Min(window.Width, area.Width * 0.94);
+        window.Height = Math.Min(window.Height, area.Height * 0.94);
+        window.Left = area.Left + (area.Width - window.Width) / 2;
+        window.Top = area.Top + (area.Height - window.Height) / 2;
     }
 
     public static IntPtr HookMinMaxInfo(Window window)
